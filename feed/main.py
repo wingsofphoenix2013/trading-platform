@@ -1,4 +1,4 @@
-# feed/main.py — модуль сбора рыночных данных с Binance (WebSocket-only)
+# feed/main.py — модуль сбора рыночных данных с Binance (WebSocket-only, логи упрощены)
 
 print("🔥 MAIN.PY LAUNCHED", flush=True)
 
@@ -12,17 +12,13 @@ TICKER = "BTCUSDT"
 MARK_PRICE_WS = f"wss://fstream.binance.com/ws/{TICKER.lower()}@markPrice"
 KLINE_WS = f"wss://fstream.binance.com/ws/{TICKER.lower()}@kline_1m"
 
-# 🔌 Подключение к WebSocket Binance (фьючерсы) — поток цен
+# 🔌 Подключение к WebSocket Binance (фьючерсы) — поток цен (без логов)
 async def stream_mark_price():
-    print(f"[DEBUG] Connecting to WebSocket {MARK_PRICE_WS}", flush=True)
     async for ws in websockets.connect(MARK_PRICE_WS):
         try:
-            print("[DEBUG] WebSocket connected — MARK PRICE", flush=True)
             async for message in ws:
                 data = json.loads(message)
-                price = data.get("p")
-                if price:
-                    print(f"[MARK PRICE] {datetime.utcnow()} - {TICKER}: {price}", flush=True)
+                _ = data.get("p")  # цена используется, но не логируется
         except websockets.ConnectionClosed:
             print("[WebSocket] Disconnected. Reconnecting...", flush=True)
             continue
