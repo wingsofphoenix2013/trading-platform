@@ -1,59 +1,107 @@
-# feed/main.py — модуль сбора рыночных данных с Binance (WebSocket-only, логи упрощены)
+# feed/main.py — подписка на потоки + Redis Pub/Sub + загрузка тикеров из БД
 
-print("🔥 MAIN.PY LAUNCHED", flush=True)
+print("🔥 FEED STARTED", flush=True)
 
+# 1️⃣ Импорт библиотек
 import asyncio
 import json
-import websockets
+import os
 from datetime import datetime
+import websockets
+import redis.asyncio as redis
+import asyncpg
 
-# 🔧 Настройки тикера и WebSocket каналов
-TICKER = "BTCUSDT"
-MARK_PRICE_WS = f"wss://fstream.binance.com/ws/{TICKER.lower()}@markPrice"
-KLINE_WS = f"wss://fstream.binance.com/ws/{TICKER.lower()}@kline_1m"
+# 2️⃣ Подключение к Redis (Upstash) через переменные окружения
+r = redis.Redis(
+    host=os.getenv("REDIS_HOST"),
+    port=int(os.getenv("REDIS_PORT", 6379)),
+    password=os.getenv("REDIS_PASSWORD"),
+    ssl=True
+)
 
-# 🔌 Подключение к WebSocket Binance (фьючерсы) — поток цен (без логов)
-async def stream_mark_price():
-    async for ws in websockets.connect(MARK_PRICE_WS):
-        try:
-            async for message in ws:
-                data = json.loads(message)
-                _ = data.get("p")  # цена используется, но не логируется
-        except websockets.ConnectionClosed:
-            print("[WebSocket] Disconnected. Reconnecting...", flush=True)
-            continue
-
-# 🔌 Подключение к WebSocket Binance (фьючерсы) — свечи M1
-async def stream_kline_m1():
-    print(f"[DEBUG] Connecting to WebSocket {KLINE_WS}", flush=True)
-    async for ws in websockets.connect(KLINE_WS):
-        try:
-            print("[DEBUG] WebSocket connected — KLINE", flush=True)
-            async for message in ws:
-                data = json.loads(message)
-                kline = data.get("k", {})
-                if kline:
-                    open_price = kline.get("o")
-                    high = kline.get("h")
-                    low = kline.get("l")
-                    close = kline.get("c")
-                    is_closed = kline.get("x")
-                    if is_closed:
-                        print(f"[M1 CANDLE] {datetime.utcnow()} - O:{open_price} H:{high} L:{low} C:{close}", flush=True)
-        except websockets.ConnectionClosed:
-            print("[WebSocket] Kline disconnected. Reconnecting...", flush=True)
-            continue
-
-# 🧠 Главный цикл: два потока WebSocket — mark price и свечи M1
-async def main():
-    print("[MAIN] Starting data feed module (WebSocket only)...", flush=True)
+# 3️⃣ Подключение к PostgreSQL через переменные окружения
+async def get_enabled_tickers():
+    db_url = os.getenv("DATABASE_URL")
     try:
-        await asyncio.gather(
-            stream_mark_price(),
-            stream_kline_m1()
-        )
+        conn = await asyncpg.connect(dsn=db_url)
+        rows = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled'")
+        await conn.close()
+        return [row["symbol"] for row in rows]
     except Exception as e:
-        print(f"[FATAL ERROR] {e}", flush=True)
+        print(f"[ERROR] DB connection failed: {e}", flush=True)
+        return []
 
+# 4️⃣ Словарь активных тикеров
+active_tickers = {}
+
+# 5️⃣ Запускает WebSocket-потоки по тикеру
+async def subscribe_ticker(symbol):
+    if symbol in active_tickers:
+        print(f"[INFO] {symbol} уже подписан", flush=True)
+        return
+
+    print(f"[INFO] Активируем подписку для {symbol}", flush=True)
+
+    async def mark_price():
+        url = f"wss://fstream.binance.com/ws/{symbol.lower()}@markPrice"
+        async for ws in websockets.connect(url):
+            try:
+                async for message in ws:
+                    data = json.loads(message)
+                    price = data.get("p")
+                    if price:
+                        print(f"[MARK PRICE] {datetime.utcnow()} - {symbol}: {price}", flush=True)
+            except websockets.ConnectionClosed:
+                print(f"[MARK PRICE] reconnecting: {symbol}", flush=True)
+                continue
+
+    async def m1_kline():
+        url = f"wss://fstream.binance.com/ws/{symbol.lower()}@kline_1m"
+        async for ws in websockets.connect(url):
+            try:
+                async for message in ws:
+                    data = json.loads(message)
+                    k = data.get("k", {})
+                    if k and k.get("x"):
+                        print(f"[M1 CANDLE] {datetime.utcnow()} - {symbol}: O:{k['o']} H:{k['h']} L:{k['l']} C:{k['c']}", flush=True)
+            except websockets.ConnectionClosed:
+                print(f"[KLINE] reconnecting: {symbol}", flush=True)
+                continue
+
+    task1 = asyncio.create_task(mark_price())
+    task2 = asyncio.create_task(m1_kline())
+    active_tickers[symbol] = (task1, task2)
+
+# 6️⃣ Слушает Redis канал и активирует новые тикеры по команде
+async def redis_listener():
+    pubsub = r.pubsub()
+    await pubsub.subscribe("ticker_activation")
+    print("[REDIS] Подписан на канал 'ticker_activation'", flush=True)
+
+    async for message in pubsub.listen():
+        if message["type"] == "message":
+            try:
+                data = json.loads(message["data"])
+                if data.get("action") == "activate":
+                    symbol = data.get("symbol", "").upper()
+                    if symbol:
+                        await subscribe_ticker(symbol)
+            except Exception as e:
+                print(f"[ERROR] Ошибка разбора сообщения: {e}", flush=True)
+
+# 7️⃣ Главный запуск: активируем все тикеры из БД + слушаем Redis
+async def main():
+    print("[MAIN] Feed module running", flush=True)
+
+    # Загрузка тикеров из БД
+    symbols = await get_enabled_tickers()
+    print(f"[MAIN] Тикеров из БД для активации: {symbols}", flush=True)
+    for symbol in symbols:
+        await subscribe_ticker(symbol)
+
+    # Слушаем Redis для динамической активации
+    await redis_listener()
+
+# 8️⃣ Точка входа в модуль: запускает асинхронный главный цикл
 if __name__ == "__main__":
     asyncio.run(main())
