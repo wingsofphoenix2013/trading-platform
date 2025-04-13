@@ -33,6 +33,13 @@ async def fetch_m1_klines():
                 print(f"[M1 CANDLE] {datetime.utcnow()} - O:{candle[1]} H:{candle[2]} L:{candle[3]} C:{candle[4]}")
             else:
                 print("[WARNING] Empty or unexpected response from Binance")
+
+# ⏱️ Цикл вызова свечей каждую минуту
+async def poll_m1_candles():
+    while True:
+        await fetch_m1_klines()
+        await asyncio.sleep(60)
+
 # 🔌 Подключение к WebSocket Binance (поток цен)
 async def stream_mark_price():
     async for ws in websockets.connect(WS_URL):
@@ -46,7 +53,6 @@ async def stream_mark_price():
             print("[WebSocket] Disconnected. Reconnecting...")
             continue
 
-# 🧠 Главный цикл: параллельно WebSocket и M1-опрос
 # 🧠 Главный цикл: параллельно WebSocket и M1-опрос
 async def main():
     print("[MAIN] Starting data feed module...")
