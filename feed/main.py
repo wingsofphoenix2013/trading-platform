@@ -13,7 +13,6 @@ WS_URL = f"wss://fstream.binance.com/ws/{TICKER.lower()}@markPrice"
 KLINES_URL = f"{BASE_URL}/fapi/v1/klines"
 
 # 🧩 Получение минутных свечей M1 через REST
-# 🧩 Получение минутных свечей M1 через REST
 async def fetch_m1_klines():
     async with aiohttp.ClientSession() as session:
         params = {
@@ -48,17 +47,16 @@ async def stream_mark_price():
             continue
 
 # 🧠 Главный цикл: параллельно WebSocket и M1-опрос
+# 🧠 Главный цикл: параллельно WebSocket и M1-опрос
 async def main():
-    await asyncio.gather(
-        stream_mark_price(),
-        poll_m1_candles()
-    )
-
-# ⏱️ Цикл вызова свечей каждую минуту
-async def poll_m1_candles():
-    while True:
-        await fetch_m1_klines()
-        await asyncio.sleep(60)
+    print("[MAIN] Starting data feed module...")
+    try:
+        await asyncio.gather(
+            stream_mark_price(),
+            poll_m1_candles()
+        )
+    except Exception as e:
+        print(f"[FATAL ERROR] {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
