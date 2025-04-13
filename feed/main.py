@@ -1,5 +1,7 @@
 # feed/main.py — модуль сбора рыночных данных с Binance
 
+print("🔥 MAIN.PY LAUNCHED", flush=True)
+
 import asyncio
 import json
 import aiohttp
@@ -23,49 +25,48 @@ async def fetch_m1_klines():
         async with session.get(KLINES_URL, params=params) as resp:
             data = await resp.json()
 
-            # 🛡️ Проверка на ошибку
             if isinstance(data, dict) and "code" in data:
-                print(f"[ERROR] Binance API returned error: {data}")
+                print(f"[ERROR] Binance API returned error: {data}", flush=True)
                 return
 
             if isinstance(data, list) and len(data) > 0:
                 candle = data[0]
-                print(f"[M1 CANDLE] {datetime.utcnow()} - O:{candle[1]} H:{candle[2]} L:{candle[3]} C:{candle[4]}")
+                print(f"[M1 CANDLE] {datetime.utcnow()} - O:{candle[1]} H:{candle[2]} L:{candle[3]} C:{candle[4]}", flush=True)
             else:
-                print("[WARNING] Empty or unexpected response from Binance")
+                print("[WARNING] Empty or unexpected response from Binance", flush=True)
 
 # ⏱️ Цикл вызова свечей каждую минуту
 async def poll_m1_candles():
     while True:
-        print("[DEBUG] Polling M1 candle from REST...")
+        print("[DEBUG] Polling M1 candle from REST...", flush=True)
         await fetch_m1_klines()
         await asyncio.sleep(60)
 
 # 🔌 Подключение к WebSocket Binance (поток цен)
 async def stream_mark_price():
-    print(f"[DEBUG] Connecting to WebSocket {WS_URL}")
+    print(f"[DEBUG] Connecting to WebSocket {WS_URL}", flush=True)
     async for ws in websockets.connect(WS_URL):
         try:
-            print("[DEBUG] WebSocket connected")
+            print("[DEBUG] WebSocket connected", flush=True)
             async for message in ws:
                 data = json.loads(message)
                 price = data.get("p")
                 if price:
-                    print(f"[MARK PRICE] {datetime.utcnow()} - {TICKER}: {price}")
+                    print(f"[MARK PRICE] {datetime.utcnow()} - {TICKER}: {price}", flush=True)
         except websockets.ConnectionClosed:
-            print("[WebSocket] Disconnected. Reconnecting...")
+            print("[WebSocket] Disconnected. Reconnecting...", flush=True)
             continue
 
 # 🧠 Главный цикл: параллельно WebSocket и M1-опрос
 async def main():
-    print("[MAIN] Starting data feed module...")
+    print("[MAIN] Starting data feed module...", flush=True)
     try:
         await asyncio.gather(
             stream_mark_price(),
             poll_m1_candles()
         )
     except Exception as e:
-        print(f"[FATAL ERROR] {e}")
+        print(f"[FATAL ERROR] {e}", flush=True)
 
 if __name__ == "__main__":
     asyncio.run(main())
