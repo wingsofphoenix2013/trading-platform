@@ -37,13 +37,16 @@ async def fetch_m1_klines():
 # ⏱️ Цикл вызова свечей каждую минуту
 async def poll_m1_candles():
     while True:
+        print("[DEBUG] Polling M1 candle from REST...")
         await fetch_m1_klines()
         await asyncio.sleep(60)
 
 # 🔌 Подключение к WebSocket Binance (поток цен)
 async def stream_mark_price():
+    print(f"[DEBUG] Connecting to WebSocket {WS_URL}")
     async for ws in websockets.connect(WS_URL):
         try:
+            print("[DEBUG] WebSocket connected")
             async for message in ws:
                 data = json.loads(message)
                 price = data.get("p")
