@@ -13,6 +13,7 @@ WS_URL = f"wss://fstream.binance.com/ws/{TICKER.lower()}@markPrice"
 KLINES_URL = f"{BASE_URL}/fapi/v1/klines"
 
 # 🧩 Получение минутных свечей M1 через REST
+# 🧩 Получение минутных свечей M1 через REST
 async def fetch_m1_klines():
     async with aiohttp.ClientSession() as session:
         params = {
@@ -22,9 +23,17 @@ async def fetch_m1_klines():
         }
         async with session.get(KLINES_URL, params=params) as resp:
             data = await resp.json()
-            candle = data[0]  # [time, open, high, low, close, volume, ...]
-            print(f"[M1 CANDLE] {datetime.utcnow()} - O:{candle[1]} H:{candle[2]} L:{candle[3]} C:{candle[4]}")
 
+            # 🛡️ Проверка на ошибку
+            if isinstance(data, dict) and "code" in data:
+                print(f"[ERROR] Binance API returned error: {data}")
+                return
+
+            if isinstance(data, list) and len(data) > 0:
+                candle = data[0]
+                print(f"[M1 CANDLE] {datetime.utcnow()} - O:{candle[1]} H:{candle[2]} L:{candle[3]} C:{candle[4]}")
+            else:
+                print("[WARNING] Empty or unexpected response from Binance")
 # 🔌 Подключение к WebSocket Binance (поток цен)
 async def stream_mark_price():
     async for ws in websockets.connect(WS_URL):
