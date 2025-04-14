@@ -21,10 +21,13 @@ r = redis.Redis(
     ssl=True
 )
 
-# 2. Главная страница (заглушка)
+# 2. Главная страница (динамическое количество тикеров)
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    return templates.TemplateResponse("base.html", {"request": request})
+    conn = await get_db()
+    count = await conn.fetchval("SELECT COUNT(*) FROM tickers")
+    await conn.close()
+    return templates.TemplateResponse("base.html", {"request": request, "ticker_count": count})
 
 # 3. Список тикеров
 @app.get("/tickers", response_class=HTMLResponse)
