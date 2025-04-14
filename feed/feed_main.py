@@ -72,23 +72,6 @@ async def subscribe_ticker(symbol):
     task2 = asyncio.create_task(m1_kline())
     active_tickers[symbol] = (task1, task2)
 
-# 6. Слушает Redis канал и активирует новые тикеры по команде
-async def redis_listener():
-    pubsub = r.pubsub()
-    await pubsub.subscribe("ticker_activation")
-    print("[REDIS] Подписан на канал 'ticker_activation'", flush=True)
-
-    async for message in pubsub.listen():
-        if message["type"] == "message":
-            try:
-                data = json.loads(message["data"])
-                if data.get("action") == "activate":
-                    symbol = data.get("symbol", "").upper()
-                    if symbol:
-                        await subscribe_ticker(symbol)
-            except Exception as e:
-                print(f"[ERROR] Ошибка разбора сообщения: {e}", flush=True)
-
 
 # 8. Запись M1-свечи в базу данных с диагностикой пропуска предыдущей
 
@@ -147,7 +130,24 @@ def save_m1_candle_with_diagnostics(conn, candle: dict):
 
     except Exception as e:
         print(f"[M1] ❌ Ошибка при сохранении свечи: {e}", flush=True)
-        
+
+# 6. Слушает Redis канал и активирует новые тикеры по команде
+async def redis_listener():
+    pubsub = r.pubsub()
+    await pubsub.subscribe("ticker_activation")
+    print("[REDIS] Подписан на канал 'ticker_activation'", flush=True)
+
+    async for message in pubsub.listen():
+        if message["type"] == "message":
+            try:
+                data = json.loads(message["data"])
+                if data.get("action") == "activate":
+                    symbol = data.get("symbol", "").upper()
+                    if symbol:
+                        await subscribe_ticker(symbol)
+            except Exception as e:
+                print(f"[ERROR] Ошибка разбора сообщения: {e}", flush=True)
+                
 # X. Точка входа в модуль: запускает асинхронный главный цикл
 async def main():
     print("🔥 FEED STARTED", flush=True)
