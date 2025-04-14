@@ -1,4 +1,4 @@
-# feed/main.py — подписка на потоки + Redis Pub/Sub + загрузка тикеров из БД
+# feed_main.py — подписка на потоки + Redis Pub/Sub + загрузка тикеров из БД
 
 print("🔥 FEED STARTED", flush=True)
 
@@ -31,6 +31,23 @@ async def get_enabled_tickers():
         print(f"[ERROR] DB connection failed: {e}", flush=True)
         return []
 
+# Запись свечи M1 в базу данных
+async def save_m1_candle(symbol, kline):
+    db_url = os.getenv("DATABASE_URL")
+    try:
+        conn = await asyncpg.connect(dsn=db_url)
+        await conn.execute("""
+            INSERT INTO ohlcv_m1 (symbol, open_time, open, high, low, close, volume)
+            VALUES ($1, to_timestamp($2 / 1000), $3, $4, $5, $6, $7)
+        """,
+            symbol,
+            kline["t"], kline["o"], kline["h"],
+            kline["l"], kline["c"], kline["v"]
+        )
+        await conn.close()
+    except Exception as e:
+        print(f"[ERROR] Ошибка при записи M1-свечи: {e}", flush=True)
+        
 # Словарь активных тикеров
 active_tickers = {}
 
@@ -64,6 +81,7 @@ async def subscribe_ticker(symbol):
                     k = data.get("k", {})
                     if k and k.get("x"):
                         print(f"[M1 CANDLE] {datetime.utcnow()} - {symbol}: O:{k['o']} H:{k['h']} L:{k['l']} C:{k['c']}", flush=True)
+                        await save_m1_candle(symbol, k)
             except websockets.ConnectionClosed:
                 print(f"[KLINE] reconnecting: {symbol}", flush=True)
                 continue
