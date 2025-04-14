@@ -4,7 +4,9 @@
   <!-- Первый ряд с кнопками -->
   <div class="row" style="align-items: center;">
     <div class="w-50"><a href="/" class="button">← Назад</a></div>
-    <div class="w-50" style="text-align: right;"><a href="/tickers/new" class="button">Добавить тикер</a></div>
+    <div class="w-50" style="text-align: right;">
+      <button class="button" onclick="openTickerPopup()">Добавить тикер</button>
+    </div>
   </div>
 
   <!-- Второй ряд с таблицей -->
@@ -50,7 +52,10 @@ function toggleStatus(btn) {
   const isActive = btn.textContent.trim() === 'Выключить';
   btn.textContent = isActive ? 'Включить' : 'Выключить';
   btn.style.backgroundColor = isActive ? '#e0e0e0' : '#cce5ff';
-  // Здесь можно добавить fetch-запрос для активации/деактивации
+}
+
+function openTickerPopup() {
+  window.open("/tickers/new", "new_ticker", "width=600,height=400,scrollbars=no,resizable=no,toolbar=no,menubar=no,status=no");
 }
 </script>
 {% endblock %}
