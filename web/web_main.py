@@ -1,4 +1,4 @@
-# web/main.py — интерфейс и управление тикерами
+# web_main.py — интерфейс и управление тикерами (обновлено с ticker_count)
 
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -34,22 +34,27 @@ async def root(request: Request):
 async def list_tickers(request: Request):
     conn = await get_db()
     rows = await conn.fetch("SELECT * FROM tickers ORDER BY created_at DESC")
+    count = await conn.fetchval("SELECT COUNT(*) FROM tickers")
     await conn.close()
-    return templates.TemplateResponse("tickers.html", {"request": request, "tickers": rows})
+    return templates.TemplateResponse("tickers.html", {"request": request, "tickers": rows, "ticker_count": count})
 
 # 4. Отображение формы создания тикера (popup)
 @app.get("/tickers/new", response_class=HTMLResponse)
 async def new_ticker_form(request: Request):
-    return templates.TemplateResponse("ticker_form.html", {"request": request})
+    conn = await get_db()
+    count = await conn.fetchval("SELECT COUNT(*) FROM tickers")
+    await conn.close()
+    return templates.TemplateResponse("ticker_form.html", {"request": request, "ticker_count": count})
 
 # 5. Детали тикера
 @app.get("/tickers/{symbol}", response_class=HTMLResponse)
 async def ticker_detail(symbol: str, request: Request):
     conn = await get_db()
     row = await conn.fetchrow("SELECT * FROM tickers WHERE symbol = $1", symbol.upper())
+    count = await conn.fetchval("SELECT COUNT(*) FROM tickers")
     await conn.close()
     if row:
-        return templates.TemplateResponse("ticker_detail.html", {"request": request, "ticker": row, "strategies": []})
+        return templates.TemplateResponse("ticker_detail.html", {"request": request, "ticker": row, "strategies": [], "ticker_count": count})
     return HTMLResponse("Тикер не найден", status_code=404)
 
 # 6. Создание нового тикера
@@ -69,7 +74,7 @@ async def create_ticker(
     """, symbol.upper(), precision_price, precision_qty, min_qty)
     await conn.close()
     return templates.TemplateResponse("ticker_success.html", {"request": request})
-    
+
 # 7. Активация тикера (через Redis)
 @app.post("/tickers/{symbol}/activate")
 async def activate_ticker(symbol: str):
