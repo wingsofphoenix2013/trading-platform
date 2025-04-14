@@ -11,31 +11,30 @@
   <div class="row">
     <div class="widget w-100">
       <h2><i class="fas fa-table icon"></i> Информация по тикерам</h2>
-      <h2 style="color: red;">Шаблон работает!</h2>
-      <table style="width: 100%; border-collapse: collapse;">
+      <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
         <thead>
           <tr>
-            <th>Название</th>
-            <th>Курс</th>
-            <th style="background-color: #eef1f4">Winrate 24h</th>
-            <th style="background-color: #eef1f4">ROI 24h</th>
-            <th style="background-color: #dce1e6">Winrate 7d</th>
-            <th style="background-color: #dce1e6">ROI 7d</th>
-            <th>Статус</th>
-            <th>Управление</th>
+            <th style="padding: 0.6rem; border: 1px solid #d0d7de;">Название</th>
+            <th style="padding: 0.6rem; border: 1px solid #d0d7de;">Курс</th>
+            <th style="background-color: #eef1f4; padding: 0.6rem; border: 1px solid #d0d7de;">Winrate 24h</th>
+            <th style="background-color: #eef1f4; padding: 0.6rem; border: 1px solid #d0d7de;">ROI 24h</th>
+            <th style="background-color: #dce1e6; padding: 0.6rem; border: 1px solid #d0d7de;">Winrate 7d</th>
+            <th style="background-color: #dce1e6; padding: 0.6rem; border: 1px solid #d0d7de;">ROI 7d</th>
+            <th style="padding: 0.6rem; border: 1px solid #d0d7de;">Статус</th>
+            <th style="padding: 0.6rem; border: 1px solid #d0d7de;">Управление</th>
           </tr>
         </thead>
         <tbody>
           {% for t in tickers %}
           <tr>
-            <td><a href="/tickers/{{ t.symbol }}">{{ t.symbol }}</a></td>
-            <td>{{ t.price if t.price else 'n/a' }} <span style="color: green;">▲</span></td>
-            <td style="background-color: #eef1f4">{{ t.winrate_24h if t.winrate_24h else 'n/a' }}</td>
-            <td style="background-color: #eef1f4">{{ t.roi_24h if t.roi_24h else 'n/a' }}</td>
-            <td style="background-color: #dce1e6">{{ t.winrate_7d if t.winrate_7d else 'n/a' }}</td>
-            <td style="background-color: #dce1e6">{{ t.roi_7d if t.roi_7d else 'n/a' }}</td>
-            <td><span style="color: orange;">●</span></td>
-            <td>
+            <td style="padding: 0.6rem; border: 1px solid #d0d7de;"><a href="/tickers/{{ t.symbol }}">{{ t.symbol }}</a></td>
+            <td style="padding: 0.6rem; border: 1px solid #d0d7de;">{{ t.price if t.price else 'n/a' }} <span style="color: green;">▲</span></td>
+            <td style="background-color: #eef1f4; padding: 0.6rem; border: 1px solid #d0d7de;">{{ t.winrate_24h if t.winrate_24h else 'n/a' }}</td>
+            <td style="background-color: #eef1f4; padding: 0.6rem; border: 1px solid #d0d7de;">{{ t.roi_24h if t.roi_24h else 'n/a' }}</td>
+            <td style="background-color: #dce1e6; padding: 0.6rem; border: 1px solid #d0d7de;">{{ t.winrate_7d if t.winrate_7d else 'n/a' }}</td>
+            <td style="background-color: #dce1e6; padding: 0.6rem; border: 1px solid #d0d7de;">{{ t.roi_7d if t.roi_7d else 'n/a' }}</td>
+            <td style="padding: 0.6rem; border: 1px solid #d0d7de;"><span style="color: orange;">●</span></td>
+            <td style="padding: 0.6rem; border: 1px solid #d0d7de;">
               <button onclick="toggleStatus(this)">Включить</button>
             </td>
           </tr>
