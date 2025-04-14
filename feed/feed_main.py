@@ -20,21 +20,23 @@ r = redis.Redis(
 )
 
 # 3. Подключение к PostgreSQL через переменные окружения
-async def get_enabled_tickers():
+
+import psycopg2
+from urllib.parse import urlparse
+
+try:
     db_url = os.getenv("DATABASE_URL")
-    try:
-        conn = await asyncpg.connect(dsn=db_url)
-        rows = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled'")
-        await conn.close()
-        return [row["symbol"] for row in rows]
-    except Exception as e:
-        print(f"[ERROR] DB connection failed: {e}", flush=True)
-        return []
+    pg_conn = psycopg2.connect(db_url)
+    print("[PG] ✅ Подключение к PostgreSQL установлено", flush=True)
+except Exception as e:
+    print(f"[PG] ❌ Ошибка подключения к PostgreSQL: {e}", flush=True)
+    pg_conn = None
 
 # 4. Словарь активных тикеров
 active_tickers = {}
 
 # 5. Запускает WebSocket-потоки по тикеру
+
 async def subscribe_ticker(symbol):
     if symbol in active_tickers:
         print(f"[INFO] {symbol} уже подписан", flush=True)
@@ -50,7 +52,7 @@ async def subscribe_ticker(symbol):
                     data = json.loads(message)
                     price = data.get("p")
                     if price:
-                        pass # логи по mark price отключены
+                        pass  # логи по mark price отключены
             except websockets.ConnectionClosed:
                 print(f"[MARK PRICE] reconnecting: {symbol}", flush=True)
                 continue
@@ -64,6 +66,7 @@ async def subscribe_ticker(symbol):
                     k = data.get("k", {})
                     if k and k.get("x"):
                         print(f"[M1 CANDLE] {datetime.utcnow()} - {symbol}: O:{k['o']} H:{k['h']} L:{k['l']} C:{k['c']}", flush=True)
+                        save_m1_candle_with_diagnostics(pg_conn, data)
             except websockets.ConnectionClosed:
                 print(f"[KLINE] reconnecting: {symbol}", flush=True)
                 continue
