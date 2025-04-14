@@ -64,6 +64,12 @@
         .button:hover {
             background-color: #0559bd;
         }
+        .data-table th,
+        .data-table td {
+            text-align: center;
+            padding: 0.6rem;
+            border: 1px solid #d0d7de;
+        }
     </style>
 </head>
 <body>
@@ -73,7 +79,9 @@
     <div class="row">
         <div class="widget w-25"><h2><i class="fas fa-server icon"></i> Система</h2></div>
         <div class="widget w-25">
-    <h2><i class="fas fa-coins icon"></i> Тикеры</h2><a href="/tickers"><strong>{{ ticker_count }}</strong></a></div>
+            <h2><i class="fas fa-coins icon"></i> Тикеры</h2>
+            <a href="/tickers"><strong>{{ ticker_count }}</strong></a>
+        </div>
         <div class="widget w-25"><h2><i class="fas fa-brain icon"></i> Стратегии</h2></div>
         <div class="widget w-25"><h2><i class="fas fa-wrench icon"></i> Утилиты</h2></div>
     </div>
