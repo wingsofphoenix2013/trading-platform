@@ -1,4 +1,3 @@
-# feed/main.py — подписка на потоки + Redis Pub/Sub + загрузка тикеров из БД
 # 1. Импорт библиотек
 import asyncio
 import json
@@ -130,7 +129,7 @@ def save_m1_candle_with_diagnostics(conn, candle: dict):
 
     except Exception as e:
         print(f"[M1] ❌ Ошибка при сохранении свечи: {e}", flush=True)
-
+        
 # 6. Слушает Redis канал и активирует новые тикеры по команде
 async def redis_listener():
     pubsub = r.pubsub()
@@ -147,9 +146,29 @@ async def redis_listener():
                         await subscribe_ticker(symbol)
             except Exception as e:
                 print(f"[ERROR] Ошибка разбора сообщения: {e}", flush=True)
-                
-# X. Точка входа в модуль: запускает асинхронный главный цикл
-async def main():
+
+async
+
+# 6. Слушает Redis канал и активирует новые тикеры по команде
+
+async def listen_redis_channel():
+    try:
+        redis_url = os.getenv("REDIS_URL")
+        redis = await aioredis.from_url(redis_url)
+        pubsub = redis.pubsub()
+        await pubsub.subscribe("ticker_activation")
+
+        print("[REDIS] Подписан на канал 'ticker_activation'", flush=True)
+
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                symbol = message["data"].decode()
+                await subscribe_ticker(symbol)
+
+    except Exception as e:
+        print(f"[REDIS] ❌ Ошибка Redis подписки: {e}", flush=True)
+
+def main():
     print("🔥 FEED STARTED", flush=True)
     await listen_redis_channel()
 
