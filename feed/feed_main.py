@@ -50,7 +50,7 @@ async def subscribe_ticker(symbol):
                     data = json.loads(message)
                     price = data.get("p")
                     if price:
-                        print(f"[MARK PRICE] {datetime.utcnow()} - {symbol}: {price}", flush=True)
+                        pass # логи по mark price отключены
             except websockets.ConnectionClosed:
                 print(f"[MARK PRICE] reconnecting: {symbol}", flush=True)
                 continue
