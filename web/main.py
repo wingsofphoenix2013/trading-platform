@@ -1,7 +1,72 @@
-from fastapi import FastAPI
+# web/main.py — интерфейс и управление тикерами
+
+from fastapi import FastAPI, Request, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+import asyncpg
+import redis.asyncio as redis
+import os
 
 app = FastAPI()
+templates = Jinja2Templates(directory="templates")
 
-@app.get("/")
-async def root():
-    return {"message": "Hello from Trading Platform Web Service"}
+# 1️⃣ Подключение к PostgreSQL и Redis через окружение
+async def get_db():
+    return await asyncpg.connect(dsn=os.getenv("DATABASE_URL"))
+
+r = redis.Redis(
+    host=os.getenv("REDIS_HOST"),
+    port=int(os.getenv("REDIS_PORT", 6379)),
+    password=os.getenv("REDIS_PASSWORD"),
+    ssl=True
+)
+
+# 2️⃣ Главная страница (заглушка)
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    return templates.TemplateResponse("base.html", {"request": request})
+
+# 3️⃣ Список тикеров
+@app.get("/tickers", response_class=HTMLResponse)
+async def list_tickers(request: Request):
+    conn = await get_db()
+    rows = await conn.fetch("SELECT * FROM tickers ORDER BY created_at DESC")
+    await conn.close()
+    return templates.TemplateResponse("tickers.html", {"request": request, "tickers": rows})
+
+# 4️⃣ Детали тикера
+@app.get("/tickers/{symbol}", response_class=HTMLResponse)
+async def ticker_detail(symbol: str, request: Request):
+    conn = await get_db()
+    row = await conn.fetchrow("SELECT * FROM tickers WHERE symbol = $1", symbol.upper())
+    await conn.close()
+    if row:
+        # пока без привязанных стратегий
+        return templates.TemplateResponse("ticker_detail.html", {"request": request, "ticker": row, "strategies": []})
+    return HTMLResponse("Тикер не найден", status_code=404)
+
+# 5️⃣ Создание нового тикера
+@app.post("/tickers")
+async def create_ticker(
+    symbol: str = Form(...),
+    precision_price: int = Form(...),
+    precision_qty: int = Form(...),
+    min_qty: float = Form(...)
+):
+    conn = await get_db()
+    await conn.execute("""
+        INSERT INTO tickers (symbol, precision_price, precision_qty, min_qty)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (symbol) DO NOTHING
+    """, symbol.upper(), precision_price, precision_qty, min_qty)
+    await conn.close()
+    return RedirectResponse(url="/tickers", status_code=303)
+
+# 6️⃣ Активация тикера (через Redis)
+@app.post("/tickers/{symbol}/activate")
+async def activate_ticker(symbol: str):
+    await r.publish("ticker_activation", f'{{"symbol": "{symbol.upper()}", "action": "activate"}}')
+    conn = await get_db()
+    await conn.execute("UPDATE tickers SET status = 'enabled' WHERE symbol = $1", symbol.upper())
+    await conn.close()
+    return RedirectResponse(url="/tickers", status_code=303)
