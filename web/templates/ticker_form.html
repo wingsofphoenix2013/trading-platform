@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+  <div class="row">
+    <div class="widget w-100">
+      <h2><i class="fas fa-plus-circle icon"></i> Добавить тикер</h2>
+      <form method="post" action="/tickers">
+        <label for="symbol">Тикер (например BTCUSDT)</label><br>
+        <input type="text" id="symbol" name="symbol" required><br><br>
+
+        <label for="precision_price">Точность цены</label><br>
+        <input type="number" id="precision_price" name="precision_price" min="0" required><br><br>
+
+        <label for="precision_qty">Точность объёма</label><br>
+        <input type="number" id="precision_qty" name="precision_qty" min="0" required><br><br>
+
+        <label for="min_qty">Мин. количество актива</label><br>
+        <input type="number" step="any" id="min_qty" name="min_qty" min="0" required><br><br>
+
+        <button type="submit">Сохранить</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

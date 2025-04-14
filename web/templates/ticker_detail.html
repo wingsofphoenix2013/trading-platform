@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+  <!-- Первый ряд: кнопки управления -->
+  <div class="row" style="align-items: center;">
+    <div class="w-50"><a href="/" class="button">← Назад</a></div>
+    <div class="w-50" style="text-align: right;">
+      <button onclick="toggleTicker(this)">Выключить</button>
+    </div>
+  </div>
+
+  <!-- Второй ряд: стратегия по тикеру -->
+  <div class="row">
+    <div class="widget w-100">
+      <h2><i class="fas fa-project-diagram icon"></i> Информация по тикеру {{ ticker.symbol }}</h2>
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th>Стратегия</th>
+            <th>Unrealized PnL</th>
+            <th style="background-color: #eef1f4">Winrate 24h</th>
+            <th style="background-color: #eef1f4">ROI 24h</th>
+            <th style="background-color: #dce1e6">Winrate 7d</th>
+            <th style="background-color: #dce1e6">ROI 7d</th>
+            <th>Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in strategies %}
+          <tr>
+            <td><a href="/strategies/{{ s.id }}">{{ s.name }}</a></td>
+            <td>
+              {% if s.pnl >= 0 %}
+                <span style="color: green;">+${{ s.pnl }}</span>
+              {% else %}
+                <span style="color: red;">-${{ (-s.pnl) }}</span>
+              {% endif %}
+            </td>
+            <td style="background-color: #eef1f4">{{ s.winrate_24h if s.winrate_24h else 'n/a' }}</td>
+            <td style="background-color: #eef1f4">{{ s.roi_24h if s.roi_24h else 'n/a' }}</td>
+            <td style="background-color: #dce1e6">{{ s.winrate_7d if s.winrate_7d else 'n/a' }}</td>
+            <td style="background-color: #dce1e6">{{ s.roi_7d if s.roi_7d else 'n/a' }}</td>
+            <td><span style="color: orange;">●</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleTicker(btn) {
+  const isEnabled = btn.textContent.trim() === 'Выключить';
+  btn.textContent = isEnabled ? 'Включить' : 'Выключить';
+  btn.style.backgroundColor = isEnabled ? '#e0e0e0' : '#cce5ff';
+  // здесь можно вставить fetch-запрос для отправки команды в backend
+}
+</script>
+{% endblock %}
