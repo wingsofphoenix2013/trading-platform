@@ -2,7 +2,7 @@
 
 print("🔥 FEED STARTED", flush=True)
 
-# 1️⃣ Импорт библиотек
+# Импорт библиотек
 import asyncio
 import json
 import os
@@ -11,7 +11,7 @@ import websockets
 import redis.asyncio as redis
 import asyncpg
 
-# 2️⃣ Подключение к Redis (Upstash) через переменные окружения
+# Подключение к Redis (Upstash) через переменные окружения
 r = redis.Redis(
     host=os.getenv("REDIS_HOST"),
     port=int(os.getenv("REDIS_PORT", 6379)),
@@ -19,7 +19,7 @@ r = redis.Redis(
     ssl=True
 )
 
-# 3️⃣ Подключение к PostgreSQL через переменные окружения
+# Подключение к PostgreSQL через переменные окружения
 async def get_enabled_tickers():
     db_url = os.getenv("DATABASE_URL")
     try:
@@ -31,10 +31,10 @@ async def get_enabled_tickers():
         print(f"[ERROR] DB connection failed: {e}", flush=True)
         return []
 
-# 4️⃣ Словарь активных тикеров
+# Словарь активных тикеров
 active_tickers = {}
 
-# 5️⃣ Запускает WebSocket-потоки по тикеру
+# Запускает WebSocket-потоки по тикеру
 async def subscribe_ticker(symbol):
     if symbol in active_tickers:
         print(f"[INFO] {symbol} уже подписан", flush=True)
@@ -72,7 +72,7 @@ async def subscribe_ticker(symbol):
     task2 = asyncio.create_task(m1_kline())
     active_tickers[symbol] = (task1, task2)
 
-# 6️⃣ Слушает Redis канал и активирует новые тикеры по команде
+# Слушает Redis канал и активирует новые тикеры по команде
 async def redis_listener():
     pubsub = r.pubsub()
     await pubsub.subscribe("ticker_activation")
@@ -89,7 +89,7 @@ async def redis_listener():
             except Exception as e:
                 print(f"[ERROR] Ошибка разбора сообщения: {e}", flush=True)
 
-# 7️⃣ Главный запуск: активируем все тикеры из БД + слушаем Redis
+# Главный запуск: активируем все тикеры из БД + слушаем Redis
 async def main():
     print("[MAIN] Feed module running", flush=True)
 
@@ -102,7 +102,7 @@ async def main():
     # Слушаем Redis для динамической активации
     await redis_listener()
 
-# 8️⃣ Точка входа в модуль: запускает асинхронный главный цикл
+# Точка входа в модуль: запускает асинхронный главный цикл
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
