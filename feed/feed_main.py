@@ -1,7 +1,3 @@
-# feed/main.py — подписка на потоки + Redis Pub/Sub + загрузка тикеров из БД
-
-print("🔥 FEED STARTED", flush=True)
-
 # 1. Импорт библиотек
 import asyncio
 import json
@@ -92,19 +88,8 @@ async def redis_listener():
             except Exception as e:
                 print(f"[ERROR] Ошибка разбора сообщения: {e}", flush=True)
 
-# 7. Главный запуск: активируем все тикеры из БД + слушаем Redis
-async def main():
-    print("[MAIN] Feed module running", flush=True)
 
-    # Загрузка тикеров из БД
-    symbols = await get_enabled_tickers()
-    print(f"[MAIN] Тикеров из БД для активации: {symbols}", flush=True)
-    for symbol in symbols:
-        await subscribe_ticker(symbol)
-
-    # Слушаем Redis для динамической активации
-    await redis_listener()
-# 8. Запись M1-свечи в базу данных с диагностикой пропуска предыдущей
+# 7. Запись M1-свечи в базу данных с диагностикой пропуска предыдущей
 
 def save_m1_candle_with_diagnostics(conn, candle: dict):
     """
@@ -164,4 +149,14 @@ def save_m1_candle_with_diagnostics(conn, candle: dict):
         
 # X Точка входа в модуль: запускает асинхронный главный цикл
 if __name__ == "__main__":
+    asyncio.run(main())
+
+# X. Точка входа в модуль: запускает асинхронный главный цикл
+
+async def main():
+    print("🔥 FEED STARTED", flush=True)
+    await listen_redis_channel()
+
+if __name__ == "__main__":
+    import asyncio
     asyncio.run(main())
