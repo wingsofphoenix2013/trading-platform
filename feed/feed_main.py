@@ -38,7 +38,7 @@ async def save_m1_candle(symbol, kline):
         conn = await asyncpg.connect(dsn=db_url)
         await conn.execute("""
             INSERT INTO ohlcv_m1 (symbol, open_time, open, high, low, close, volume)
-            VALUES ($1, to_timestamp($2 / 1000), $3, $4, $5, $6, $7)
+            VALUES ($1, to_timestamp(CAST($2 AS DOUBLE PRECISION) / 1000), $3, $4, $5, $6, $7)
         """,
             symbol,
             kline["t"], kline["o"], kline["h"],
