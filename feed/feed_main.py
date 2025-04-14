@@ -84,6 +84,42 @@ async def aggregate_m5_candles():
                 print(f"[ERROR] Агрегация M5: {e}", flush=True)
 
         await asyncio.sleep(5)
+# Агрегация M15-свечей из M1
+async def aggregate_m15_candles():
+    db_url = os.getenv("DATABASE_URL")
+
+    while True:
+        now = datetime.utcnow()
+        if now.minute % 15 == 0 and now.second < 5:
+            try:
+                conn = await asyncpg.connect(dsn=db_url)
+                for symbol in active_tickers.keys():
+                    rows = await conn.fetch("""
+                        SELECT * FROM ohlcv_m1
+                        WHERE symbol = $1
+                        ORDER BY open_time DESC
+                        LIMIT 15
+                    """, symbol)
+
+                    if len(rows) == 15:
+                        rows = sorted(rows, key=lambda r: r["open_time"])
+                        open_time = rows[0]["open_time"]
+                        open = rows[0]["open"]
+                        high = max(r["high"] for r in rows)
+                        low = min(r["low"] for r in rows)
+                        close = rows[-1]["close"]
+                        volume = sum(r["volume"] for r in rows)
+
+                        await conn.execute("""
+                            INSERT INTO ohlcv_m15 (symbol, open_time, open, high, low, close, volume)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        """, symbol, open_time, open, high, low, close, volume)
+
+                await conn.close()
+            except Exception as e:
+                print(f"[ERROR] Агрегация M15: {e}", flush=True)
+
+        await asyncio.sleep(5)
 # Словарь активных тикеров
 active_tickers = {}
 
@@ -154,6 +190,9 @@ async def main():
 
     # запуск фоновой задачи агрегации M5
     asyncio.create_task(aggregate_m5_candles())
+    
+    # запуск фоновой задачи агрегации М15
+    asyncio.create_task(aggregate_m15_candles())
 
     # Слушаем Redis для динамической активации
     await redis_listener()
