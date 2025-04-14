@@ -48,6 +48,42 @@ async def save_m1_candle(symbol, kline):
     except Exception as e:
         print(f"[ERROR] Ошибка при записи M1-свечи: {e}", flush=True)
         
+# 🧩 Агрегация M5-свечей из M1
+async def aggregate_m5_candles():
+    db_url = os.getenv("DATABASE_URL")
+
+    while True:
+        now = datetime.utcnow()
+        if now.minute % 5 == 0 and now.second < 5:
+            try:
+                conn = await asyncpg.connect(dsn=db_url)
+                for symbol in active_tickers.keys():
+                    rows = await conn.fetch("""
+                        SELECT * FROM ohlcv_m1
+                        WHERE symbol = $1
+                        ORDER BY open_time DESC
+                        LIMIT 5
+                    """, symbol)
+
+                    if len(rows) == 5:
+                        rows = sorted(rows, key=lambda r: r["open_time"])
+                        open_time = rows[0]["open_time"]
+                        open = rows[0]["open"]
+                        high = max(r["high"] for r in rows)
+                        low = min(r["low"] for r in rows)
+                        close = rows[-1]["close"]
+                        volume = sum(r["volume"] for r in rows)
+
+                        await conn.execute("""
+                            INSERT INTO ohlcv_m5 (symbol, open_time, open, high, low, close, volume)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        """, symbol, open_time, open, high, low, close, volume)
+
+                await conn.close()
+            except Exception as e:
+                print(f"[ERROR] Агрегация M5: {e}", flush=True)
+
+        await asyncio.sleep(5)
 # Словарь активных тикеров
 active_tickers = {}
 
@@ -111,11 +147,13 @@ async def redis_listener():
 async def main():
     print("[MAIN] Feed module running", flush=True)
 
-    # Загрузка тикеров из БД
     symbols = await get_enabled_tickers()
     print(f"[MAIN] Тикеров из БД для активации: {symbols}", flush=True)
     for symbol in symbols:
         await subscribe_ticker(symbol)
+
+    # запуск фоновой задачи агрегации M5
+    asyncio.create_task(aggregate_m5_candles())
 
     # Слушаем Redis для динамической активации
     await redis_listener()
