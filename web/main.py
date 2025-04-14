@@ -10,7 +10,7 @@ import os
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# 1️⃣ Подключение к PostgreSQL и Redis через окружение
+# 1. Подключение к PostgreSQL и Redis через окружение
 async def get_db():
     return await asyncpg.connect(dsn=os.getenv("DATABASE_URL"))
 
@@ -21,12 +21,12 @@ r = redis.Redis(
     ssl=True
 )
 
-# 2️⃣ Главная страница (заглушка)
+# 2. Главная страница (заглушка)
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     return templates.TemplateResponse("base.html", {"request": request})
 
-# 3️⃣ Список тикеров
+# 3. Список тикеров
 @app.get("/tickers", response_class=HTMLResponse)
 async def list_tickers(request: Request):
     conn = await get_db()
@@ -34,18 +34,22 @@ async def list_tickers(request: Request):
     await conn.close()
     return templates.TemplateResponse("tickers.html", {"request": request, "tickers": rows})
 
-# 4️⃣ Детали тикера
+# 4. Отображение формы создания тикера (popup)
+@app.get("/tickers/new", response_class=HTMLResponse)
+async def new_ticker_form(request: Request):
+    return templates.TemplateResponse("ticker_form.html", {"request": request})
+
+# 5. Детали тикера
 @app.get("/tickers/{symbol}", response_class=HTMLResponse)
 async def ticker_detail(symbol: str, request: Request):
     conn = await get_db()
     row = await conn.fetchrow("SELECT * FROM tickers WHERE symbol = $1", symbol.upper())
     await conn.close()
     if row:
-        # пока без привязанных стратегий
         return templates.TemplateResponse("ticker_detail.html", {"request": request, "ticker": row, "strategies": []})
     return HTMLResponse("Тикер не найден", status_code=404)
 
-# 5️⃣ Создание нового тикера
+# 6. Создание нового тикера
 @app.post("/tickers")
 async def create_ticker(
     symbol: str = Form(...),
@@ -62,7 +66,7 @@ async def create_ticker(
     await conn.close()
     return RedirectResponse(url="/tickers", status_code=303)
 
-# 6️⃣ Активация тикера (через Redis)
+# 7. Активация тикера (через Redis)
 @app.post("/tickers/{symbol}/activate")
 async def activate_ticker(symbol: str):
     await r.publish("ticker_activation", f'{{"symbol": "{symbol.upper()}", "action": "activate"}}')
