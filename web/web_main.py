@@ -52,6 +52,7 @@ async def ticker_detail(symbol: str, request: Request):
 # 6. Создание нового тикера
 @app.post("/tickers")
 async def create_ticker(
+    request: Request,
     symbol: str = Form(...),
     precision_price: int = Form(...),
     precision_qty: int = Form(...),
@@ -64,8 +65,8 @@ async def create_ticker(
         ON CONFLICT (symbol) DO NOTHING
     """, symbol.upper(), precision_price, precision_qty, min_qty)
     await conn.close()
-    return RedirectResponse(url="/tickers", status_code=303)
-
+    return templates.TemplateResponse("ticker_success.html", {"request": request})
+    
 # 7. Активация тикера (через Redis)
 @app.post("/tickers/{symbol}/activate")
 async def activate_ticker(symbol: str):
