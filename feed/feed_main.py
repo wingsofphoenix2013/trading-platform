@@ -139,14 +139,14 @@ def save_m1_candle_with_diagnostics(conn, candle: dict):
         # Вставка текущей свечи
         with conn.cursor() as cur:
             cur.execute(
-                \"\"\"
+                """
                 INSERT INTO ohlcv_m1 (
                     symbol, open_time, open, high, low, close, volume,
                     inserted_at, missing_previous, aggregated, source
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (symbol, open_time) DO NOTHING
-                \"\"\",
+                """,
                 (
                     symbol, open_time, open_price, high_price, low_price, close_price, volume,
                     inserted_at, missing_previous, False, 'stream'
