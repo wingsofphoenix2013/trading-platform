@@ -2,7 +2,7 @@
 
 print("🔥 FEED STARTED", flush=True)
 
-# 1️⃣ Импорт библиотек
+# 1. Импорт библиотек
 import asyncio
 import json
 import os
@@ -11,7 +11,7 @@ import websockets
 import redis.asyncio as redis
 import asyncpg
 
-# 2️⃣ Подключение к Redis (Upstash) через переменные окружения
+# 2. Подключение к Redis (Upstash) через переменные окружения
 r = redis.Redis(
     host=os.getenv("REDIS_HOST"),
     port=int(os.getenv("REDIS_PORT", 6379)),
@@ -19,7 +19,7 @@ r = redis.Redis(
     ssl=True
 )
 
-# 3️⃣ Подключение к PostgreSQL через переменные окружения
+# 3. Подключение к PostgreSQL через переменные окружения
 async def get_enabled_tickers():
     db_url = os.getenv("DATABASE_URL")
     try:
@@ -31,10 +31,10 @@ async def get_enabled_tickers():
         print(f"[ERROR] DB connection failed: {e}", flush=True)
         return []
 
-# 4️⃣ Словарь активных тикеров
+# 4. Словарь активных тикеров
 active_tickers = {}
 
-# 5️⃣ Запускает WebSocket-потоки по тикеру
+# 5. Запускает WebSocket-потоки по тикеру
 async def subscribe_ticker(symbol):
     if symbol in active_tickers:
         print(f"[INFO] {symbol} уже подписан", flush=True)
@@ -72,7 +72,7 @@ async def subscribe_ticker(symbol):
     task2 = asyncio.create_task(m1_kline())
     active_tickers[symbol] = (task1, task2)
 
-# 6️⃣ Слушает Redis канал и активирует новые тикеры по команде
+# 6. Слушает Redis канал и активирует новые тикеры по команде
 async def redis_listener():
     pubsub = r.pubsub()
     await pubsub.subscribe("ticker_activation")
@@ -89,7 +89,7 @@ async def redis_listener():
             except Exception as e:
                 print(f"[ERROR] Ошибка разбора сообщения: {e}", flush=True)
 
-# 7️⃣ Главный запуск: активируем все тикеры из БД + слушаем Redis
+# 7. Главный запуск: активируем все тикеры из БД + слушаем Redis
 async def main():
     print("[MAIN] Feed module running", flush=True)
 
@@ -101,7 +101,64 @@ async def main():
 
     # Слушаем Redis для динамической активации
     await redis_listener()
+# 8. Запись M1-свечи в базу данных с диагностикой пропуска предыдущей
 
-# 8️⃣ Точка входа в модуль: запускает асинхронный главный цикл
+def save_m1_candle_with_diagnostics(conn, candle: dict):
+    """
+    Сохраняет минутную свечу в таблицу ohlcv_m1, проверяя наличие предыдущей свечи.
+    Устанавливает флаг missing_previous, а также source и aggregated.
+    """
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    from datetime import datetime, timedelta
+
+    try:
+        symbol = candle["s"]
+        kline = candle["k"]
+        open_time_ms = kline["t"]
+        open_time = datetime.utcfromtimestamp(open_time_ms / 1000).replace(second=0, microsecond=0)
+        previous_time = open_time - timedelta(minutes=1)
+
+        open_price = float(kline["o"])
+        high_price = float(kline["h"])
+        low_price = float(kline["l"])
+        close_price = float(kline["c"])
+        volume = float(kline["v"])
+        inserted_at = datetime.utcnow()
+
+        # Проверка наличия предыдущей свечи
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT 1 FROM ohlcv_m1 WHERE symbol = %s AND open_time = %s",
+                (symbol, previous_time)
+            )
+            missing_previous = cur.fetchone() is None
+
+        print(f"[M1] Вставка свечи {symbol} @ {open_time} | missing_previous = {missing_previous}", flush=True)
+
+        # Вставка текущей свечи
+        with conn.cursor() as cur:
+            cur.execute(
+                \"\"\"
+                INSERT INTO ohlcv_m1 (
+                    symbol, open_time, open, high, low, close, volume,
+                    inserted_at, missing_previous, aggregated, source
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (symbol, open_time) DO NOTHING
+                \"\"\",
+                (
+                    symbol, open_time, open_price, high_price, low_price, close_price, volume,
+                    inserted_at, missing_previous, False, 'stream'
+                )
+            )
+            conn.commit()
+
+        print(f"[M1] ✅ Успешно сохранено: {symbol} @ {open_time}", flush=True)
+
+    except Exception as e:
+        print(f"[M1] ❌ Ошибка при сохранении свечи: {e}", flush=True)
+        
+# X Точка входа в модуль: запускает асинхронный главный цикл
 if __name__ == "__main__":
     asyncio.run(main())
