@@ -63,27 +63,38 @@ async def redis_listener():
     pubsub = r.pubsub()
     await pubsub.subscribe("ticker_activation", "signal_activation")
 
+    print("[redis] Подписка на каналы: ticker_activation, signal_activation")
+
     async for message in pubsub.listen():
         if message["type"] != "message":
             continue
-        data = json.loads(message["data"])
+
+        try:
+            data = json.loads(message["data"])
+        except Exception as e:
+            print(f"[redis] Ошибка парсинга JSON: {e}")
+            continue
+
         channel = message["channel"].decode()
+        print(f"[redis] Сообщение в {channel}: {data}")
 
         if channel == "ticker_activation":
             symbol = data.get("symbol")
             action = data.get("action")
             if symbol and action == "activate":
                 active_tickers.add(symbol)
+                print(f"[tickers] Активирован тикер: {symbol}")
             elif symbol and action == "deactivate":
                 active_tickers.discard(symbol)
+                print(f"[tickers] Деактивирован тикер: {symbol}")
 
         elif channel == "signal_activation":
             signal_id = data.get("id")
             enabled = data.get("enabled")
             if signal_id is not None:
-                active_signals.clear()  # проще перезагрузить всё
+                active_signals.clear()
                 active_signals.update(await load_active_signals())
-
+                print(f"[signals] Обновлён список сигналов (triggered by id={signal_id}, enabled={enabled})")
 # --- Главная точка входа ---
 async def main():
     global active_tickers, active_signals, strategy_bindings
