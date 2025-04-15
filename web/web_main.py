@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 import asyncpg
 import redis.asyncio as redis
 import os
+import json
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
