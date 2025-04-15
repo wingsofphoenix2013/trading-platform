@@ -6,7 +6,7 @@
 <body>
     <h1>{{ "Редактировать" if mode == "edit" else "Создать" }} сигнал</h1>
 
-    <form method="post" action="{{ '/signals/' + str(signal.id) if mode == 'edit' else '/signals' }}">
+    <form method="post" action="{% if mode == 'edit' %}/signals/{{ signal.id }}{% else %}/signals{% endif %}">
         <label>Название:</label><br>
         {% if mode == 'edit' %}
             <input type="text" name="name" value="{{ signal.name or '' }}" readonly><br><br>
