@@ -221,4 +221,40 @@ async def edit_signal_form(signal_id: int, request: Request):
         "request": request,
         "mode": "edit",
         "signal": row
-    })        
+    })
+    
+# 13. Обновление кода для получения сигналов из TradingVew
+from fastapi.responses import PlainTextResponse
+import redis.asyncio as redis
+import json
+
+# Подключение к Redis (использует те же переменные окружения)
+r = redis.Redis(
+    host=os.getenv("REDIS_HOST"),
+    port=int(os.getenv("REDIS_PORT", 6379)),
+    password=os.getenv("REDIS_PASSWORD"),
+    ssl=True
+)
+
+@app.post("/webhook", response_class=PlainTextResponse)
+async def receive_webhook(request: Request):
+    try:
+        body = await request.body()
+        message = body.decode("utf-8").strip()
+    except Exception as e:
+        print(f"[webhook] Ошибка чтения тела запроса: {e}", flush=True)
+        return PlainTextResponse("Malformed request", status_code=400)
+
+    if " " not in message:
+        print(f"[webhook] Некорректный формат сигнала: '{message}'", flush=True)
+        return PlainTextResponse("Invalid format", status_code=400)
+
+    # Публикуем в Redis
+    payload = {
+        "message": message,
+        "source": "tradingview"
+    }
+    await r.publish("incoming_signals", json.dumps(payload))
+    print(f"[webhook] Принят и опубликован: {payload}", flush=True)
+
+    return PlainTextResponse("Signal accepted", status_code=200)            
