@@ -103,3 +103,38 @@ async def new_signal_form(request: Request):
         "mode": "create",
         "signal": {}
     })
+
+# 10. Сохранение нового сигнала
+@app.post("/signals")
+async def create_signal(
+    request: Request,
+    name: str = Form(...),
+    signal_type: str = Form(...),
+    long_phrase: str = Form(None),
+    short_phrase: str = Form(None),
+    long_exit_phrase: str = Form(None),
+    short_exit_phrase: str = Form(None),
+    source: str = Form(None),
+    description: str = Form(None),
+    enabled: str = Form(None)
+):
+    conn = await get_db()
+
+    # Преобразование чекбокса в булево значение
+    enabled_bool = True if enabled == "true" else False
+
+    # Вставка записи
+    await conn.execute("""
+        INSERT INTO signals (
+            name, signal_type, long_phrase, short_phrase,
+            long_exit_phrase, short_exit_phrase,
+            source, description, enabled, created_at
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()
+        )
+    """, name, signal_type, long_phrase, short_phrase,
+         long_exit_phrase, short_exit_phrase,
+         source, description, enabled_bool)
+
+    await conn.close()
+    return RedirectResponse(url="/signals", status_code=303)
