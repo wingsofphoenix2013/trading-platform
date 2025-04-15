@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Список сигналов</title>
+</head>
+<body>
+    <h1>Сигналы</h1>
+    <a href="/signals/new">Добавить сигнал</a>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            <th>ID</th>
+            <th>Название</th>
+            <th>Тип</th>
+            <th>Фразы</th>
+            <th>Источник</th>
+            <th>Активен</th>
+            <th></th>
+        </tr>
+        {% for s in signals %}
+        <tr>
+            <td>{{ s.id }}</td>
+            <td>{{ s.name }}</td>
+            <td>{{ s.signal_type }}</td>
+            <td>
+                LONG: {{ s.long_phrase or "–" }}<br>
+                SHORT: {{ s.short_phrase or "–" }}<br>
+                Exit LONG: {{ s.long_exit_phrase or "–" }}<br>
+                Exit SHORT: {{ s.short_exit_phrase or "–" }}
+            </td>
+            <td>{{ s.source or "–" }}</td>
+            <td>{{ "Да" if s.enabled else "Нет" }}</td>
+            <td><a href="/signals/{{ s.id }}/edit">Редактировать</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
