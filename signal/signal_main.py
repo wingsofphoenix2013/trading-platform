@@ -140,7 +140,8 @@ async def webhook(request: Request):
         VALUES ($1, $2, $3, $4, $5, NOW(), $6)
     """, signal_id, ticker, direction, "tradingview", message, status)
     await conn.close()
-
+    
+    print(f"[webhook] message='{message}' | signal_id={signal_id} | ticker={ticker} | direction={direction} | status={status}", flush=True)
     return PlainTextResponse(f"Logged with status: {status}")
 
 # --- Выполняется при старте FastAPI ---
