@@ -94,3 +94,12 @@ async def list_signals(request: Request):
         "request": request,
         "signals": rows
     })
+
+# 9. Форма создания нового сигнала
+@app.get("/signals/new", response_class=HTMLResponse)
+async def new_signal_form(request: Request):
+    return templates.TemplateResponse("signal_form.html", {
+        "request": request,
+        "mode": "create",
+        "signal": {}
+    })
