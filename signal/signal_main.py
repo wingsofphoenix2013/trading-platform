@@ -110,7 +110,6 @@ async def webhook(request: Request):
     except Exception:
         return PlainTextResponse("Malformed request", status_code=400)
 
-    # Проверка формата
     if " " not in message:
         status = "error"
         signal_id = None
@@ -144,8 +143,9 @@ async def webhook(request: Request):
 
     return PlainTextResponse(f"Logged with status: {status}")
 
-# --- Главная точка входа ---
-async def main():
+# --- Выполняется при старте FastAPI ---
+@app.on_event("startup")
+async def startup_event():
     global active_tickers, active_signals, strategy_bindings
 
     print("[signal_worker] Запуск...", flush=True)
@@ -156,11 +156,8 @@ async def main():
     print(f"[init] Тикеры: {len(active_tickers)} | Сигналы: {len(active_signals)} | Стратегии: {len(strategy_bindings)}", flush=True)
     print("[main] Начинаем слушать Redis...", flush=True)
 
-    await redis_listener()
+    asyncio.create_task(redis_listener())
 
+# --- Точка входа ---
 if __name__ == "__main__":
-    print("[entrypoint] Стартуем asyncio loop...", flush=True)
-    loop = asyncio.get_event_loop()
-    loop.create_task(main())
     uvicorn.run(app, host="0.0.0.0", port=10000)
-    print("[exit] worker завершился", flush=True)
