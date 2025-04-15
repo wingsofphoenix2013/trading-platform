@@ -162,7 +162,6 @@ async def update_signal(
 
     # Проверка: нельзя менять name и signal_type
     # Пропускаем их полностью — не принимаем из формы
-
     # Проверка уникальности фраз (чтобы ни одна из них не повторялась у других сигналов)
     for field_name, value in [
         ("long_phrase", long_phrase),
@@ -200,4 +199,19 @@ async def update_signal(
          source, description, enabled_bool, signal_id)
 
     await conn.close()
-    return RedirectResponse(url="/signals", status_code=303)    
+    return RedirectResponse(url="/signals", status_code=303)
+# 12. Форма редактирования сигнала
+@app.get("/signals/{signal_id}/edit", response_class=HTMLResponse)
+async def edit_signal_form(signal_id: int, request: Request):
+    conn = await get_db()
+    row = await conn.fetchrow("SELECT * FROM signals WHERE id = $1", signal_id)
+    await conn.close()
+
+    if not row:
+        return HTMLResponse("Сигнал не найден", status_code=404)
+
+    return templates.TemplateResponse("signal_form.html", {
+        "request": request,
+        "mode": "edit",
+        "signal": row
+    })        
