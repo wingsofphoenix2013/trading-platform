@@ -99,14 +99,17 @@ async def redis_listener():
 async def main():
     global active_tickers, active_signals, strategy_bindings
 
-    print("[signal_worker] Запуск...")
+    print("[signal_worker] Запуск...", flush=True)
     active_tickers = await load_active_tickers()
     active_signals = await load_active_signals()
     strategy_bindings = await load_strategy_bindings()
 
-    print(f"[init] Тикеры: {len(active_tickers)} | Сигналы: {len(active_signals)} | Стратегии: {len(strategy_bindings)}")
+    print(f"[init] Тикеры: {len(active_tickers)} | Сигналы: {len(active_signals)} | Стратегии: {len(strategy_bindings)}", flush=True)
+    print("[main] Начинаем слушать Redis...", flush=True)
 
     await redis_listener()
 
 if __name__ == "__main__":
+    print("[entrypoint] Стартуем asyncio loop...")
     asyncio.run(main())
+    print("[exit] worker завершился (main() закончился)", flush=True)
