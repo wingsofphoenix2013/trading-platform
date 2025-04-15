@@ -138,3 +138,66 @@ async def create_signal(
 
     await conn.close()
     return RedirectResponse(url="/signals", status_code=303)
+
+# 11. Обновление сигнала
+@app.post("/signals/{signal_id}")
+async def update_signal(
+    signal_id: int,
+    request: Request,
+    long_phrase: str = Form(None),
+    short_phrase: str = Form(None),
+    long_exit_phrase: str = Form(None),
+    short_exit_phrase: str = Form(None),
+    source: str = Form(None),
+    description: str = Form(None),
+    enabled: str = Form(None)
+):
+    conn = await get_db()
+
+    # Проверка: существует ли сигнал и получаем его текущее состояние
+    existing = await conn.fetchrow("SELECT * FROM signals WHERE id = $1", signal_id)
+    if not existing:
+        await conn.close()
+        return HTMLResponse("Сигнал не найден", status_code=404)
+
+    # Проверка: нельзя менять name и signal_type
+    # Пропускаем их полностью — не принимаем из формы
+
+    # Проверка уникальности фраз (чтобы ни одна из них не повторялась у других сигналов)
+    for field_name, value in [
+        ("long_phrase", long_phrase),
+        ("short_phrase", short_phrase),
+        ("long_exit_phrase", long_exit_phrase),
+        ("short_exit_phrase", short_exit_phrase)
+    ]:
+        if value:
+            exists = await conn.fetchval(
+                f"SELECT COUNT(*) FROM signals WHERE {field_name} = $1 AND id != $2",
+                value, signal_id
+            )
+            if exists:
+                await conn.close()
+                return HTMLResponse(
+                    f"Ошибка: фраза в поле '{field_name}' уже используется другим сигналом.",
+                    status_code=400
+                )
+
+    # Перевод чекбокса
+    enabled_bool = True if enabled == "true" else False
+
+    # Обновление разрешённых полей
+    await conn.execute("""
+        UPDATE signals SET
+            long_phrase = $1,
+            short_phrase = $2,
+            long_exit_phrase = $3,
+            short_exit_phrase = $4,
+            source = $5,
+            description = $6,
+            enabled = $7
+        WHERE id = $8
+    """, long_phrase, short_phrase, long_exit_phrase, short_exit_phrase,
+         source, description, enabled_bool, signal_id)
+
+    await conn.close()
+    return RedirectResponse(url="/signals", status_code=303)    
