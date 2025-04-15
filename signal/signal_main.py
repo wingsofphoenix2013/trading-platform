@@ -6,6 +6,9 @@ import redis.asyncio as redis
 import json
 import os
 from datetime import datetime
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse
+import uvicorn
 
 # --- Конфигурация окружения ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -15,7 +18,7 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # --- Глобальные переменные (в оперативной памяти) ---
 active_tickers = set()
-active_signals = {}  # signal_phrase: {id, direction, ...}
+active_signals = {}  # phrase: {id, direction}
 strategy_bindings = {}  # ticker_symbol -> [strategy_id, ...]
 
 # --- Подключение к БД ---
@@ -63,7 +66,7 @@ async def redis_listener():
     pubsub = r.pubsub()
     await pubsub.subscribe("ticker_activation", "signal_activation")
 
-    print("[redis] Подписка на каналы: ticker_activation, signal_activation")
+    print("[redis] Подписка на каналы: ticker_activation, signal_activation", flush=True)
 
     async for message in pubsub.listen():
         if message["type"] != "message":
@@ -72,21 +75,21 @@ async def redis_listener():
         try:
             data = json.loads(message["data"])
         except Exception as e:
-            print(f"[redis] Ошибка парсинга JSON: {e}")
+            print(f"[redis] Ошибка парсинга JSON: {e}", flush=True)
             continue
 
         channel = message["channel"].decode()
-        print(f"[redis] Сообщение в {channel}: {data}")
+        print(f"[redis] Сообщение в {channel}: {data}", flush=True)
 
         if channel == "ticker_activation":
             symbol = data.get("symbol")
             action = data.get("action")
             if symbol and action == "activate":
                 active_tickers.add(symbol)
-                print(f"[tickers] Активирован тикер: {symbol}")
+                print(f"[tickers] Активирован тикер: {symbol}", flush=True)
             elif symbol and action == "deactivate":
                 active_tickers.discard(symbol)
-                print(f"[tickers] Деактивирован тикер: {symbol}")
+                print(f"[tickers] Деактивирован тикер: {symbol}", flush=True)
 
         elif channel == "signal_activation":
             signal_id = data.get("id")
@@ -94,7 +97,53 @@ async def redis_listener():
             if signal_id is not None:
                 active_signals.clear()
                 active_signals.update(await load_active_signals())
-                print(f"[signals] Обновлён список сигналов (triggered by id={signal_id}, enabled={enabled})")
+                print(f"[signals] Обновлён список сигналов (triggered by id={signal_id}, enabled={enabled})", flush=True)
+
+# --- FastAPI приложение для приёма сигналов ---
+app = FastAPI()
+
+@app.post("/webhook", response_class=PlainTextResponse)
+async def webhook(request: Request):
+    try:
+        body = await request.body()
+        message = body.decode("utf-8").strip()
+    except Exception:
+        return PlainTextResponse("Malformed request", status_code=400)
+
+    # Проверка формата
+    if " " not in message:
+        status = "error"
+        signal_id = None
+        ticker = "unknown"
+        direction = "unknown"
+    else:
+        phrase, ticker = message.split(" ", 1)
+        phrase = phrase.strip()
+        ticker = ticker.strip().upper()
+
+        signal_info = active_signals.get(phrase)
+        if not signal_info:
+            status = "ignored"
+            signal_id = None
+            direction = "unknown"
+        elif ticker not in active_tickers:
+            status = "ignored"
+            signal_id = signal_info["id"]
+            direction = signal_info["direction"]
+        else:
+            status = "new"
+            signal_id = signal_info["id"]
+            direction = signal_info["direction"]
+
+    conn = await get_db()
+    await conn.execute("""
+        INSERT INTO signal_logs (signal_id, ticker_symbol, direction, source, raw_message, received_at, status)
+        VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+    """, signal_id, ticker, direction, "tradingview", message, status)
+    await conn.close()
+
+    return PlainTextResponse(f"Logged with status: {status}")
+
 # --- Главная точка входа ---
 async def main():
     global active_tickers, active_signals, strategy_bindings
@@ -110,6 +159,8 @@ async def main():
     await redis_listener()
 
 if __name__ == "__main__":
-    print("[entrypoint] Стартуем asyncio loop...")
-    asyncio.run(main())
-    print("[exit] worker завершился (main() закончился)", flush=True)
+    print("[entrypoint] Стартуем asyncio loop...", flush=True)
+    loop = asyncio.get_event_loop()
+    loop.create_task(main())
+    uvicorn.run(app, host="0.0.0.0", port=10000)
+    print("[exit] worker завершился", flush=True)
