@@ -154,15 +154,17 @@ async def update_signal(
 ):
     conn = await get_db()
 
-    # Проверка: существует ли сигнал и получаем его текущее состояние
+    # Получаем текущее состояние сигнала из базы
     existing = await conn.fetchrow("SELECT * FROM signals WHERE id = $1", signal_id)
     if not existing:
         await conn.close()
         return HTMLResponse("Сигнал не найден", status_code=404)
 
-    # Проверка: нельзя менять name и signal_type
-    # Пропускаем их полностью — не принимаем из формы
-    # Проверка уникальности фраз (чтобы ни одна из них не повторялась у других сигналов)
+    # Определяем: было ли изменение флага enabled
+    enabled_bool = True if enabled == "true" else False
+    enabled_changed = enabled_bool != existing["enabled"]
+
+    # Проверка уникальности сигнальных фраз
     for field_name, value in [
         ("long_phrase", long_phrase),
         ("short_phrase", short_phrase),
@@ -181,10 +183,7 @@ async def update_signal(
                     status_code=400
                 )
 
-    # Перевод чекбокса
-    enabled_bool = True if enabled == "true" else False
-
-    # Обновление разрешённых полей
+    # Обновление разрешённых полей в базе
     await conn.execute("""
         UPDATE signals SET
             long_phrase = $1,
@@ -197,6 +196,13 @@ async def update_signal(
         WHERE id = $8
     """, long_phrase, short_phrase, long_exit_phrase, short_exit_phrase,
          source, description, enabled_bool, signal_id)
+
+    # Если статус enabled изменился — публикуем сообщение в Redis
+    if enabled_changed:
+        await r.publish("signal_activation", json.dumps({
+            "id": signal_id,
+            "enabled": enabled_bool
+        }))
 
     await conn.close()
     return RedirectResponse(url="/signals", status_code=303)
