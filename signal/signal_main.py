@@ -60,13 +60,49 @@ async def load_strategy_bindings():
         bindings.setdefault(symbol, []).append(strategy_id)
     return bindings
 
+# --- Обработка входящего сигнала из Redis ---
+async def handle_incoming_signal(data):
+    message = data.get("message")
+    source = data.get("source", "unknown")
+
+    if not message or " " not in message:
+        print(f"[signal] Некорректный формат: '{message}'", flush=True)
+        return
+
+    phrase, ticker = message.split(" ", 1)
+    phrase = phrase.strip()
+    ticker = ticker.strip().upper()
+
+    signal_info = active_signals.get(phrase)
+    if not signal_info:
+        signal_id = None
+        direction = "unknown"
+        status = "ignored"
+    elif ticker not in active_tickers:
+        signal_id = signal_info["id"]
+        direction = signal_info["direction"]
+        status = "ignored"
+    else:
+        signal_id = signal_info["id"]
+        direction = signal_info["direction"]
+        status = "new"
+
+    conn = await get_db()
+    await conn.execute("""
+        INSERT INTO signal_logs (signal_id, ticker_symbol, direction, source, raw_message, received_at, status)
+        VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+    """, signal_id, ticker, direction, source, message, status)
+    await conn.close()
+
+    print(f"[signal] Получен сигнал: '{message}' → status={status}, direction={direction}, ticker={ticker}", flush=True)
+
 # --- Обработка сообщений из Redis ---
 async def redis_listener():
     r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, ssl=True)
     pubsub = r.pubsub()
-    await pubsub.subscribe("ticker_activation", "signal_activation")
+    await pubsub.subscribe("ticker_activation", "signal_activation", "incoming_signals")
 
-    print("[redis] Подписка на каналы: ticker_activation, signal_activation", flush=True)
+    print("[redis] Подписка на каналы: ticker_activation, signal_activation, incoming_signals", flush=True)
 
     async for message in pubsub.listen():
         if message["type"] != "message":
@@ -99,50 +135,11 @@ async def redis_listener():
                 active_signals.update(await load_active_signals())
                 print(f"[signals] Обновлён список сигналов (triggered by id={signal_id}, enabled={enabled})", flush=True)
 
-# --- FastAPI приложение для приёма сигналов ---
+        elif channel == "incoming_signals":
+            await handle_incoming_signal(data)
+
+# --- FastAPI приложение (для отладки или расширения) ---
 app = FastAPI()
-
-@app.post("/webhook", response_class=PlainTextResponse)
-async def webhook(request: Request):
-    try:
-        body = await request.body()
-        message = body.decode("utf-8").strip()
-    except Exception:
-        return PlainTextResponse("Malformed request", status_code=400)
-
-    if " " not in message:
-        status = "error"
-        signal_id = None
-        ticker = "unknown"
-        direction = "unknown"
-    else:
-        phrase, ticker = message.split(" ", 1)
-        phrase = phrase.strip()
-        ticker = ticker.strip().upper()
-
-        signal_info = active_signals.get(phrase)
-        if not signal_info:
-            status = "ignored"
-            signal_id = None
-            direction = "unknown"
-        elif ticker not in active_tickers:
-            status = "ignored"
-            signal_id = signal_info["id"]
-            direction = signal_info["direction"]
-        else:
-            status = "new"
-            signal_id = signal_info["id"]
-            direction = signal_info["direction"]
-
-    conn = await get_db()
-    await conn.execute("""
-        INSERT INTO signal_logs (signal_id, ticker_symbol, direction, source, raw_message, received_at, status)
-        VALUES ($1, $2, $3, $4, $5, NOW(), $6)
-    """, signal_id, ticker, direction, "tradingview", message, status)
-    await conn.close()
-    
-    print(f"[webhook] message='{message}' | signal_id={signal_id} | ticker={ticker} | direction={direction} | status={status}", flush=True)
-    return PlainTextResponse(f"Logged with status: {status}")
 
 # --- Выполняется при старте FastAPI ---
 @app.on_event("startup")
