@@ -83,3 +83,14 @@ async def activate_ticker(symbol: str):
     await conn.execute("UPDATE tickers SET status = 'enabled' WHERE symbol = $1", symbol.upper())
     await conn.close()
     return RedirectResponse(url="/tickers", status_code=303)
+    
+# 8. Список всех сигналов
+@app.get("/signals", response_class=HTMLResponse)
+async def list_signals(request: Request):
+    conn = await get_db()
+    rows = await conn.fetch("SELECT * FROM signals ORDER BY created_at DESC")
+    await conn.close()
+    return templates.TemplateResponse("signals_list.html", {
+        "request": request,
+        "signals": rows
+    })
