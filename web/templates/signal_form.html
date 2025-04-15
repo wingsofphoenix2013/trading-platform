@@ -1,40 +1,49 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Создание сигнала</title>
+    <title>{{ "Редактировать" if mode == "edit" else "Создать" }} сигнал</title>
 </head>
 <body>
-    <h1>Создать сигнал</h1>
-    <form method="post" action="/signals">
+    <h1>{{ "Редактировать" if mode == "edit" else "Создать" }} сигнал</h1>
+
+    <form method="post" action="{{ '/signals/' + str(signal.id) if mode == 'edit' else '/signals' }}">
         <label>Название:</label><br>
-        <input type="text" name="name"><br><br>
+        {% if mode == 'edit' %}
+            <input type="text" name="name" value="{{ signal.name or '' }}" readonly><br><br>
+        {% else %}
+            <input type="text" name="name"><br><br>
+        {% endif %}
 
         <label>Тип сигнала:</label><br>
-        <select name="signal_type">
-            <option value="action">action</option>
-            <option value="control">control</option>
-        </select><br><br>
+        {% if mode == 'edit' %}
+            <input type="text" name="signal_type" value="{{ signal.signal_type or '' }}" readonly><br><br>
+        {% else %}
+            <select name="signal_type">
+                <option value="action">action</option>
+                <option value="control">control</option>
+            </select><br><br>
+        {% endif %}
 
         <label>Фраза для LONG:</label><br>
-        <input type="text" name="long_phrase"><br><br>
+        <input type="text" name="long_phrase" value="{{ signal.long_phrase or '' }}"><br><br>
 
         <label>Фраза для SHORT:</label><br>
-        <input type="text" name="short_phrase"><br><br>
+        <input type="text" name="short_phrase" value="{{ signal.short_phrase or '' }}"><br><br>
 
         <label>Фраза выхода из LONG:</label><br>
-        <input type="text" name="long_exit_phrase"><br><br>
+        <input type="text" name="long_exit_phrase" value="{{ signal.long_exit_phrase or '' }}"><br><br>
 
         <label>Фраза выхода из SHORT:</label><br>
-        <input type="text" name="short_exit_phrase"><br><br>
+        <input type="text" name="short_exit_phrase" value="{{ signal.short_exit_phrase or '' }}"><br><br>
 
         <label>Источник:</label><br>
-        <input type="text" name="source"><br><br>
+        <input type="text" name="source" value="{{ signal.source or '' }}"><br><br>
 
         <label>Описание:</label><br>
-        <textarea name="description" rows="4" cols="40"></textarea><br><br>
+        <textarea name="description" rows="4" cols="40">{{ signal.description or '' }}</textarea><br><br>
 
         <label>Активен:</label>
-        <input type="checkbox" name="enabled" value="true" checked><br><br>
+        <input type="checkbox" name="enabled" value="true" {% if signal.enabled %}checked{% endif %}><br><br>
 
         <button type="submit">Сохранить</button>
     </form>
