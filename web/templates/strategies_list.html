@@ -13,6 +13,7 @@
             <th>Депозит</th>
             <th>Лимит позиции</th>
             <th>Тикеры</th>
+            <th>Упр. сигнал</th>
             <th>Вкл</th>
             <th></th>
         </tr>
@@ -23,6 +24,7 @@
 			<td>{{ '%.2f' | format(s.deposit) }}</td>
 			<td>{{ '%.2f' | format(s.position_limit) }}</td>
             <td>{% if s.use_all_tickers %}Все{% else %}Выборочно{% endif %}</td>
+            <td>{{ s.signal_name or "n/a" }}</td>
             <td>{{ "Да" if s.enabled else "Нет" }}</td>
             <td><a href="/strategies/{{ s.id }}/edit">Редактировать</a></td>
         </tr>
