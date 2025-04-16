@@ -286,7 +286,8 @@ async def list_strategies(request: Request):
 async def new_strategy_form(request: Request):
     return templates.TemplateResponse("strategy_form.html", {
         "request": request,
-        "mode": "create"
+        "mode": "create",
+        "strategy": {}
     })
 # 16. Сохранение новой стратегии (POST)
 # Принимает данные из формы и сохраняет новую запись в таблицу `strategies`.
