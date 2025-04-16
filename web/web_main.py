@@ -277,4 +277,14 @@ async def list_strategies(request: Request):
     return templates.TemplateResponse("strategies_list.html", {
         "request": request,
         "strategies": rows
-    })    
+    })
+    
+# 15. Форма создания стратегии (GET)
+# Отображает пустую форму для добавления новой стратегии
+
+@app.get("/strategies/new", response_class=HTMLResponse)
+async def new_strategy_form(request: Request):
+    return templates.TemplateResponse("strategy_form.html", {
+        "request": request,
+        "mode": "create"
+    })        

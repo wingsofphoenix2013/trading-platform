@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Создание стратегии</title>
+</head>
+<body>
+    <h1>Создать стратегию</h1>
+    <form method="post" action="/strategies">
+        <label>Название:</label><br>
+        <input type="text" name="name"><br><br>
+
+        <label>Описание:</label><br>
+        <textarea name="description" rows="4" cols="40"></textarea><br><br>
+
+        <label>Депозит:</label><br>
+        <input type="number" step="0.01" name="deposit"><br><br>
+
+        <label>Лимит позиции:</label><br>
+        <input type="number" step="0.01" name="position_limit"><br><br>
+
+        <label>Использовать все тикеры:</label>
+        <input type="checkbox" name="use_all_tickers" value="true" checked><br><br>
+
+        <label>Активна:</label>
+        <input type="checkbox" name="enabled" value="true" checked><br><br>
+
+        <button type="submit">Сохранить</button>
+    </form>
+</body>
+</html>
