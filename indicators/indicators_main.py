@@ -62,6 +62,7 @@ async def get_last_m5_candles(symbol, limit=100):
         print(f"[ERROR] Failed to fetch M5 candles for {symbol}: {e}", flush=True)
         return []
 
+# === Расчёт линейного регрессионного канала ===
 def calculate_lr_channel(symbol, candles, length=50, std_multiplier=2):
     if len(candles) < length:
         print(f"[SKIP] {symbol}: not enough candles for regression (have {len(candles)}, need {length})", flush=True)
@@ -84,7 +85,7 @@ def calculate_lr_channel(symbol, candles, length=50, std_multiplier=2):
     upper = mid + std_multiplier * std_dev
     lower = mid - std_multiplier * std_dev
 
-    print(f"[LR] {symbol}: angle={angle:.2f}°, slope(norm)={slope:.4f}, mid={mid:.2f}, upper={upper:.2f}, lower={lower:.2f}", flush=True)
+    print(f"[LR] {symbol}: angle={angle:.2f}°, slope(norm)={slope:.4f}, mid={mid:.4f}, upper={upper:.4f}, lower={lower:.4f}", flush=True)
     
 # === Основной цикл воркера ===
 async def main():
@@ -101,11 +102,9 @@ async def main():
                 candles = await get_last_m5_candles(symbol, limit=100)
                 calculate_lr_channel(symbol, candles)
 
-            # Пауза, чтобы не пересчитать повторно в ту же минуту
             await asyncio.sleep(5)
 
         else:
-            print(f"[WAIT] now = {now.strftime('%H:%M:%S')} — not yet time", flush=True)
             await asyncio.sleep(1)
             
 # === Запуск ===
