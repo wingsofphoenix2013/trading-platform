@@ -346,19 +346,37 @@ async def create_strategy(
     await conn.close()
     return RedirectResponse(url="/strategies", status_code=303)
 # 17. Форма редактирования стратегии (GET)
-# Загружает стратегию по ID и отображает форму с автозаполнением
+# Загружает стратегию по ID и отображает форму с автозаполнением + выбор управляющего сигнала
 
 @app.get("/strategies/{strategy_id}/edit", response_class=HTMLResponse)
 async def edit_strategy_form(strategy_id: int, request: Request):
     conn = await get_db()
-    row = await conn.fetchrow("SELECT * FROM strategies WHERE id = $1", strategy_id)
-    await conn.close()
 
-    if not row:
+    # Загружаем стратегию
+    strategy = await conn.fetchrow("SELECT * FROM strategies WHERE id = $1", strategy_id)
+    if not strategy:
+        await conn.close()
         return HTMLResponse("Стратегия не найдена", status_code=404)
+
+    # Загружаем все активные action-сигналы
+    signals = await conn.fetch("""
+        SELECT id, name FROM signals
+        WHERE signal_type = 'action' AND enabled = true
+        ORDER BY name
+    """)
+
+    # Загружаем текущий управляющий сигнал этой стратегии
+    current_signal_id = await conn.fetchval("""
+        SELECT signal_id FROM strategy_signals
+        WHERE strategy_id = $1 AND role = 'action'
+    """, strategy_id)
+
+    await conn.close()
 
     return templates.TemplateResponse("strategy_form.html", {
         "request": request,
         "mode": "edit",
-        "strategy": row
-    })            
+        "strategy": strategy,
+        "signals": signals,
+        "current_signal_id": current_signal_id
+    })
