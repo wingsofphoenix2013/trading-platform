@@ -18,12 +18,14 @@
 <div class="card">
     <div class="title">Параметры технических индикаторов</div>
 
-    <label for="ticker">Выберите тикер:</label>
-    <select id="ticker" name="ticker">
-        {% for ticker in tickers %}
-            <option value="{{ ticker }}">{{ ticker }}</option>
-        {% endfor %}
-    </select>
+    <form method="get" action="/indicators">
+        <label for="ticker">Выберите тикер:</label>
+        <select id="ticker" name="symbol" onchange="this.form.submit()">
+            {% for ticker in tickers %}
+                <option value="{{ ticker }}" {% if ticker == selected_symbol %}selected{% endif %}>{{ ticker }}</option>
+            {% endfor %}
+        </select>
+    </form>
 
     <table>
         <thead>
@@ -33,15 +35,14 @@
             </tr>
         </thead>
         <tbody>
-            <tr><td>Текущая цена</td><td>n/a</td></tr>
-            <tr><td>LR Угол</td><td>n/a</td></tr>
-            <tr><td>LR Mid</td><td>n/a</td></tr>
-            <tr><td>LR Верхняя</td><td>n/a</td></tr>
-            <tr><td>LR Нижняя</td><td>n/a</td></tr>
-            <tr><td>RSI</td><td>n/a</td></tr>
-            <tr><td>SMI</td><td>n/a</td></tr>
-            <tr><td>SMI Signal</td><td>n/a</td></tr>
-            <tr><td>ATR</td><td>n/a</td></tr>
+            <tr><td>LR Угол</td><td>{{ indicators.angle or 'n/a' }}</td></tr>
+            <tr><td>LR Mid</td><td>{{ indicators.mid or 'n/a' }}</td></tr>
+            <tr><td>LR Верхняя</td><td>{{ indicators.upper or 'n/a' }}</td></tr>
+            <tr><td>LR Нижняя</td><td>{{ indicators.lower or 'n/a' }}</td></tr>
+            <tr><td>RSI</td><td>{{ indicators.rsi or 'n/a' }}</td></tr>
+            <tr><td>SMI</td><td>{{ indicators.smi or 'n/a' }}</td></tr>
+            <tr><td>SMI Signal</td><td>{{ indicators.smi_signal or 'n/a' }}</td></tr>
+            <tr><td>ATR</td><td>{{ indicators.atr or 'n/a' }}</td></tr>
         </tbody>
     </table>
 </div>
