@@ -3,13 +3,19 @@
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from jinja2 import ChoiceLoader, FileSystemLoader
 import asyncpg
 import redis.asyncio as redis
 import os
 import json
 
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
+# Инициализация шаблонов: поддержка шаблонов из нескольких директорий
+templates = Jinja2Templates(directory="web/templates")
+templates.env.loader = ChoiceLoader([
+    FileSystemLoader("web/templates"),
+    FileSystemLoader("strategies/templates")
+])
 
 # 1. Подключение к PostgreSQL и Redis через окружение
 async def get_db():
