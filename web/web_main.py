@@ -380,3 +380,47 @@ async def edit_strategy_form(strategy_id: int, request: Request):
         "signals": signals,
         "current_signal_id": current_signal_id
     })
+# 18. Сохранение изменений стратегии (POST)
+# Обновляет стратегию и её управляющий сигнал
+
+@app.post("/strategies/{strategy_id}")
+async def update_strategy(
+    strategy_id: int,
+    request: Request,
+    description: str = Form(None),
+    deposit: float = Form(...),
+    position_limit: float = Form(...),
+    use_all_tickers: str = Form(None),
+    enabled: str = Form(None),
+    action_signal_id: int = Form(...)
+):
+    use_all_tickers_bool = use_all_tickers == "true"
+    enabled_bool = enabled == "true"
+
+    conn = await get_db()
+
+    # Обновляем стратегию
+    await conn.execute("""
+        UPDATE strategies SET
+            description = $1,
+            deposit = $2,
+            position_limit = $3,
+            use_all_tickers = $4,
+            enabled = $5
+        WHERE id = $6
+    """, description, deposit, position_limit, use_all_tickers_bool, enabled_bool, strategy_id)
+
+    # Удаляем старую связь сигнала
+    await conn.execute("""
+        DELETE FROM strategy_signals
+        WHERE strategy_id = $1 AND role = 'action'
+    """, strategy_id)
+
+    # Вставляем новую
+    await conn.execute("""
+        INSERT INTO strategy_signals (strategy_id, signal_id, role)
+        VALUES ($1, $2, 'action')
+    """, strategy_id, action_signal_id)
+
+    await conn.close()
+    return RedirectResponse(url="/strategies", status_code=303)    
