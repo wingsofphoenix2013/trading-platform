@@ -1,0 +1,62 @@
+<!-- indicators_param.html — Страница настройки параметров индикаторов -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Настройки индикаторов</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; background: #f8f9fa; }
+        .card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 900px; margin: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #ddd; text-align: center; }
+        th { background: #f1f1f1; font-weight: 600; }
+        .title { margin-bottom: 1rem; font-size: 1.4rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="title">Настройки параметров индикаторов</div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Индикатор</th>
+                <th>Параметры</th>
+                <th>Описание</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>RSI</td>
+                <td>Период: <input type="number" value="14" disabled></td>
+                <td>Отслеживает силу движения цены</td>
+            </tr>
+            <tr>
+                <td>SMI</td>
+                <td>Схема: <input type="text" value="13/5/3" disabled></td>
+                <td>Стохастик + сглаживание</td>
+            </tr>
+            <tr>
+                <td>ATR</td>
+                <td>Период: <input type="number" value="14" disabled></td>
+                <td>Средний истинный диапазон (волатильность)</td>
+            </tr>
+            <tr>
+                <td>Линейный канал</td>
+                <td>Длина: <input type="number" value="50" disabled></td>
+                <td>Трендовая линия + границы</td>
+            </tr>
+            <tr>
+                <td>Тренд-фильтр</td>
+                <td>
+                    Up > <input type="number" value="2" step="0.1" disabled>
+                    &nbsp;&nbsp;
+                    Down < <input type="number" value="-2" step="0.1" disabled>
+                </td>
+                <td>Классификация угла наклона</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

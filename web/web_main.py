@@ -450,3 +450,7 @@ async def indicators_main_page(request: Request, symbol: str = None):
         "selected_symbol": selected_symbol,
         "indicators": indicator_data
     })
+# 20. Страница настройки параметров индикаторов
+@app.get("/indicators/settings", response_class=HTMLResponse)
+async def indicators_param_page(request: Request):
+    return templates.TemplateResponse("indicators_param.html", {"request": request})    
