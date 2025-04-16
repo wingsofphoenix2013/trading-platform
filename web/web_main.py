@@ -258,3 +258,23 @@ async def receive_webhook(request: Request):
     print(f"[webhook] Принят и опубликован: {payload}", flush=True)
 
     return PlainTextResponse("Signal accepted", status_code=200)            
+# 14. Отображение списка стратегий
+# Страница /strategies — отображает все стратегии в виде таблицы.
+# Данные загружаются из таблицы `strategies`, выводится основная информация: депозит, лимит, статус, режим тикеров.
+
+@app.get("/strategies", response_class=HTMLResponse)
+async def list_strategies(request: Request):
+    # Получаем список всех стратегий (без фильтрации)
+    conn = await get_db()
+    rows = await conn.fetch("""
+        SELECT id, name, deposit, position_limit, use_all_tickers, enabled
+        FROM strategies
+        ORDER BY created_at DESC
+    """)
+    await conn.close()
+
+    # Возвращаем шаблон со списком стратегий
+    return templates.TemplateResponse("strategies_list.html", {
+        "request": request,
+        "strategies": rows
+    })    

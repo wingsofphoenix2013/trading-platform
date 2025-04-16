@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Список стратегий</title>
+</head>
+<body>
+    <h1>Стратегии</h1>
+    <a href="/strategies/new">Добавить стратегию</a>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            <th>ID</th>
+            <th>Название</th>
+            <th>Депозит</th>
+            <th>Лимит позиции</th>
+            <th>Тикеры</th>
+            <th>Вкл</th>
+            <th></th>
+        </tr>
+        {% for s in strategies %}
+        <tr>
+            <td>{{ s.id }}</td>
+            <td>{{ s.name }}</td>
+            <td>{{ s.deposit }}</td>
+            <td>{{ s.position_limit }}</td>
+            <td>{% if s.use_all_tickers %}Все{% else %}Выборочно{% endif %}</td>
+            <td>{{ "Да" if s.enabled else "Нет" }}</td>
+            <td><a href="/strategies/{{ s.id }}/edit">Редактировать</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
