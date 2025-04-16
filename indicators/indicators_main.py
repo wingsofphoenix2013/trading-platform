@@ -101,12 +101,13 @@ async def main():
                 candles = await get_last_m5_candles(symbol, limit=100)
                 calculate_lr_channel(symbol, candles)
 
-            # Дожидаемся окончания первой секунды, чтобы не дублировать расчёт
+            # Пауза, чтобы не пересчитать повторно в ту же минуту
             await asyncio.sleep(5)
 
         else:
+            print(f"[WAIT] now = {now.strftime('%H:%M:%S')} — not yet time", flush=True)
             await asyncio.sleep(1)
-
+            
 # === Запуск ===
 if __name__ == "__main__":
     asyncio.run(main())
