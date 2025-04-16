@@ -424,12 +424,11 @@ async def update_strategy(
 
     await conn.close()
     return RedirectResponse(url="/strategies", status_code=303)
-    
 # 19. Страница параметров индикаторов по тикеру
-@app.get("/tickers/params", response_class=HTMLResponse)
+@app.get("/tickers/indicators", response_class=HTMLResponse)
 async def ticker_param(request: Request):
     conn = await get_db()
     rows = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled' ORDER BY symbol ASC")
     await conn.close()
     symbols = [row["symbol"] for row in rows]
-    return templates.TemplateResponse("ticker_param.html", {"request": request, "tickers": symbols})        
+    return templates.TemplateResponse("ticker_param.html", {"request": request, "tickers": symbols})
