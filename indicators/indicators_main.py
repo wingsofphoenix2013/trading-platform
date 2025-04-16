@@ -1,4 +1,4 @@
-# indicators_main.py — расчёт технических индикаторов (с LR и RSI)
+# indicators_main.py — расчёт технических индикаторов (с LR, RSI, SMI)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -43,7 +43,7 @@ async def get_last_m5_candles(symbol, limit=100):
         conn = await asyncpg.connect(dsn=db_url)
         rows = await conn.fetch(
             """
-            SELECT open_time, close FROM ohlcv_m5
+            SELECT open_time, high, low, close FROM ohlcv_m5
             WHERE symbol = $1
             ORDER BY open_time DESC
             LIMIT $2
@@ -103,6 +103,32 @@ def calculate_rsi(symbol, candles, period=14):
 
     print(f"[RSI] {symbol}: RSI={rsi:.2f}", flush=True)
 
+# === Расчёт SMI по hlc3 ===
+def calculate_smi(symbol, candles, k=13, d=5, s=3):
+    required = k + d + s
+    if len(candles) < required:
+        print(f"[SKIP] {symbol}: not enough candles for SMI (have {len(candles)}, need {required})", flush=True)
+        return
+
+    hlc3 = np.array([(float(c['high']) + float(c['low']) + float(c['close'])) / 3 for c in candles])
+
+    highest_high = np.array([max([hlc3[j] for j in range(i - k, i)]) for i in range(k, len(hlc3))])
+    lowest_low = np.array([min([hlc3[j] for j in range(i - k, i)]) for i in range(k, len(hlc3))])
+    center = (highest_high + lowest_low) / 2
+    diff = hlc3[k:len(hlc3)] - center
+
+    # Smoothing (2 этапа EMA -> симуляция через простое SMA для начального этапа)
+    smoothed_diff = np.convolve(diff, np.ones(d)/d, mode='valid')
+    smoothed_range = np.convolve(highest_high - lowest_low, np.ones(d)/d, mode='valid')
+
+    smi_raw = 100 * smoothed_diff / (smoothed_range + 1e-9)
+    smi = np.convolve(smi_raw, np.ones(s)/s, mode='valid')
+
+    if len(smi) > 0:
+        print(f"[SMI] {symbol}: SMI={smi_raw[-1]:.2f}, Signal={smi[-1]:.2f}", flush=True)
+    else:
+        print(f"[SKIP] {symbol}: SMI smoothing produced no output", flush=True)
+
 # === Основной цикл воркера ===
 async def main():
     print("[INIT] Starting indicators loop", flush=True)
@@ -118,6 +144,7 @@ async def main():
                 candles = await get_last_m5_candles(symbol, limit=100)
                 calculate_lr_channel(symbol, candles)
                 calculate_rsi(symbol, candles)
+                calculate_smi(symbol, candles)
 
             await asyncio.sleep(5)
         else:
