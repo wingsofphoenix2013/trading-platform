@@ -62,13 +62,13 @@ async def get_last_m5_candles(symbol, limit=100):
         print(f"[ERROR] Failed to fetch M5 candles for {symbol}: {e}", flush=True)
         return []
 
-# === Расчёт линейного регрессионного канала ===
 def calculate_lr_channel(symbol, candles, length=50, std_multiplier=2):
     if len(candles) < length:
         print(f"[SKIP] {symbol}: not enough candles for regression (have {len(candles)}, need {length})", flush=True)
         return
 
-    closes = np.array([c["close"] for c in candles[-length:]])
+    # Преобразуем Decimal → float
+    closes = np.array([float(c["close"]) for c in candles[-length:]])
     x = np.arange(len(closes))
 
     # === 1. Угол по нормализованным close ===
@@ -85,7 +85,7 @@ def calculate_lr_channel(symbol, candles, length=50, std_multiplier=2):
     lower = mid - std_multiplier * std_dev
 
     print(f"[LR] {symbol}: angle={angle:.2f}°, slope(norm)={slope:.4f}, mid={mid:.2f}, upper={upper:.2f}, lower={lower:.2f}", flush=True)
-
+    
 # === Основной цикл воркера ===
 async def main():
     print("[INIT] Starting indicators loop", flush=True)
