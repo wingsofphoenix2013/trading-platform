@@ -287,4 +287,34 @@ async def new_strategy_form(request: Request):
     return templates.TemplateResponse("strategy_form.html", {
         "request": request,
         "mode": "create"
-    })        
+    })
+# 16. Сохранение новой стратегии (POST)
+# Принимает данные из формы и сохраняет новую запись в таблицу `strategies`.
+
+@app.post("/strategies")
+async def create_strategy(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(None),
+    deposit: float = Form(...),
+    position_limit: float = Form(...),
+    use_all_tickers: str = Form(None),
+    enabled: str = Form(None)
+):
+    # Обработка чекбоксов: если галочка стояла — придёт строка, иначе None
+    use_all_tickers_bool = use_all_tickers == "true"
+    enabled_bool = enabled == "true"
+
+    conn = await get_db()
+    await conn.execute("""
+        INSERT INTO strategies (
+            name, description, deposit, position_limit,
+            use_all_tickers, enabled, created_at
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, NOW()
+        )
+    """, name, description, deposit, position_limit, use_all_tickers_bool, enabled_bool)
+    await conn.close()
+
+    # Возврат на список стратегий
+    return RedirectResponse(url="/strategies", status_code=303)            
