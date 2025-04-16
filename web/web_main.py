@@ -426,9 +426,27 @@ async def update_strategy(
     return RedirectResponse(url="/strategies", status_code=303)
 # 19. Страница параметров индикаторов по тикеру
 @app.get("/indicators", response_class=HTMLResponse)
-async def indicators_main_page(request: Request):
+async def indicators_main_page(request: Request, symbol: str = None):
     conn = await get_db()
     rows = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled' ORDER BY symbol ASC")
     await conn.close()
     symbols = [row["symbol"] for row in rows]
-    return templates.TemplateResponse("ticker_param.html", {"request": request, "tickers": symbols})
+
+    selected_symbol = symbol or (symbols[0] if symbols else None)
+    indicator_data = {}
+
+    if selected_symbol:
+        key = f"indicators:{selected_symbol}"
+        raw = await r.get(key)
+        if raw:
+            try:
+                indicator_data = json.loads(raw)
+            except Exception as e:
+                print(f"[ERROR] Failed to parse Redis JSON for {selected_symbol}: {e}", flush=True)
+
+    return templates.TemplateResponse("ticker_param.html", {
+        "request": request,
+        "tickers": symbols,
+        "selected_symbol": selected_symbol,
+        "indicators": indicator_data
+    })
