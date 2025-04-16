@@ -1,4 +1,4 @@
-# indicators_main.py — расчёт технических индикаторов (с LR, RSI, SMI, ATR)
+# indicators_main.py — расчёт технических индикаторов (с публикацией в Redis)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -8,6 +8,7 @@ import os
 import asyncpg
 import redis.asyncio as redis
 import numpy as np
+import json
 from datetime import datetime
 from math import atan, degrees
 
@@ -27,7 +28,7 @@ async def get_enabled_tickers():
     db_url = os.getenv("DATABASE_URL")
     try:
         conn = await asyncpg.connect(dsn=db_url)
-        rows = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled'")
+        rows = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled' ORDER BY symbol ASC")
         await conn.close()
         symbols = [row["symbol"] for row in rows]
         print(f"[DB] {len(symbols)} tickers fetched: {symbols}", flush=True)
@@ -62,97 +63,6 @@ async def get_last_m5_candles(symbol, limit=100):
         print(f"[ERROR] Failed to fetch M5 candles for {symbol}: {e}", flush=True)
         return []
 
-# === Расчёт линейного регрессионного канала ===
-def calculate_lr_channel(symbol, candles, length=50, std_multiplier=2):
-    if len(candles) < length:
-        print(f"[SKIP] {symbol}: not enough candles for regression (have {len(candles)}, need {length})", flush=True)
-        return
-
-    closes = np.array([float(c["close"]) for c in candles[-length:]])
-    x = np.arange(len(closes))
-
-    norm = (closes - closes.mean()) / closes.std()
-    slope, intercept = np.polyfit(x, norm, 1)
-    angle = degrees(atan(slope))
-
-    slope_real, intercept_real = np.polyfit(x, closes, 1)
-    regression_line = slope_real * x + intercept_real
-    std_dev = np.std(closes - regression_line)
-    mid = regression_line[-1]
-    upper = mid + std_multiplier * std_dev
-    lower = mid - std_multiplier * std_dev
-
-    print(f"[LR] {symbol}: angle={angle:.2f}°, slope(norm)={slope:.4f}, mid={mid:.4f}, upper={upper:.4f}, lower={lower:.4f}", flush=True)
-
-# === Расчёт RSI по close ===
-def calculate_rsi(symbol, candles, period=14):
-    if len(candles) < period:
-        print(f"[SKIP] {symbol}: not enough candles for RSI (have {len(candles)}, need {period})", flush=True)
-        return
-
-    closes = np.array([float(c["close"]) for c in candles[-(period + 1):]])
-    deltas = np.diff(closes)
-    gain = np.where(deltas > 0, deltas, 0).sum() / period
-    loss = -np.where(deltas < 0, deltas, 0).sum() / period
-
-    if loss == 0:
-        rsi = 100.0
-    else:
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-
-    print(f"[RSI] {symbol}: RSI={rsi:.2f}", flush=True)
-
-# === Расчёт SMI по hlc3 ===
-def calculate_smi(symbol, candles, k=13, d=5, s=3):
-    required = k + d + s
-    if len(candles) < required:
-        print(f"[SKIP] {symbol}: not enough candles for SMI (have {len(candles)}, need {required})", flush=True)
-        return
-
-    hlc3 = np.array([(float(c['high']) + float(c['low']) + float(c['close'])) / 3 for c in candles])
-
-    highest_high = np.array([max([hlc3[j] for j in range(i - k, i)]) for i in range(k, len(hlc3))])
-    lowest_low = np.array([min([hlc3[j] for j in range(i - k, i)]) for i in range(k, len(hlc3))])
-    center = (highest_high + lowest_low) / 2
-    diff = hlc3[k:len(hlc3)] - center
-
-    smoothed_diff = np.convolve(diff, np.ones(d)/d, mode='valid')
-    smoothed_range = np.convolve(highest_high - lowest_low, np.ones(d)/d, mode='valid')
-
-    smi_raw = 100 * smoothed_diff / (smoothed_range + 1e-9)
-    smi = np.convolve(smi_raw, np.ones(s)/s, mode='valid')
-
-    if len(smi) > 0:
-        print(f"[SMI] {symbol}: SMI={smi_raw[-1]:.2f}, Signal={smi[-1]:.2f}", flush=True)
-    else:
-        print(f"[SKIP] {symbol}: SMI smoothing produced no output", flush=True)
-
-# === Расчёт ATR ===
-def calculate_atr(symbol, candles, period=14):
-    if len(candles) < period + 1:
-        print(f"[SKIP] {symbol}: not enough candles for ATR (have {len(candles)}, need {period + 1})", flush=True)
-        return
-
-    highs = np.array([float(c['high']) for c in candles[-(period + 1):]])
-    lows = np.array([float(c['low']) for c in candles[-(period + 1):]])
-    closes = np.array([float(c['close']) for c in candles[-(period + 1):]])
-
-    tr_list = []
-    for i in range(1, len(highs)):
-        high = highs[i]
-        low = lows[i]
-        prev_close = closes[i - 1]
-        tr = max(
-            high - low,
-            abs(high - prev_close),
-            abs(low - prev_close)
-        )
-        tr_list.append(tr)
-
-    atr = sum(tr_list) / period
-    print(f"[ATR] {symbol}: ATR={atr:.4f}", flush=True)
-
 # === Основной цикл воркера ===
 async def main():
     print("[INIT] Starting indicators loop", flush=True)
@@ -166,10 +76,74 @@ async def main():
 
             for symbol in tickers:
                 candles = await get_last_m5_candles(symbol, limit=100)
-                calculate_lr_channel(symbol, candles)
-                calculate_rsi(symbol, candles)
-                calculate_smi(symbol, candles)
-                calculate_atr(symbol, candles)
+
+                angle = mid = upper = lower = rsi = smi_val = smi_signal_val = atr = None
+
+                # === LR канал ===
+                if len(candles) >= 50:
+                    closes = np.array([float(c["close"]) for c in candles[-50:]])
+                    x = np.arange(len(closes))
+                    norm = (closes - closes.mean()) / closes.std()
+                    slope, _ = np.polyfit(x, norm, 1)
+                    angle = round(degrees(atan(slope)), 2)
+
+                    slope_real, intercept_real = np.polyfit(x, closes, 1)
+                    regression_line = slope_real * x + intercept_real
+                    std_dev = np.std(closes - regression_line)
+                    mid = round(regression_line[-1], 4)
+                    upper = round(mid + 2 * std_dev, 4)
+                    lower = round(mid - 2 * std_dev, 4)
+                    print(f"[LR] {symbol}: angle={angle}°, mid={mid}, upper={upper}, lower={lower}", flush=True)
+
+                # === RSI ===
+                if len(candles) >= 15:
+                    closes = np.array([float(c["close"]) for c in candles[-15:]])
+                    deltas = np.diff(closes)
+                    gain = np.where(deltas > 0, deltas, 0).sum() / 14
+                    loss = -np.where(deltas < 0, deltas, 0).sum() / 14
+                    rsi = 100.0 if loss == 0 else round(100 - (100 / (1 + gain / loss)), 2)
+                    print(f"[RSI] {symbol}: RSI={rsi}", flush=True)
+
+                # === SMI ===
+                if len(candles) >= 21:
+                    hlc3 = np.array([(float(c['high']) + float(c['low']) + float(c['close'])) / 3 for c in candles])
+                    k = 13; d = 5; s = 3
+                    hh = np.array([max(hlc3[j-k:j]) for j in range(k, len(hlc3))])
+                    ll = np.array([min(hlc3[j-k:j]) for j in range(k, len(hlc3))])
+                    center = (hh + ll) / 2
+                    diff = hlc3[k:] - center
+                    smoothed_diff = np.convolve(diff, np.ones(d)/d, mode='valid')
+                    smoothed_range = np.convolve(hh - ll, np.ones(d)/d, mode='valid')
+                    smi_raw = 100 * smoothed_diff / (smoothed_range + 1e-9)
+                    smi = np.convolve(smi_raw, np.ones(s)/s, mode='valid')
+                    if len(smi) > 0:
+                        smi_val = round(smi_raw[-1], 2)
+                        smi_signal_val = round(smi[-1], 2)
+                        print(f"[SMI] {symbol}: SMI={smi_val}, Signal={smi_signal_val}", flush=True)
+
+                # === ATR ===
+                if len(candles) >= 15:
+                    highs = np.array([float(c['high']) for c in candles[-15:]])
+                    lows = np.array([float(c['low']) for c in candles[-15:]])
+                    closes = np.array([float(c['close']) for c in candles[-15:]])
+                    tr = [
+                        max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1]))
+                        for i in range(1, len(highs))
+                    ]
+                    atr = round(sum(tr) / 14, 4)
+                    print(f"[ATR] {symbol}: ATR={atr}", flush=True)
+
+                # === Публикация в Redis ===
+                await r.set(f"indicators:{symbol}", json.dumps({
+                    "rsi": rsi,
+                    "smi": smi_val,
+                    "smi_signal": smi_signal_val,
+                    "atr": atr,
+                    "angle": angle,
+                    "mid": mid,
+                    "upper": upper,
+                    "lower": lower
+                }))
 
             await asyncio.sleep(5)
         else:
