@@ -1,4 +1,4 @@
-# indicators_main.py — расчёт технических индикаторов (с LR, RSI, SMI)
+# indicators_main.py — расчёт технических индикаторов (с LR, RSI, SMI, ATR)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -117,7 +117,6 @@ def calculate_smi(symbol, candles, k=13, d=5, s=3):
     center = (highest_high + lowest_low) / 2
     diff = hlc3[k:len(hlc3)] - center
 
-    # Smoothing (2 этапа EMA -> симуляция через простое SMA для начального этапа)
     smoothed_diff = np.convolve(diff, np.ones(d)/d, mode='valid')
     smoothed_range = np.convolve(highest_high - lowest_low, np.ones(d)/d, mode='valid')
 
@@ -128,6 +127,31 @@ def calculate_smi(symbol, candles, k=13, d=5, s=3):
         print(f"[SMI] {symbol}: SMI={smi_raw[-1]:.2f}, Signal={smi[-1]:.2f}", flush=True)
     else:
         print(f"[SKIP] {symbol}: SMI smoothing produced no output", flush=True)
+
+# === Расчёт ATR ===
+def calculate_atr(symbol, candles, period=14):
+    if len(candles) < period + 1:
+        print(f"[SKIP] {symbol}: not enough candles for ATR (have {len(candles)}, need {period + 1})", flush=True)
+        return
+
+    highs = np.array([float(c['high']) for c in candles[-(period + 1):]])
+    lows = np.array([float(c['low']) for c in candles[-(period + 1):]])
+    closes = np.array([float(c['close']) for c in candles[-(period + 1):]])
+
+    tr_list = []
+    for i in range(1, len(highs)):
+        high = highs[i]
+        low = lows[i]
+        prev_close = closes[i - 1]
+        tr = max(
+            high - low,
+            abs(high - prev_close),
+            abs(low - prev_close)
+        )
+        tr_list.append(tr)
+
+    atr = sum(tr_list) / period
+    print(f"[ATR] {symbol}: ATR={atr:.4f}", flush=True)
 
 # === Основной цикл воркера ===
 async def main():
@@ -145,6 +169,7 @@ async def main():
                 calculate_lr_channel(symbol, candles)
                 calculate_rsi(symbol, candles)
                 calculate_smi(symbol, candles)
+                calculate_atr(symbol, candles)
 
             await asyncio.sleep(5)
         else:
