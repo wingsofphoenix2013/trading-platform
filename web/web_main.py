@@ -13,7 +13,7 @@ app = FastAPI()
 # Инициализация шаблонов: поддержка шаблонов из нескольких директорий
 templates = Jinja2Templates(directory="web/templates")
 templates.env.loader = ChoiceLoader([
-    FileSystemLoader("web/templates"),
+    templates.env.loader,
     FileSystemLoader("strategies/templates")
 ])
 
