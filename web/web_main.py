@@ -307,7 +307,7 @@ async def new_strategy_form(request: Request):
         "signals": signals
     })
 # 16. Сохранение новой стратегии (POST)
-# Принимает данные из формы и сохраняет новую запись в таблицу `strategies`.
+# Принимает данные из формы и сохраняет стратегию + связь с управляющим сигналом (action)
 
 @app.post("/strategies")
 async def create_strategy(
@@ -317,24 +317,33 @@ async def create_strategy(
     deposit: float = Form(...),
     position_limit: float = Form(...),
     use_all_tickers: str = Form(None),
-    enabled: str = Form(None)
+    enabled: str = Form(None),
+    action_signal_id: int = Form(...)
 ):
-    # Обработка чекбоксов: если галочка стояла — придёт строка, иначе None
     use_all_tickers_bool = use_all_tickers == "true"
     enabled_bool = enabled == "true"
 
     conn = await get_db()
-    await conn.execute("""
+
+    # Вставка стратегии и возврат её ID
+    row = await conn.fetchrow("""
         INSERT INTO strategies (
             name, description, deposit, position_limit,
             use_all_tickers, enabled, created_at
         ) VALUES (
             $1, $2, $3, $4, $5, $6, NOW()
         )
+        RETURNING id
     """, name, description, deposit, position_limit, use_all_tickers_bool, enabled_bool)
-    await conn.close()
+    strategy_id = row["id"]
 
-    # Возврат на список стратегий
+    # Привязка управляющего сигнала (action)
+    await conn.execute("""
+        INSERT INTO strategy_signals (strategy_id, signal_id, role)
+        VALUES ($1, $2, 'action')
+    """, strategy_id, action_signal_id)
+
+    await conn.close()
     return RedirectResponse(url="/strategies", status_code=303)
 # 17. Форма редактирования стратегии (GET)
 # Загружает стратегию по ID и отображает форму с автозаполнением
