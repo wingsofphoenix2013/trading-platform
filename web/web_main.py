@@ -290,13 +290,21 @@ async def list_strategies(request: Request):
     
 # 15. Форма создания стратегии (GET)
 # Отображает пустую форму для добавления новой стратегии
-
 @app.get("/strategies/new", response_class=HTMLResponse)
 async def new_strategy_form(request: Request):
+    conn = await get_db()
+    signals = await conn.fetch("""
+        SELECT id, name FROM signals
+        WHERE signal_type = 'action' AND enabled = true
+        ORDER BY name
+    """)
+    await conn.close()
+
     return templates.TemplateResponse("strategy_form.html", {
         "request": request,
         "mode": "create",
-        "strategy": {}
+        "strategy": {},
+        "signals": signals
     })
 # 16. Сохранение новой стратегии (POST)
 # Принимает данные из формы и сохраняет новую запись в таблицу `strategies`.

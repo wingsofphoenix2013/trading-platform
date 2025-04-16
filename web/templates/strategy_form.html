@@ -26,6 +26,12 @@
         <label>Использовать все тикеры:</label>
         <input type="checkbox" name="use_all_tickers" value="true"
                {% if mode != 'edit' or strategy.use_all_tickers %}checked{% endif %}><br><br>
+		
+		<label>Управляющий сигнал (action):</label><br>
+		<select name="action_signal_id">{% for sig in signals %}
+        <option value="{{ sig.id }}">{{ sig.name }}</option>
+    	{% endfor %}
+		</select><br><br>
 
         <label>Активна:</label>
         <input type="checkbox" name="enabled" value="true"
