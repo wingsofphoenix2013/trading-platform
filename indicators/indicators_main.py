@@ -89,15 +89,23 @@ def calculate_lr_channel(symbol, candles, length=50, std_multiplier=2):
 # === Основной цикл воркера ===
 async def main():
     print("[INIT] Starting indicators loop", flush=True)
+    
     while True:
-        tickers = await get_enabled_tickers()
-        print("[INFO] Starting calculation cycle (LR channel)", flush=True)
+        now = datetime.utcnow()
+        if now.minute % 5 == 0 and now.second < 5:
+            print("[INFO] New M5 interval detected — starting indicator calculation", flush=True)
+            
+            tickers = await get_enabled_tickers()
 
-        for symbol in tickers:
-            candles = await get_last_m5_candles(symbol, limit=100)
-            calculate_lr_channel(symbol, candles)
+            for symbol in tickers:
+                candles = await get_last_m5_candles(symbol, limit=100)
+                calculate_lr_channel(symbol, candles)
 
-        await asyncio.sleep(300)  # Пауза 5 минут
+            # Дожидаемся окончания первой секунды, чтобы не дублировать расчёт
+            await asyncio.sleep(5)
+
+        else:
+            await asyncio.sleep(1)
 
 # === Запуск ===
 if __name__ == "__main__":
