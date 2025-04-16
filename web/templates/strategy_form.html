@@ -1,28 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Создание стратегии</title>
+    <title>{% if mode == "edit" %}Редактировать стратегию{% else %}Создать стратегию{% endif %}</title>
 </head>
 <body>
-    <h1>Создать стратегию</h1>
-    <form method="post" action="/strategies">
+    <h1>{% if mode == "edit" %}Редактировать стратегию{% else %}Создать стратегию{% endif %}</h1>
+
+    <form method="post" action="{% if mode == 'edit' %}/strategies/{{ strategy.id }}{% else %}/strategies{% endif %}">
         <label>Название:</label><br>
-        <input type="text" name="name"><br><br>
+        {% if mode == "edit" %}
+            <input type="text" name="name" value="{{ strategy.name }}" readonly><br><br>
+        {% else %}
+            <input type="text" name="name"><br><br>
+        {% endif %}
 
         <label>Описание:</label><br>
-        <textarea name="description" rows="4" cols="40"></textarea><br><br>
+        <textarea name="description" rows="4" cols="40">{{ strategy.description or '' }}</textarea><br><br>
 
         <label>Депозит:</label><br>
-        <input type="number" step="0.01" name="deposit"><br><br>
+        <input type="number" step="0.01" name="deposit" value="{{ strategy.deposit if mode == 'edit' else '' }}"><br><br>
 
         <label>Лимит позиции:</label><br>
-        <input type="number" step="0.01" name="position_limit"><br><br>
+        <input type="number" step="0.01" name="position_limit" value="{{ strategy.position_limit if mode == 'edit' else '' }}"><br><br>
 
         <label>Использовать все тикеры:</label>
-        <input type="checkbox" name="use_all_tickers" value="true" checked><br><br>
+        <input type="checkbox" name="use_all_tickers" value="true"
+               {% if mode != 'edit' or strategy.use_all_tickers %}checked{% endif %}><br><br>
 
         <label>Активна:</label>
-        <input type="checkbox" name="enabled" value="true" checked><br><br>
+        <input type="checkbox" name="enabled" value="true"
+               {% if mode != 'edit' or strategy.enabled %}checked{% endif %}><br><br>
 
         <button type="submit">Сохранить</button>
     </form>

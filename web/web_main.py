@@ -317,4 +317,21 @@ async def create_strategy(
     await conn.close()
 
     # Возврат на список стратегий
-    return RedirectResponse(url="/strategies", status_code=303)            
+    return RedirectResponse(url="/strategies", status_code=303)
+# 17. Форма редактирования стратегии (GET)
+# Загружает стратегию по ID и отображает форму с автозаполнением
+
+@app.get("/strategies/{strategy_id}/edit", response_class=HTMLResponse)
+async def edit_strategy_form(strategy_id: int, request: Request):
+    conn = await get_db()
+    row = await conn.fetchrow("SELECT * FROM strategies WHERE id = $1", strategy_id)
+    await conn.close()
+
+    if not row:
+        return HTMLResponse("Стратегия не найдена", status_code=404)
+
+    return templates.TemplateResponse("strategy_form.html", {
+        "request": request,
+        "mode": "edit",
+        "strategy": row
+    })            
