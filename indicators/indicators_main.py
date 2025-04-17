@@ -154,22 +154,29 @@ async def process_candle(symbol, timestamp):
         logging.error(f"Ошибка при расчёте индикаторов: {e}")
         session.rollback()
 
-# Подписка на канал Redis и запуск расчётов
+# Слушает Redis канал и активирует новые тикеры по команде
 async def redis_listener():
-    pubsub = redis_client.pubsub()
-    await pubsub.subscribe("ohlcv_m5_complete")
-    logging.info("[Redis] Подписка на канал 'ohlcv_m5_complete'")
+    pubsub = r.pubsub()
+    await pubsub.subscribe("ticker_activation")
+    print("[REDIS] Подписан на канал 'ticker_activation'", flush=True)
 
     async for message in pubsub.listen():
         if message["type"] == "message":
             try:
+                # ⬇️ Временная отладка: выводим полученное сообщение полностью
+                print(f"[DEBUG] RAW REDIS MESSAGE: {message}", flush=True)
+
+                # Пытаемся распарсить JSON-сообщение
                 data = json.loads(message["data"])
-                symbol = data.get("symbol")
-                timestamp = datetime.fromisoformat(data.get("timestamp"))
-                if symbol and timestamp:
-                    await process_candle(symbol, timestamp)
+                print(f"[DEBUG] PARSED: {data} ({type(data)})", flush=True)
+
+                if data.get("action") == "activate":
+                    symbol = data.get("symbol", "").upper()
+                    if symbol:
+                        await subscribe_ticker(symbol)
+
             except Exception as e:
-                logging.error(f"Ошибка обработки сообщения из Redis: {e}")
+                print(f"[ERROR] Ошибка разбора сообщения: {e}", flush=True)
 
 # Точка входа
 if __name__ == "__main__":
