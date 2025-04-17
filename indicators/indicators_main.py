@@ -1,9 +1,10 @@
-# indicators_main.py — шаг 6.3.2: расчёт SMI и сигнальной линии, как на TradingView
+# indicators_main.py — шаг 6.3.3: возвращение к классической формуле SMI (hlc3 + SMA)
 
 import asyncio
 import json
 import math
 import os
+import numpy as np
 from datetime import datetime
 from sqlalchemy import create_engine, Table, MetaData, select
 from sqlalchemy.orm import sessionmaker
@@ -28,16 +29,6 @@ redis_client = redis.Redis(
     ssl=True,
     decode_responses=True
 )
-
-# EMA-последовательность
-def ema_series(data, period):
-    if len(data) < period:
-        return []
-    alpha = 2 / (period + 1)
-    ema_values = [sum(data[:period]) / period]
-    for price in data[period:]:
-        ema_values.append((price - ema_values[-1]) * alpha + ema_values[-1])
-    return ema_values
 
 # Расчёт индикаторов
 async def process_candle(symbol, timestamp):
@@ -116,26 +107,28 @@ async def process_candle(symbol, timestamp):
         rsi = 100 - (100 / (1 + rs)) if avg_loss != 0 else 100
         print(f"[DEBUG] RSI для {symbol} @ {timestamp}: {rsi:.2f}", flush=True)
 
-        # === SMI (двойное EMA + сигнал) ===
-        midpoints = [(h + l) / 2 for h, l in zip(highs, lows)]
-        diffs = [h - l for h, l in zip(highs, lows)]
-        close_minus_mid = [c - m for c, m in zip(closes, midpoints)]
+        # === Классический SMI (hlc3 + SMA) ===
+        k, d, s = smi_k, smi_d, smi_s
+        required = k + d + s
 
-        cmd_ema1 = ema_series(close_minus_mid, smi_d)
-        hl_ema1 = ema_series(diffs, smi_d)
+        if len(candles) >= required:
+            hlc3 = np.array([(h + l + c) / 3 for h, l, c in zip(highs, lows, closes)])
+            hh = np.array([max(hlc3[j - k:j]) for j in range(k, len(hlc3))])
+            ll = np.array([min(hlc3[j - k:j]) for j in range(k, len(hlc3))])
+            center = (hh + ll) / 2
+            diff = hlc3[k:] - center
 
-        cmd_ema2 = ema_series(cmd_ema1, smi_s) if cmd_ema1 else []
-        hl_ema2 = ema_series(hl_ema1, smi_s) if hl_ema1 else []
+            smoothed_diff = np.convolve(diff, np.ones(d) / d, mode='valid')
+            smoothed_range = np.convolve(hh - ll, np.ones(d) / d, mode='valid')
+            smi_raw = 100 * smoothed_diff / (smoothed_range + 1e-9)
+            smi = np.convolve(smi_raw, np.ones(s) / s, mode='valid')
 
-        smi_series = [200 * c / h for c, h in zip(cmd_ema2, hl_ema2) if h != 0]
-        signal_series = ema_series(smi_series, smi_s) if smi_series else []
-
-        if smi_series and signal_series:
-            smi = smi_series[-1]
-            signal = signal_series[-1]
-            print(f"[DEBUG] SMI для {symbol} @ {timestamp}: {smi:.2f}, сигнал: {signal:.2f}", flush=True)
-        else:
-            print(f"[WARNING] SMI не рассчитан для {symbol}", flush=True)
+            if len(smi) > 0:
+                smi_val = round(smi_raw[-1], 2)
+                smi_signal_val = round(smi[-1], 2)
+                print(f"[SMI] {symbol}: SMI={smi_val}, Signal={smi_signal_val}", flush=True)
+            else:
+                print(f"[WARNING] SMI не рассчитан для {symbol}", flush=True)
 
     except Exception as e:
         print(f"[ERROR] Ошибка в process_candle: {e}", flush=True)
