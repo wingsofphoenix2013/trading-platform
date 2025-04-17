@@ -453,7 +453,34 @@ async def indicators_main_page(request: Request, symbol: str = None):
 # 20. Страница настройки параметров индикаторов
 @app.get("/indicators/settings", response_class=HTMLResponse)
 async def indicators_param_page(request: Request):
-    return templates.TemplateResponse("indicators_param.html", {"request": request})    
+    db_url = os.getenv("DATABASE_URL")
+    try:
+        conn = await asyncpg.connect(dsn=db_url)
+        rows = await conn.fetch("SELECT indicator, param, value FROM indicator_settings")
+        await conn.close()
+    except Exception as e:
+        print(f"[ERROR] Failed to load indicator settings: {e}", flush=True)
+        rows = []
+
+    settings = {}
+    for row in rows:
+        ind = row["indicator"]
+        param = row["param"]
+        value = row["value"]
+        if ind not in settings:
+            settings[ind] = {}
+        try:
+            value = float(value)
+            if value.is_integer():
+                value = int(value)
+        except:
+            pass
+        settings[ind][param] = value
+
+    return templates.TemplateResponse("indicators_param.html", {
+        "request": request,
+        "settings": settings
+    }) 
 # 21. Обновление параметров индикаторов
 @app.post("/indicators/settings", response_class=HTMLResponse)
 async def update_indicator_settings(
