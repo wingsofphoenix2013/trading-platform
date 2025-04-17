@@ -1,6 +1,4 @@
-# indicators/indicators_main.py — исправлены имена полей: lr_upper / lr_lower
-
-print("🚀 INDICATORS WORKER STARTED", flush=True)
+# indicators_main.py — полный пересобранный файл с корректными отступами и Redis SET
 
 import asyncio
 import os
@@ -14,6 +12,8 @@ from math import atan, degrees
 
 REDIS_CHANNEL_IN = 'ohlcv_m5_complete'
 REDIS_CHANNEL_OUT = 'indicators_m5_live'
+
+print("🚀 INDICATORS WORKER STARTED", flush=True)
 
 async def main():
     print("[INIT] Connecting to Redis...", flush=True)
@@ -187,13 +187,13 @@ async def main():
                 print(f"[ERROR] LR calculation failed for {symbol}: {e}", flush=True)
                 continue
 
+            ts_dt = datetime.fromisoformat(ts_str)
             update_query = """
                 UPDATE ohlcv_m5
                 SET rsi = $1, smi = $2, smi_signal = $3, atr = $4,
                     lr_angle = $5, lr_trend = $6, lr_upper = $7, lr_lower = $8, lr_mid = $9
                 WHERE symbol = $10 AND open_time = $11
             """
-            ts_dt = datetime.fromisoformat(ts_str)
             await pg_conn.execute(update_query, rsi_value, smi_value, smi_sig_value, atr_value,
                                    angle_deg, trend, lr_upper, lr_lower, lr_mid, symbol, ts_dt)
 
@@ -210,7 +210,20 @@ async def main():
                 "lr_lower": lr_lower
             }
             await redis_client.publish(REDIS_CHANNEL_OUT, json.dumps(publish_data))
-            await redis_client.set(f"indicators:{symbol}", json.dumps(publish_data))
+
+            ui_data = {
+                "rsi": rsi_value,
+                "smi": smi_value,
+                "smi_signal": smi_sig_value,
+                "atr": atr_value,
+                "angle": angle_deg,
+                "trend": trend,
+                "mid": lr_mid,
+                "upper": lr_upper,
+                "lower": lr_lower
+            }
+            await redis_client.set(f"indicators:{symbol}", json.dumps(ui_data))
+
             print(f"[REDIS → {REDIS_CHANNEL_OUT}] Публикация индикаторов: {publish_data}", flush=True)
 
         except Exception as e:
