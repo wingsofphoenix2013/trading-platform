@@ -1,4 +1,4 @@
-# indicators/indicators_main.py — расчёт технических индикаторов (этап 2)
+# indicators/indicators_main.py — расчёт технических индикаторов (этап 2, фикс поля open_time)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -11,10 +11,8 @@ import json
 import pandas as pd
 from datetime import datetime
 
-# === Конфигурация ===
 REDIS_CHANNEL = 'ohlcv_m5_complete'
 
-# === Асинхронный запуск подписки на Redis и подключение к PostgreSQL ===
 async def main():
     print("[INIT] Connecting to Redis...", flush=True)
     try:
@@ -51,7 +49,6 @@ async def main():
         print(f"[ERROR] Failed to connect PostgreSQL: {e}", flush=True)
         return
 
-    # Слушаем Redis-канал и логируем поступающие сообщения
     async for message in pubsub.listen():
         if message['type'] == 'message':
             try:
@@ -62,10 +59,10 @@ async def main():
 
                 # === ЭТАП 2: Загрузка последних 100 свечей по тикеру ===
                 query_candles = """
-                    SELECT timestamp, open, high, low, close, volume
+                    SELECT open_time AS timestamp, open, high, low, close, volume
                     FROM ohlcv_m5
                     WHERE symbol = $1 AND complete = true
-                    ORDER BY timestamp DESC
+                    ORDER BY open_time DESC
                     LIMIT 100
                 """
                 rows = await pg_conn.fetch(query_candles, symbol)
@@ -75,14 +72,10 @@ async def main():
 
                 df = pd.DataFrame(rows, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
                 df = df.sort_values('timestamp')  # от старых к новым
-
                 print(f"[DATA] Загружено {len(df)} свечей для {symbol}", flush=True)
 
-                # === Загрузка всех параметров из indicator_settings ===
-                query_settings = """
-                    SELECT indicator, param, value
-                    FROM indicator_settings
-                """
+                # === Загрузка параметров индикаторов ===
+                query_settings = "SELECT indicator, param, value FROM indicator_settings"
                 rows = await pg_conn.fetch(query_settings)
                 settings = {}
                 for row in rows:
