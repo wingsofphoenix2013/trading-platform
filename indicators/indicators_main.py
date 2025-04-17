@@ -1,8 +1,7 @@
-# indicators/indicators_main.py — RSI + SMI + ATR + LR (середина канала включена)
+# indicators/indicators_main.py — RSI + SMI + ATR + LR (фикс precision_digits)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
-# === Импорты ===
 import asyncio
 import os
 import asyncpg
@@ -79,6 +78,11 @@ async def main():
                 df[col] = df[col].astype(float)
             df = df.sort_values('timestamp')
 
+            # Получение precision_digits заранее (до расчётов ATR/LR)
+            query_precision = "SELECT precision_price FROM tickers WHERE symbol = $1"
+            precision_row = await pg_conn.fetchrow(query_precision, symbol)
+            precision_digits = int(precision_row['precision_price']) if precision_row else 2
+
             query_settings = "SELECT indicator, param, value FROM indicator_settings"
             rows = await pg_conn.fetch(query_settings)
             settings = {}
@@ -138,10 +142,6 @@ async def main():
 
                 tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
                 atr_series = tr.ewm(alpha=1/atr_period, adjust=False).mean()
-
-                query_precision = "SELECT precision_price FROM tickers WHERE symbol = $1"
-                precision_row = await pg_conn.fetchrow(query_precision, symbol)
-                precision_digits = int(precision_row['precision_price']) if precision_row else 2
 
                 atr_value = round(atr_series.iloc[-1], precision_digits)
                 print(f"[ATR] {symbol}: {atr_value} (точность: {precision_digits})", flush=True)
