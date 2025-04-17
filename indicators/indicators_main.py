@@ -1,4 +1,4 @@
-# indicators_main.py — шаг 3: исправленная загрузка глобальных настроек индикаторов
+# indicators_main.py — шаг 4: загрузка параметров из нормализованной таблицы indicator_settings
 
 import asyncio
 import json
@@ -29,27 +29,45 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# Шаг 3: Загрузка универсальных настроек (не по symbol)
+# Шаг 4: Загрузка нормализованных параметров индикаторов
 async def process_candle(symbol, timestamp):
     print(f"[DEBUG] ВХОД: process_candle(symbol={symbol}, timestamp={timestamp})", flush=True)
 
     try:
-        settings_row = session.execute(
-            select(settings_table).limit(1)
-        ).fetchone()
+        result = session.execute(select(settings_table)).fetchall()
 
-        if not settings_row:
-            print(f"[ERROR] Настройки не найдены (таблица indicator_settings пуста)", flush=True)
+        if not result:
+            print(f"[ERROR] Таблица indicator_settings пуста", flush=True)
             return
 
-        try:
-            settings_dict = dict(settings_row._mapping)
-            print(f"[DEBUG] Настройки: {settings_dict}", flush=True)
-        except Exception as e:
-            print(f"[ERROR] Ошибка при разборе settings_row: {e}", flush=True)
+        # Построение словаря: {'rsi': {'period': 14}, 'smi': {'k': ..., 'd': ...}, ...}
+        settings = {}
+        for row in result:
+            row_dict = dict(row._mapping)
+            indicator = row_dict.get("indicator")
+            param = row_dict.get("param")
+            value = row_dict.get("value")
+
+            if not indicator or not param:
+                continue
+
+            if indicator not in settings:
+                settings[indicator] = {}
+
+            # Преобразуем числовые значения
+            try:
+                value = float(value)
+                if value.is_integer():
+                    value = int(value)
+            except:
+                pass  # оставить как строку, если не число
+
+            settings[indicator][param] = value
+
+        print(f"[DEBUG] Построенные настройки: {settings}", flush=True)
 
     except Exception as e:
-        print(f"[ERROR] Ошибка при загрузке настроек: {e}", flush=True)
+        print(f"[ERROR] Ошибка при загрузке или разборе настроек: {e}", flush=True)
 
 # Слушает Redis канал и запускает расчёт индикаторов по завершённой свече
 async def redis_listener():
