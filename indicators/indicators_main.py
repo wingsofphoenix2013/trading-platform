@@ -1,4 +1,4 @@
-# indicators_main.py — шаг 6.3: реализация SMI в методологии TradingView (двойное EMA, ×200)
+# indicators_main.py — шаг 6.3.2: расчёт SMI и сигнальной линии, как на TradingView
 
 import asyncio
 import json
@@ -29,15 +29,15 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# EMA расчёт
-def ema(data, period):
+# EMA-последовательность
+def ema_series(data, period):
     if len(data) < period:
-        return None
+        return []
     alpha = 2 / (period + 1)
     ema_values = [sum(data[:period]) / period]
     for price in data[period:]:
         ema_values.append((price - ema_values[-1]) * alpha + ema_values[-1])
-    return ema_values[-1]
+    return ema_values
 
 # Расчёт индикаторов
 async def process_candle(symbol, timestamp):
@@ -116,22 +116,24 @@ async def process_candle(symbol, timestamp):
         rsi = 100 - (100 / (1 + rs)) if avg_loss != 0 else 100
         print(f"[DEBUG] RSI для {symbol} @ {timestamp}: {rsi:.2f}", flush=True)
 
-        # === SMI по методологии TradingView ===
+        # === SMI (двойное EMA + сигнал) ===
         midpoints = [(h + l) / 2 for h, l in zip(highs, lows)]
         diffs = [h - l for h, l in zip(highs, lows)]
         close_minus_mid = [c - m for c, m in zip(closes, midpoints)]
 
-        # Первая EMA
-        cmd_ema1 = ema(close_minus_mid, smi_d)
-        hl_ema1 = ema(diffs, smi_d)
+        cmd_ema1 = ema_series(close_minus_mid, smi_d)
+        hl_ema1 = ema_series(diffs, smi_d)
 
-        # Вторая EMA (по результатам первой)
-        cmd_ema2 = ema([cmd_ema1] * smi_s, smi_s) if cmd_ema1 is not None else None
-        hl_ema2 = ema([hl_ema1] * smi_s, smi_s) if hl_ema1 is not None else None
+        cmd_ema2 = ema_series(cmd_ema1, smi_s) if cmd_ema1 else []
+        hl_ema2 = ema_series(hl_ema1, smi_s) if hl_ema1 else []
 
-        if cmd_ema2 is not None and hl_ema2 and hl_ema2 != 0:
-            smi = 200 * cmd_ema2 / hl_ema2
-            print(f"[DEBUG] SMI для {symbol} @ {timestamp}: {smi:.2f}", flush=True)
+        smi_series = [200 * c / h for c, h in zip(cmd_ema2, hl_ema2) if h != 0]
+        signal_series = ema_series(smi_series, smi_s) if smi_series else []
+
+        if smi_series and signal_series:
+            smi = smi_series[-1]
+            signal = signal_series[-1]
+            print(f"[DEBUG] SMI для {symbol} @ {timestamp}: {smi:.2f}, сигнал: {signal:.2f}", flush=True)
         else:
             print(f"[WARNING] SMI не рассчитан для {symbol}", flush=True)
 
