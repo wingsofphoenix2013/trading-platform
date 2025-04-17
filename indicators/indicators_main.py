@@ -74,9 +74,9 @@ async def process_candle(symbol, timestamp):
         # Запрос последних N свечей для тикера
         candles = session.query(ohlcv_table) \
             .filter(ohlcv_table.c.symbol == symbol) \
-            .filter(ohlcv_table.c.timestamp <= timestamp) \
+            .filter(ohlcv_table.c.open_time <= timestamp) \
             .filter(ohlcv_table.c.complete == True) \
-            .order_by(ohlcv_table.c.timestamp.desc()) \
+            .order_by(ohlcv_table.c.open_time.desc()) \
             .limit(lookback) \
             .all()
 
