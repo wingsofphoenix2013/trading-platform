@@ -1,4 +1,4 @@
-# indicators/indicators_main.py — расчёт технических индикаторов (RSI + SMI + ATR)
+# indicators/indicators_main.py — RSI + SMI + ATR (Wilder RMA)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -61,7 +61,7 @@ async def main():
             ts_str = data.get("timestamp")
             print(f"[REDIS] Получено сообщение: symbol={symbol}, timestamp={ts_str}", flush=True)
 
-            # === Загрузка последних 100 свечей ===
+            # === Загрузка 100 свечей ===
             query_candles = """
                 SELECT open_time AS timestamp, open, high, low, close, volume
                 FROM ohlcv_m5
@@ -80,7 +80,7 @@ async def main():
             df = df.sort_values('timestamp')
             print(f"[DATA] Загружено {len(df)} свечей для {symbol}", flush=True)
 
-            # === Загрузка параметров индикаторов ===
+            # === Параметры индикаторов ===
             query_settings = "SELECT indicator, param, value FROM indicator_settings"
             rows = await pg_conn.fetch(query_settings)
             settings = {}
@@ -91,9 +91,9 @@ async def main():
                 if indicator not in settings:
                     settings[indicator] = {}
                 settings[indicator][param] = value
-            print(f"[DATA] Загружены параметры индикаторов: {settings}", flush=True)
+            print(f"[DATA] Загружены параметры: {settings}", flush=True)
 
-            # === Расчёт RSI ===
+            # === RSI ===
             rsi_period = int(settings.get('rsi', {}).get('period', 14))
             delta = df['close'].diff()
             gain = np.where(delta > 0, delta, 0)
@@ -105,7 +105,7 @@ async def main():
             rsi_value = round(rsi_series.iloc[-1], 2)
             print(f"[RSI] {symbol}: {rsi_value}", flush=True)
 
-            # === Расчёт SMI ===
+            # === SMI ===
             try:
                 smi_k = int(settings.get('smi', {}).get('k', 13))
                 smi_d = int(settings.get('smi', {}).get('d', 5))
@@ -130,7 +130,7 @@ async def main():
                 print(f"[ERROR] SMI calculation failed for {symbol}: {e}", flush=True)
                 continue
 
-            # === Расчёт ATR ===
+            # === ATR (Wilder RMA) ===
             try:
                 atr_period = int(settings.get('atr', {}).get('period', 14))
                 high = df['high']
@@ -143,7 +143,7 @@ async def main():
                 tr3 = (low - prev_close).abs()
 
                 tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-                atr_series = tr.rolling(window=atr_period).mean()
+                atr_series = tr.ewm(alpha=1/atr_period, adjust=False).mean()
 
                 query_precision = "SELECT precision_price FROM tickers WHERE symbol = $1"
                 precision_row = await pg_conn.fetchrow(query_precision, symbol)
