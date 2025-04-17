@@ -1,4 +1,4 @@
-# indicators_main.py — расчёт технических индикаторов (с поддержкой настроек из БД)
+# indicators_main.py — расчёт технических индикаторов (исправленная версия с get_enabled_tickers)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -52,16 +52,54 @@ async def load_indicator_settings():
         print(f"[ERROR] Failed to load indicator settings: {e}", flush=True)
         return {}
 
+# === Получение списка активных тикеров ===
+async def get_enabled_tickers():
+    db_url = os.getenv("DATABASE_URL")
+    try:
+        conn = await asyncpg.connect(dsn=db_url)
+        rows = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled' ORDER BY symbol ASC")
+        await conn.close()
+        return [row["symbol"] for row in rows]
+    except Exception as e:
+        print(f"[ERROR] DB connection failed: {e}", flush=True)
+        return []
+
+# === Получение последних N свечей M5 по тикеру ===
+async def get_last_m5_candles(symbol, limit=100):
+    db_url = os.getenv("DATABASE_URL")
+    try:
+        conn = await asyncpg.connect(dsn=db_url)
+        rows = await conn.fetch(
+            """
+            SELECT open_time, high, low, close FROM ohlcv_m5
+            WHERE symbol = $1
+            ORDER BY open_time DESC
+            LIMIT $2
+            """,
+            symbol, limit
+        )
+        await conn.close()
+
+        if rows:
+            sorted_rows = sorted(rows, key=lambda r: r["open_time"])
+            return sorted_rows
+        else:
+            return []
+
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch M5 candles for {symbol}: {e}", flush=True)
+        return []
+
 # === Основной цикл воркера ===
 async def main():
     print("[INIT] Starting indicators loop", flush=True)
-    settings = await load_indicator_settings()
 
     while True:
         now = datetime.utcnow()
         if now.minute % 5 == 0 and now.second < 5:
             print("[INFO] New M5 interval detected — starting indicator calculation", flush=True)
 
+            settings = await load_indicator_settings()
             tickers = await get_enabled_tickers()
 
             for symbol in tickers:
