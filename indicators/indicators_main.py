@@ -1,4 +1,4 @@
-# indicators_main.py — расчёт индикаторов по сигналу из Redis (этап 2.1: диагностика settings_row)
+# indicators_main.py — шаг 3: исправленная загрузка глобальных настроек индикаторов
 
 import asyncio
 import json
@@ -29,24 +29,22 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# Шаг 2.1: Загрузка и отладка settings_row
+# Шаг 3: Загрузка универсальных настроек (не по symbol)
 async def process_candle(symbol, timestamp):
     print(f"[DEBUG] ВХОД: process_candle(symbol={symbol}, timestamp={timestamp})", flush=True)
 
     try:
         settings_row = session.execute(
-            select(settings_table).where(settings_table.c.symbol == symbol).limit(1)
+            select(settings_table).limit(1)
         ).fetchone()
 
         if not settings_row:
-            print(f"[ERROR] Настройки НЕ найдены для {symbol}", flush=True)
+            print(f"[ERROR] Настройки не найдены (таблица indicator_settings пуста)", flush=True)
             return
-
-        print(f"[DEBUG] settings_row object: {settings_row}", flush=True)
 
         try:
             settings_dict = dict(settings_row._mapping)
-            print(f"[DEBUG] Настройки для {symbol}: {settings_dict}", flush=True)
+            print(f"[DEBUG] Настройки: {settings_dict}", flush=True)
         except Exception as e:
             print(f"[ERROR] Ошибка при разборе settings_row: {e}", flush=True)
 
