@@ -1,4 +1,4 @@
-# indicators_main.py — шаг 4: загрузка параметров из нормализованной таблицы indicator_settings
+# indicators_main.py — шаг 5: загрузка свечей по symbol и timestamp
 
 import asyncio
 import json
@@ -29,18 +29,17 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# Шаг 4: Загрузка нормализованных параметров индикаторов
+# Шаг 5: загрузка свечей из ohlcv_m5 для расчёта индикаторов
 async def process_candle(symbol, timestamp):
     print(f"[DEBUG] ВХОД: process_candle(symbol={symbol}, timestamp={timestamp})", flush=True)
 
     try:
         result = session.execute(select(settings_table)).fetchall()
-
         if not result:
             print(f"[ERROR] Таблица indicator_settings пуста", flush=True)
             return
 
-        # Построение словаря: {'rsi': {'period': 14}, 'smi': {'k': ..., 'd': ...}, ...}
+        # Построение словаря настроек
         settings = {}
         for row in result:
             row_dict = dict(row._mapping)
@@ -54,20 +53,39 @@ async def process_candle(symbol, timestamp):
             if indicator not in settings:
                 settings[indicator] = {}
 
-            # Преобразуем числовые значения
             try:
                 value = float(value)
                 if value.is_integer():
                     value = int(value)
             except:
-                pass  # оставить как строку, если не число
+                pass
 
             settings[indicator][param] = value
 
         print(f"[DEBUG] Построенные настройки: {settings}", flush=True)
 
+        # Получаем lookback: максимум из всех нужных периодов
+        lookback = max(
+            settings.get("rsi", {}).get("period", 14),
+            settings.get("smi", {}).get("k", 13) + settings.get("smi", {}).get("d", 5) + settings.get("smi", {}).get("s", 3),
+            settings.get("lr", {}).get("length", 50)
+        )
+
+        # Запрос последних N свечей для тикера
+        candles = session.query(ohlcv_table) \
+            .filter(ohlcv_table.c.symbol == symbol) \
+            .filter(ohlcv_table.c.timestamp <= timestamp) \
+            .filter(ohlcv_table.c.complete == True) \
+            .order_by(ohlcv_table.c.timestamp.desc()) \
+            .limit(lookback) \
+            .all()
+
+        candles = list(reversed(candles))
+
+        print(f"[DEBUG] Загружено {len(candles)} свечей для {symbol}", flush=True)
+
     except Exception as e:
-        print(f"[ERROR] Ошибка при загрузке или разборе настроек: {e}", flush=True)
+        print(f"[ERROR] Ошибка при загрузке настроек или свечей: {e}", flush=True)
 
 # Слушает Redis канал и запускает расчёт индикаторов по завершённой свече
 async def redis_listener():
