@@ -48,7 +48,7 @@ async def save_m1_candle(symbol, kline):
     except Exception as e:
         print(f"[ERROR] Ошибка при записи M1-свечи: {e}", flush=True)
         
-# 🧩 Агрегация M5-свечей из M1
+# 🧩 Агрегация M5-свечей из M1 с установкой флага complete и публикацией в Redis
 async def aggregate_m5_candles():
     db_url = os.getenv("DATABASE_URL")
 
@@ -74,15 +74,25 @@ async def aggregate_m5_candles():
                         close = rows[-1]["close"]
                         volume = sum(r["volume"] for r in rows)
 
+                        # Вставка свечи M5 с флагом complete = TRUE
                         await conn.execute("""
-                            INSERT INTO ohlcv_m5 (symbol, open_time, open, high, low, close, volume)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                            INSERT INTO ohlcv_m5 (symbol, open_time, open, high, low, close, volume, complete)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)
                         """, symbol, open_time, open, high, low, close, volume)
 
+                        # Публикация сообщения о готовности свечи в Redis
+                        message = {
+                            "symbol": symbol,
+                            "timestamp": open_time.isoformat()
+                        }
+                        await r.publish("ohlcv_m5_complete", json.dumps(message))
+
                 await conn.close()
+
             except Exception as e:
                 print(f"[ERROR] Агрегация M5: {e}", flush=True)
 
+        # Периодический запуск цикла с шагом в 5 секунд
         await asyncio.sleep(5)
 # Агрегация M15-свечей из M1
 async def aggregate_m15_candles():
