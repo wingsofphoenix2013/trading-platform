@@ -194,7 +194,7 @@ async def main():
 
                 # === Запись индикаторов в таблицу ohlcv_m5 ===
                 if candles:
-                    open_time = candles[-1]["open_time"]
+                    open_time = candles[-2]["open_time"]
                     db_url = os.getenv("DATABASE_URL")
                     try:
                         conn = await asyncpg.connect(dsn=db_url)
