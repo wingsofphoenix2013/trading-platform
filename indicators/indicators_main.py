@@ -190,6 +190,7 @@ async def redis_listener():
 
             except Exception as e:
                 logging.error(f"[ERROR] Общая ошибка обработки сообщения из Redis: {e}")
+                
 # Точка входа
 if __name__ == "__main__":
     asyncio.run(redis_listener())
