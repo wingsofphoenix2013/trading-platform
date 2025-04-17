@@ -75,6 +75,8 @@ async def main():
                 continue
 
             df = pd.DataFrame(rows, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = df[col].astype(float)
             df = df.sort_values('timestamp')
             print(f"[DATA] Загружено {len(df)} свечей для {symbol}", flush=True)
 
