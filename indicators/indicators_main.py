@@ -153,26 +153,43 @@ async def process_candle(symbol, timestamp):
     except Exception as e:
         logging.error(f"Ошибка при расчёте индикаторов: {e}")
         session.rollback()
-
-# Временная версия: только печать входящих сообщений из Redis
+# Слушает Redis канал и запускает расчёт индикаторов по завершённой свече
 async def redis_listener():
     pubsub = redis_client.pubsub()
     await pubsub.subscribe("ohlcv_m5_complete")
-    print("[Redis] Подписка на канал 'ohlcv_m5_complete'", flush=True)
+    logging.info("[Redis] Подписка на канал 'ohlcv_m5_complete'")
 
     async for message in pubsub.listen():
         if message["type"] == "message":
             try:
                 raw_data = message["data"]
 
+                # Если Redis отдает байты — декодируем
                 if isinstance(raw_data, bytes):
                     raw_data = raw_data.decode()
 
-                print(f"[RECEIVED] raw_data repr: {repr(raw_data)}", flush=True)
-                print(f"[RECEIVED] raw_data type: {type(raw_data)}", flush=True)
+                # Парсим JSON
+                data = json.loads(raw_data)
+
+                # Проверяем наличие ключей
+                symbol = data.get("symbol")
+                timestamp_str = data.get("timestamp")
+                if not symbol or not timestamp_str:
+                    logging.error(f"[ERROR] Не хватает ключей в сообщении: {data}")
+                    continue
+
+                # Преобразуем timestamp
+                try:
+                    timestamp = datetime.fromisoformat(timestamp_str)
+                except ValueError:
+                    logging.error(f"[ERROR] Неверный формат времени: {timestamp_str}")
+                    continue
+
+                # Запускаем расчёт
+                await process_candle(symbol, timestamp)
 
             except Exception as e:
-                print(f"[ERROR] Exception while printing Redis message: {e}", flush=True)
+                logging.error(f"[ERROR] Общая ошибка обработки сообщения из Redis: {e}")
 # Точка входа
 if __name__ == "__main__":
     asyncio.run(redis_listener())
