@@ -1,10 +1,11 @@
-# indicators_main.py — шаг 6.4.1: восстановление расчёта линейного канала с нормализацией угла
+# indicators_main.py — шаг 6.5: расчёт RSI, SMI и LR без изменений
 
 import asyncio
 import json
 import math
 import os
 import numpy as np
+from math import atan, degrees
 from datetime import datetime
 from sqlalchemy import create_engine, Table, MetaData, select
 from sqlalchemy.orm import sessionmaker
@@ -67,12 +68,12 @@ async def process_candle(symbol, timestamp):
         lr_len = settings.get("lr", {}).get("length", 50)
         angle_up = settings.get("lr", {}).get("angle_up", 2)
         angle_down = settings.get("lr", {}).get("angle_down", -2)
+        rsi_period = settings.get("rsi", {}).get("period", 14)
+        smi_k = settings.get("smi", {}).get("k", 13)
+        smi_d = settings.get("smi", {}).get("d", 5)
+        smi_s = settings.get("smi", {}).get("s", 3)
 
-        lookback = max(
-            settings.get("rsi", {}).get("period", 14),
-            settings.get("smi", {}).get("k", 13) + settings.get("smi", {}).get("d", 5) + settings.get("smi", {}).get("s", 3),
-            lr_len
-        )
+        lookback = max(rsi_period, smi_k + smi_d + smi_s, lr_len)
 
         candles = session.query(ohlcv_table) \
             .filter(ohlcv_table.c.symbol == symbol) \
@@ -83,40 +84,73 @@ async def process_candle(symbol, timestamp):
             .all()
 
         candles = list(reversed(candles))
-        print(f"[DEBUG] Загружено {len(candles)} свечей для {symbol}", flush=True)
 
         if len(candles) < lookback:
             print(f"[WARNING] Недостаточно данных для индикаторов ({len(candles)} < {lookback})", flush=True)
             return
 
-        closes = np.array([float(c.close) for c in candles])
+        closes = [float(c.close) for c in candles]
+        highs = [float(c.high) for c in candles]
+        lows = [float(c.low) for c in candles]
 
-        # === Линейный канал с нормализацией угла ===
-        if len(closes) >= lr_len:
-            y = closes[-lr_len:]
-            x = np.arange(len(y))
-            slope, intercept = np.polyfit(x, y, 1)
+        # === RSI ===
+        gains, losses = [], []
+        for i in range(-rsi_period - 1, -1):
+            delta = closes[i + 1] - closes[i]
+            gains.append(max(delta, 0))
+            losses.append(abs(min(delta, 0)))
 
-            # нормализация угла
-            slope_normalized = slope * 1000 / y[-1]  # масштабирование
-            angle_rad = math.atan(slope_normalized)
-            angle_deg = angle_rad * 180 / math.pi
+        avg_gain = sum(gains) / rsi_period
+        avg_loss = sum(losses) / rsi_period
+        rs = avg_gain / avg_loss if avg_loss != 0 else 0
+        rsi = 100 - (100 / (1 + rs)) if avg_loss != 0 else 100
+        print(f"[DEBUG] RSI для {symbol} @ {timestamp}: {rsi:.2f}", flush=True)
 
-            regression = slope * x + intercept
-            diffs = y - regression
-            upper = y[-1] + max(diffs)
-            lower = y[-1] + min(diffs)
+        # === SMI ===
+        k, d, s = smi_k, smi_d, smi_s
+        required = k + d + s
 
-            if angle_deg > angle_up:
+        if len(candles) >= required:
+            hlc3 = np.array([(h + l + c) / 3 for h, l, c in zip(highs, lows, closes)])
+            hh = np.array([max(hlc3[j - k:j]) for j in range(k, len(hlc3))])
+            ll = np.array([min(hlc3[j - k:j]) for j in range(k, len(hlc3))])
+            center = (hh + ll) / 2
+            diff = hlc3[k:] - center
+
+            smoothed_diff = np.convolve(diff, np.ones(d) / d, mode='valid')
+            smoothed_range = np.convolve(hh - ll, np.ones(d) / d, mode='valid')
+            smi_raw = 100 * smoothed_diff / (smoothed_range + 1e-9)
+            smi = np.convolve(smi_raw, np.ones(s) / s, mode='valid')
+
+            if len(smi) > 0:
+                smi_val = round(smi_raw[-1], 2)
+                smi_signal_val = round(smi[-1], 2)
+                print(f"[SMI] {symbol}: SMI={smi_val}, Signal={smi_signal_val}", flush=True)
+
+        # === LR канал ===
+        trend = None
+        if len(candles) >= lr_len:
+            closes_np = np.array(closes[-lr_len:])
+            x = np.arange(len(closes_np))
+            norm = (closes_np - closes_np.mean()) / closes_np.std()
+            slope, _ = np.polyfit(x, norm, 1)
+            angle = round(degrees(atan(slope)), 2)
+
+            if angle > angle_up:
                 trend = "up"
-            elif angle_deg < angle_down:
+            elif angle < angle_down:
                 trend = "down"
             else:
                 trend = "flat"
 
-            print(f"[LR] {symbol}: угол={angle_deg:.2f}°, тренд={trend}, верх={upper:.4f}, низ={lower:.4f}", flush=True)
-        else:
-            print(f"[WARNING] Недостаточно данных для LR ({len(closes)} < {lr_len})", flush=True)
+            slope_real, intercept_real = np.polyfit(x, closes_np, 1)
+            regression_line = slope_real * x + intercept_real
+            std_dev = np.std(closes_np - regression_line)
+            mid = round(regression_line[-1], 4)
+            upper = round(mid + 2 * std_dev, 4)
+            lower = round(mid - 2 * std_dev, 4)
+
+            print(f"[LR] {symbol}: angle={angle}°, trend={trend}, mid={mid}, upper={upper}, lower={lower}", flush=True)
 
     except Exception as e:
         print(f"[ERROR] Ошибка в process_candle: {e}", flush=True)
