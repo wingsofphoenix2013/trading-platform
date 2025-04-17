@@ -1,4 +1,4 @@
-# indicators/indicators_main.py — расчёт технических индикаторов (этап 2, фикс поля open_time)
+# indicators/indicators_main.py — расчёт технических индикаторов (этап 3: RSI)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -9,9 +9,11 @@ import asyncpg
 import redis.asyncio as redis
 import json
 import pandas as pd
+import numpy as np
 from datetime import datetime
 
-REDIS_CHANNEL = 'ohlcv_m5_complete'
+REDIS_CHANNEL_IN = 'ohlcv_m5_complete'
+REDIS_CHANNEL_OUT = 'indicators_m5_live'
 
 async def main():
     print("[INIT] Connecting to Redis...", flush=True)
@@ -28,8 +30,8 @@ async def main():
         print("[OK] Connected to Redis", flush=True)
 
         pubsub = redis_client.pubsub()
-        await pubsub.subscribe(REDIS_CHANNEL)
-        print(f"[INIT] Subscribed to Redis channel: {REDIS_CHANNEL}", flush=True)
+        await pubsub.subscribe(REDIS_CHANNEL_IN)
+        print(f"[INIT] Subscribed to Redis channel: {REDIS_CHANNEL_IN}", flush=True)
 
     except Exception as e:
         print(f"[ERROR] Redis connection or subscription failed: {e}", flush=True)
@@ -50,46 +52,77 @@ async def main():
         return
 
     async for message in pubsub.listen():
-        if message['type'] == 'message':
-            try:
-                data = json.loads(message['data'])
-                symbol = data.get("symbol")
-                ts_str = data.get("timestamp")
-                print(f"[REDIS] Получено сообщение: symbol={symbol}, timestamp={ts_str}", flush=True)
+        if message['type'] != 'message':
+            continue
 
-                # === ЭТАП 2: Загрузка последних 100 свечей по тикеру ===
-                query_candles = """
-                    SELECT open_time AS timestamp, open, high, low, close, volume
-                    FROM ohlcv_m5
-                    WHERE symbol = $1 AND complete = true
-                    ORDER BY open_time DESC
-                    LIMIT 100
-                """
-                rows = await pg_conn.fetch(query_candles, symbol)
-                if not rows or len(rows) < 20:
-                    print(f"[SKIP] Недостаточно данных для {symbol} ({len(rows)} свечей)", flush=True)
-                    continue
+        try:
+            data = json.loads(message['data'])
+            symbol = data.get("symbol")
+            ts_str = data.get("timestamp")
+            print(f"[REDIS] Получено сообщение: symbol={symbol}, timestamp={ts_str}", flush=True)
 
-                df = pd.DataFrame(rows, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                df = df.sort_values('timestamp')  # от старых к новым
-                print(f"[DATA] Загружено {len(df)} свечей для {symbol}", flush=True)
+            # === Загрузка последних 100 свечей ===
+            query_candles = """
+                SELECT open_time AS timestamp, open, high, low, close, volume
+                FROM ohlcv_m5
+                WHERE symbol = $1 AND complete = true
+                ORDER BY open_time DESC
+                LIMIT 100
+            """
+            rows = await pg_conn.fetch(query_candles, symbol)
+            if not rows or len(rows) < 20:
+                print(f"[SKIP] Недостаточно данных для {symbol} ({len(rows)} свечей)", flush=True)
+                continue
 
-                # === Загрузка параметров индикаторов ===
-                query_settings = "SELECT indicator, param, value FROM indicator_settings"
-                rows = await pg_conn.fetch(query_settings)
-                settings = {}
-                for row in rows:
-                    indicator = row['indicator']
-                    param = row['param']
-                    value = float(row['value'])
-                    if indicator not in settings:
-                        settings[indicator] = {}
-                    settings[indicator][param] = value
+            df = pd.DataFrame(rows, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            df = df.sort_values('timestamp')
+            print(f"[DATA] Загружено {len(df)} свечей для {symbol}", flush=True)
 
-                print(f"[DATA] Загружены параметры индикаторов: {settings}", flush=True)
+            # === Загрузка параметров индикаторов ===
+            query_settings = "SELECT indicator, param, value FROM indicator_settings"
+            rows = await pg_conn.fetch(query_settings)
+            settings = {}
+            for row in rows:
+                indicator = row['indicator']
+                param = row['param']
+                value = float(row['value'])
+                if indicator not in settings:
+                    settings[indicator] = {}
+                settings[indicator][param] = value
+            print(f"[DATA] Загружены параметры индикаторов: {settings}", flush=True)
 
-            except Exception as e:
-                print(f"[ERROR] Ошибка при обработке сообщения: {e}", flush=True)
+            # === Расчёт RSI ===
+            rsi_period = int(settings.get('rsi', {}).get('period', 14))
+            delta = df['close'].diff()
+            gain = np.where(delta > 0, delta, 0)
+            loss = np.where(delta < 0, -delta, 0)
+            avg_gain = pd.Series(gain).rolling(window=rsi_period).mean()
+            avg_loss = pd.Series(loss).rolling(window=rsi_period).mean()
+            rs = avg_gain / avg_loss
+            rsi_series = 100 - (100 / (1 + rs))
+            rsi_value = round(rsi_series.iloc[-1], 2)
+            print(f"[RSI] {symbol}: {rsi_value}", flush=True)
+
+            # === Обновление ohlcv_m5 ===
+            update_query = """
+                UPDATE ohlcv_m5
+                SET rsi = $1
+                WHERE symbol = $2 AND open_time = $3
+            """
+            ts_dt = datetime.fromisoformat(ts_str)
+            await pg_conn.execute(update_query, rsi_value, symbol, ts_dt)
+            print(f"[DB] RSI записан в ohlcv_m5 для {symbol} @ {ts_str}", flush=True)
+
+            # === Публикация в Redis ===
+            publish_data = {
+                "symbol": symbol,
+                "rsi": rsi_value
+            }
+            await redis_client.publish(REDIS_CHANNEL_OUT, json.dumps(publish_data))
+            print(f"[REDIS → {REDIS_CHANNEL_OUT}] Публикация RSI: {publish_data}", flush=True)
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка при обработке сообщения: {e}", flush=True)
 
 # === Точка входа ===
 if __name__ == '__main__':
