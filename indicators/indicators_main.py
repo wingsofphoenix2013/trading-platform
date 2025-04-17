@@ -1,4 +1,4 @@
-# indicators/indicators_main.py — расчёт технических индикаторов (RSI + SMI)
+# indicators/indicators_main.py — расчёт технических индикаторов (RSI + SMI + ATR)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -130,25 +130,52 @@ async def main():
                 print(f"[ERROR] SMI calculation failed for {symbol}: {e}", flush=True)
                 continue
 
+            # === Расчёт ATR ===
+            try:
+                atr_period = int(settings.get('atr', {}).get('period', 14))
+                high = df['high']
+                low = df['low']
+                close = df['close']
+                prev_close = close.shift(1)
+
+                tr1 = high - low
+                tr2 = (high - prev_close).abs()
+                tr3 = (low - prev_close).abs()
+
+                tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+                atr_series = tr.rolling(window=atr_period).mean()
+
+                query_precision = "SELECT precision_price FROM tickers WHERE symbol = $1"
+                precision_row = await pg_conn.fetchrow(query_precision, symbol)
+                precision_digits = int(precision_row['precision_price']) if precision_row else 2
+
+                atr_value = round(atr_series.iloc[-1], precision_digits)
+                print(f"[ATR] {symbol}: {atr_value} (точность: {precision_digits})", flush=True)
+
+            except Exception as e:
+                print(f"[ERROR] ATR calculation failed for {symbol}: {e}", flush=True)
+                continue
+
             # === Обновление ohlcv_m5 ===
             update_query = """
                 UPDATE ohlcv_m5
-                SET rsi = $1, smi = $2, smi_signal = $3
-                WHERE symbol = $4 AND open_time = $5
+                SET rsi = $1, smi = $2, smi_signal = $3, atr = $4
+                WHERE symbol = $5 AND open_time = $6
             """
             ts_dt = datetime.fromisoformat(ts_str)
-            await pg_conn.execute(update_query, rsi_value, smi_value, smi_sig_value, symbol, ts_dt)
-            print(f"[DB] RSI + SMI записаны в ohlcv_m5 для {symbol} @ {ts_str}", flush=True)
+            await pg_conn.execute(update_query, rsi_value, smi_value, smi_sig_value, atr_value, symbol, ts_dt)
+            print(f"[DB] RSI + SMI + ATR записаны в ohlcv_m5 для {symbol} @ {ts_str}", flush=True)
 
             # === Публикация в Redis ===
             publish_data = {
                 "symbol": symbol,
                 "rsi": rsi_value,
                 "smi": smi_value,
-                "smi_signal": smi_sig_value
+                "smi_signal": smi_sig_value,
+                "atr": atr_value
             }
             await redis_client.publish(REDIS_CHANNEL_OUT, json.dumps(publish_data))
-            print(f"[REDIS → {REDIS_CHANNEL_OUT}] Публикация RSI+SMI: {publish_data}", flush=True)
+            print(f"[REDIS → {REDIS_CHANNEL_OUT}] Публикация индикаторов: {publish_data}", flush=True)
 
         except Exception as e:
             print(f"[ERROR] Ошибка при обработке сообщения: {e}", flush=True)
