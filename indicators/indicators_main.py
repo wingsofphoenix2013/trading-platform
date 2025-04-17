@@ -1,4 +1,4 @@
-# indicators_main.py — расчёт индикаторов по сигналу из Redis (этап 2: загрузка настроек)
+# indicators_main.py — расчёт индикаторов по сигналу из Redis (этап 2.1: диагностика settings_row)
 
 import asyncio
 import json
@@ -29,7 +29,7 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# Шаг 2: Загрузка настроек из indicator_settings
+# Шаг 2.1: Загрузка и отладка settings_row
 async def process_candle(symbol, timestamp):
     print(f"[DEBUG] ВХОД: process_candle(symbol={symbol}, timestamp={timestamp})", flush=True)
 
@@ -39,10 +39,16 @@ async def process_candle(symbol, timestamp):
         ).fetchone()
 
         if not settings_row:
-            print(f"[ERROR] Настройки не найдены для {symbol}", flush=True)
+            print(f"[ERROR] Настройки НЕ найдены для {symbol}", flush=True)
             return
 
-        print(f"[DEBUG] Настройки для {symbol}: {dict(settings_row._mapping)}", flush=True)
+        print(f"[DEBUG] settings_row object: {settings_row}", flush=True)
+
+        try:
+            settings_dict = dict(settings_row._mapping)
+            print(f"[DEBUG] Настройки для {symbol}: {settings_dict}", flush=True)
+        except Exception as e:
+            print(f"[ERROR] Ошибка при разборе settings_row: {e}", flush=True)
 
     except Exception as e:
         print(f"[ERROR] Ошибка при загрузке настроек: {e}", flush=True)
