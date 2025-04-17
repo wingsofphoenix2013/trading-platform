@@ -1,4 +1,4 @@
-# indicators_main.py — расчёт технических индикаторов (с публикацией в Redis)
+# indicators_main.py — расчёт технических индикаторов (с поддержкой настроек из БД)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -22,50 +22,40 @@ r = redis.Redis(
 )
 print("[OK] Connected to Redis", flush=True)
 
-# === Подключение к PostgreSQL ===
-async def get_enabled_tickers():
-    print("[DB] Fetching enabled tickers...", flush=True)
+# === Загрузка параметров индикаторов из базы ===
+async def load_indicator_settings():
     db_url = os.getenv("DATABASE_URL")
     try:
         conn = await asyncpg.connect(dsn=db_url)
-        rows = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled' ORDER BY symbol ASC")
-        await conn.close()
-        symbols = [row["symbol"] for row in rows]
-        print(f"[DB] {len(symbols)} tickers fetched: {symbols}", flush=True)
-        return symbols
-    except Exception as e:
-        print(f"[ERROR] DB connection failed: {e}", flush=True)
-        return []
-
-# === Получение последних N свечей M5 по тикеру ===
-async def get_last_m5_candles(symbol, limit=100):
-    db_url = os.getenv("DATABASE_URL")
-    try:
-        conn = await asyncpg.connect(dsn=db_url)
-        rows = await conn.fetch(
-            """
-            SELECT open_time, high, low, close FROM ohlcv_m5
-            WHERE symbol = $1
-            ORDER BY open_time DESC
-            LIMIT $2
-            """,
-            symbol, limit
-        )
+        rows = await conn.fetch("SELECT indicator, param, value FROM indicator_settings")
         await conn.close()
 
-        if rows:
-            sorted_rows = sorted(rows, key=lambda r: r["open_time"])
-            return sorted_rows
-        else:
-            return []
+        result = {}
+        for row in rows:
+            ind = row["indicator"]
+            param = row["param"]
+            val = row["value"]
+            if ind not in result:
+                result[ind] = {}
+            try:
+                val = float(val)
+                if val.is_integer():
+                    val = int(val)
+            except:
+                pass
+            result[ind][param] = val
+
+        print(f"[SETTINGS] Loaded indicator settings: {result}", flush=True)
+        return result
 
     except Exception as e:
-        print(f"[ERROR] Failed to fetch M5 candles for {symbol}: {e}", flush=True)
-        return []
+        print(f"[ERROR] Failed to load indicator settings: {e}", flush=True)
+        return {}
 
 # === Основной цикл воркера ===
 async def main():
     print("[INIT] Starting indicators loop", flush=True)
+    settings = await load_indicator_settings()
 
     while True:
         now = datetime.utcnow()
@@ -80,8 +70,9 @@ async def main():
                 angle = mid = upper = lower = rsi = smi_val = smi_signal_val = atr = None
 
                 # === LR канал ===
-                if len(candles) >= 50:
-                    closes = np.array([float(c["close"]) for c in candles[-50:]])
+                lr_len = settings.get("lr", {}).get("length", 50)
+                if len(candles) >= lr_len:
+                    closes = np.array([float(c["close"]) for c in candles[-lr_len:]])
                     x = np.arange(len(closes))
                     norm = (closes - closes.mean()) / closes.std()
                     slope, _ = np.polyfit(x, norm, 1)
@@ -96,18 +87,22 @@ async def main():
                     print(f"[LR] {symbol}: angle={angle}°, mid={mid}, upper={upper}, lower={lower}", flush=True)
 
                 # === RSI ===
-                if len(candles) >= 15:
-                    closes = np.array([float(c["close"]) for c in candles[-15:]])
+                rsi_period = settings.get("rsi", {}).get("period", 14)
+                if len(candles) >= rsi_period + 1:
+                    closes = np.array([float(c["close"]) for c in candles[-(rsi_period + 1):]])
                     deltas = np.diff(closes)
-                    gain = np.where(deltas > 0, deltas, 0).sum() / 14
-                    loss = -np.where(deltas < 0, deltas, 0).sum() / 14
+                    gain = np.where(deltas > 0, deltas, 0).sum() / rsi_period
+                    loss = -np.where(deltas < 0, deltas, 0).sum() / rsi_period
                     rsi = 100.0 if loss == 0 else round(100 - (100 / (1 + gain / loss)), 2)
                     print(f"[RSI] {symbol}: RSI={rsi}", flush=True)
 
                 # === SMI ===
-                if len(candles) >= 21:
+                k = settings.get("smi", {}).get("k", 13)
+                d = settings.get("smi", {}).get("d", 5)
+                s = settings.get("smi", {}).get("s", 3)
+                required = k + d + s
+                if len(candles) >= required:
                     hlc3 = np.array([(float(c['high']) + float(c['low']) + float(c['close'])) / 3 for c in candles])
-                    k = 13; d = 5; s = 3
                     hh = np.array([max(hlc3[j-k:j]) for j in range(k, len(hlc3))])
                     ll = np.array([min(hlc3[j-k:j]) for j in range(k, len(hlc3))])
                     center = (hh + ll) / 2
@@ -122,15 +117,16 @@ async def main():
                         print(f"[SMI] {symbol}: SMI={smi_val}, Signal={smi_signal_val}", flush=True)
 
                 # === ATR ===
-                if len(candles) >= 15:
-                    highs = np.array([float(c['high']) for c in candles[-15:]])
-                    lows = np.array([float(c['low']) for c in candles[-15:]])
-                    closes = np.array([float(c['close']) for c in candles[-15:]])
+                atr_period = settings.get("atr", {}).get("period", 14)
+                if len(candles) >= atr_period + 1:
+                    highs = np.array([float(c['high']) for c in candles[-(atr_period + 1):]])
+                    lows = np.array([float(c['low']) for c in candles[-(atr_period + 1):]])
+                    closes = np.array([float(c['close']) for c in candles[-(atr_period + 1):]])
                     tr = [
                         max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1]))
                         for i in range(1, len(highs))
                     ]
-                    atr = round(sum(tr) / 14, 4)
+                    atr = round(sum(tr) / atr_period, 4)
                     print(f"[ATR] {symbol}: ATR={atr}", flush=True)
 
                 # === Публикация в Redis ===
