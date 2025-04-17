@@ -1,4 +1,4 @@
-<!-- indicators_param.html — Страница настройки параметров индикаторов -->
+<!-- indicators_param.html — Страница настройки параметров индикаторов с формой -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -11,52 +11,63 @@
         th, td { padding: 0.75rem; border-bottom: 1px solid #ddd; text-align: center; }
         th { background: #f1f1f1; font-weight: 600; }
         .title { margin-bottom: 1rem; font-size: 1.4rem; font-weight: bold; }
+        .submit-row { text-align: right; margin-top: 1.5rem; }
+        input[type=number], input[type=text] { width: 60px; text-align: center; }
     </style>
 </head>
 <body>
 <div class="card">
     <div class="title">Настройки параметров индикаторов</div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Индикатор</th>
-                <th>Параметры</th>
-                <th>Описание</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>RSI</td>
-                <td>Период: <input type="number" value="14" disabled></td>
-                <td>Отслеживает силу движения цены</td>
-            </tr>
-            <tr>
-                <td>SMI</td>
-                <td>Схема: <input type="text" value="13/5/3" disabled></td>
-                <td>Стохастик + сглаживание</td>
-            </tr>
-            <tr>
-                <td>ATR</td>
-                <td>Период: <input type="number" value="14" disabled></td>
-                <td>Средний истинный диапазон (волатильность)</td>
-            </tr>
-            <tr>
-                <td>Линейный канал</td>
-                <td>Длина: <input type="number" value="50" disabled></td>
-                <td>Трендовая линия + границы</td>
-            </tr>
-            <tr>
-                <td>Тренд-фильтр</td>
-                <td>
-                    Up > <input type="number" value="2" step="0.1" disabled>
-                    &nbsp;&nbsp;
-                    Down < <input type="number" value="-2" step="0.1" disabled>
-                </td>
-                <td>Классификация угла наклона</td>
-            </tr>
-        </tbody>
-    </table>
+    <form method="post" action="/indicators/settings">
+        <table>
+            <thead>
+                <tr>
+                    <th>Индикатор</th>
+                    <th>Параметры</th>
+                    <th>Описание</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>RSI</td>
+                    <td>Период: <input type="number" name="rsi_period" value="{{ settings['rsi']['period'] if settings.get('rsi') else 14 }}"></td>
+                    <td>Отслеживает силу движения цены</td>
+                </tr>
+                <tr>
+                    <td>SMI</td>
+                    <td>
+                        K: <input type="number" name="smi_k" value="{{ settings['smi']['k'] if settings.get('smi') else 13 }}">
+                        D: <input type="number" name="smi_d" value="{{ settings['smi']['d'] if settings.get('smi') else 5 }}">
+                        S: <input type="number" name="smi_s" value="{{ settings['smi']['s'] if settings.get('smi') else 3 }}">
+                    </td>
+                    <td>Стохастик + сглаживание</td>
+                </tr>
+                <tr>
+                    <td>ATR</td>
+                    <td>Период: <input type="number" name="atr_period" value="{{ settings['atr']['period'] if settings.get('atr') else 14 }}"></td>
+                    <td>Средний истинный диапазон (волатильность)</td>
+                </tr>
+                <tr>
+                    <td>Линейный канал</td>
+                    <td>Длина: <input type="number" name="lr_length" value="{{ settings['lr']['length'] if settings.get('lr') else 50 }}"></td>
+                    <td>Трендовая линия + границы</td>
+                </tr>
+                <tr>
+                    <td>Тренд-фильтр</td>
+                    <td>
+                        Up > <input type="number" name="lr_angle_up" step="0.1" value="{{ settings['lr']['angle_up'] if settings.get('lr') else 2 }}">
+                        Down < <input type="number" name="lr_angle_down" step="0.1" value="{{ settings['lr']['angle_down'] if settings.get('lr') else -2 }}">
+                    </td>
+                    <td>Классификация угла наклона</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="submit-row">
+            <button type="submit">Сохранить</button>
+        </div>
+    </form>
 </div>
 </body>
 </html>

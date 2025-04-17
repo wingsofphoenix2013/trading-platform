@@ -454,3 +454,39 @@ async def indicators_main_page(request: Request, symbol: str = None):
 @app.get("/indicators/settings", response_class=HTMLResponse)
 async def indicators_param_page(request: Request):
     return templates.TemplateResponse("indicators_param.html", {"request": request})    
+# 21. Обновление параметров индикаторов
+@app.post("/indicators/settings", response_class=HTMLResponse)
+async def update_indicator_settings(
+    request: Request,
+    rsi_period: int = Form(...),
+    smi_k: int = Form(...),
+    smi_d: int = Form(...),
+    smi_s: int = Form(...),
+    atr_period: int = Form(...),
+    lr_length: int = Form(...),
+    lr_angle_up: float = Form(...),
+    lr_angle_down: float = Form(...)
+):
+    values = {
+        "rsi": {"period": rsi_period},
+        "smi": {"k": smi_k, "d": smi_d, "s": smi_s},
+        "atr": {"period": atr_period},
+        "lr": {
+            "length": lr_length,
+            "angle_up": lr_angle_up,
+            "angle_down": lr_angle_down
+        }
+    }
+
+    conn = await get_db()
+    for indicator, params in values.items():
+        for param, value in params.items():
+            await conn.execute("""
+                INSERT INTO indicator_settings (indicator, param, value)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (indicator, param)
+                DO UPDATE SET value = EXCLUDED.value
+            """, indicator, param, str(value))
+    await conn.close()
+
+    return RedirectResponse("/indicators/settings", status_code=303)    
