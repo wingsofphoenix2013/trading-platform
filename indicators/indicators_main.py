@@ -1,4 +1,4 @@
-# indicators/indicators_main.py — RSI + SMI + ATR + LR (фикс precision_digits)
+# indicators/indicators_main.py — исправлены имена полей: lr_upper / lr_lower
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -78,7 +78,6 @@ async def main():
                 df[col] = df[col].astype(float)
             df = df.sort_values('timestamp')
 
-            # Получение precision_digits заранее (до расчётов ATR/LR)
             query_precision = "SELECT precision_price FROM tickers WHERE symbol = $1"
             precision_row = await pg_conn.fetchrow(query_precision, symbol)
             precision_digits = int(precision_row['precision_price']) if precision_row else 2
@@ -179,10 +178,10 @@ async def main():
 
                 std_dev = np.std(y - regression_line)
                 lr_mid = round(regression_line[-1], precision_digits)
-                lr_top = round(regression_line[-1] + 2 * std_dev, precision_digits)
-                lr_bot = round(regression_line[-1] - 2 * std_dev, precision_digits)
+                lr_upper = round(regression_line[-1] + 2 * std_dev, precision_digits)
+                lr_lower = round(regression_line[-1] - 2 * std_dev, precision_digits)
 
-                print(f"[LR] {symbol}: угол={angle_deg}°, тренд={trend}, середина={lr_mid}, верх={lr_top}, низ={lr_bot}", flush=True)
+                print(f"[LR] {symbol}: угол={angle_deg}°, тренд={trend}, середина={lr_mid}, верх={lr_upper}, низ={lr_lower}", flush=True)
 
             except Exception as e:
                 print(f"[ERROR] LR calculation failed for {symbol}: {e}", flush=True)
@@ -191,12 +190,12 @@ async def main():
             update_query = """
                 UPDATE ohlcv_m5
                 SET rsi = $1, smi = $2, smi_signal = $3, atr = $4,
-                    lr_angle = $5, lr_trend = $6, lr_top = $7, lr_bottom = $8, lr_mid = $9
+                    lr_angle = $5, lr_trend = $6, lr_upper = $7, lr_lower = $8, lr_mid = $9
                 WHERE symbol = $10 AND open_time = $11
             """
             ts_dt = datetime.fromisoformat(ts_str)
             await pg_conn.execute(update_query, rsi_value, smi_value, smi_sig_value, atr_value,
-                                   angle_deg, trend, lr_top, lr_bot, lr_mid, symbol, ts_dt)
+                                   angle_deg, trend, lr_upper, lr_lower, lr_mid, symbol, ts_dt)
 
             publish_data = {
                 "symbol": symbol,
@@ -207,8 +206,8 @@ async def main():
                 "lr_angle": angle_deg,
                 "lr_trend": trend,
                 "lr_mid": lr_mid,
-                "lr_top": lr_top,
-                "lr_bottom": lr_bot
+                "lr_upper": lr_upper,
+                "lr_lower": lr_lower
             }
             await redis_client.publish(REDIS_CHANNEL_OUT, json.dumps(publish_data))
             print(f"[REDIS → {REDIS_CHANNEL_OUT}] Публикация индикаторов: {publish_data}", flush=True)
