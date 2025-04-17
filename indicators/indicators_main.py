@@ -1,4 +1,4 @@
-# indicators_main.py — шаг 6.2: расчёт RSI и SMI (через EMA)
+# indicators_main.py — шаг 6.2.1: приведение Decimal к float для SMI и RSI
 
 import asyncio
 import json
@@ -6,7 +6,7 @@ import math
 import os
 from datetime import datetime
 from sqlalchemy import create_engine, Table, MetaData, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm importsessionmaker
 import redis.asyncio as redis
 
 # Подключение к БД
@@ -100,8 +100,12 @@ async def process_candle(symbol, timestamp):
             print(f"[WARNING] Недостаточно данных для индикаторов ({len(candles)} < {lookback})", flush=True)
             return
 
+        # Приведение к float
+        closes = [float(c.close) for c in candles]
+        highs = [float(c.high) for c in candles]
+        lows = [float(c.low) for c in candles]
+
         # === RSI ===
-        closes = [c.close for c in candles]
         gains, losses = [], []
         for i in range(-rsi_period - 1, -1):
             delta = closes[i + 1] - closes[i]
@@ -115,8 +119,6 @@ async def process_candle(symbol, timestamp):
         print(f"[DEBUG] RSI для {symbol} @ {timestamp}: {rsi:.2f}", flush=True)
 
         # === SMI ===
-        highs = [c.high for c in candles]
-        lows = [c.low for c in candles]
         midpoints = [(h + l) / 2 for h, l in zip(highs, lows)]
         diffs = [h - l for h, l in zip(highs, lows)]
         close_minus_mid = [c - m for c, m in zip(closes, midpoints)]
