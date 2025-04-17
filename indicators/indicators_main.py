@@ -6,7 +6,7 @@ import math
 import os
 from datetime import datetime
 from sqlalchemy import create_engine, Table, MetaData, select
-from sqlalchemy.orm importsessionmaker
+from sqlalchemy.orm import sessionmaker
 import redis.asyncio as redis
 
 # Подключение к БД
