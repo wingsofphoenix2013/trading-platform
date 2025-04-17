@@ -1,4 +1,4 @@
-# indicators_main.py — реактивный расчёт индикаторов по сигналу из Redis (этап 1: заглушка process_candle)
+# indicators_main.py — расчёт индикаторов по сигналу из Redis (этап 2: загрузка настроек)
 
 import asyncio
 import json
@@ -29,9 +29,23 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# Заглушка функции расчёта индикаторов
+# Шаг 2: Загрузка настроек из indicator_settings
 async def process_candle(symbol, timestamp):
     print(f"[DEBUG] ВХОД: process_candle(symbol={symbol}, timestamp={timestamp})", flush=True)
+
+    try:
+        settings_row = session.execute(
+            select(settings_table).where(settings_table.c.symbol == symbol).limit(1)
+        ).fetchone()
+
+        if not settings_row:
+            print(f"[ERROR] Настройки не найдены для {symbol}", flush=True)
+            return
+
+        print(f"[DEBUG] Настройки для {symbol}: {dict(settings_row._mapping)}", flush=True)
+
+    except Exception as e:
+        print(f"[ERROR] Ошибка при загрузке настроек: {e}", flush=True)
 
 # Слушает Redis канал и запускает расчёт индикаторов по завершённой свече
 async def redis_listener():
