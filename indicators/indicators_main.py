@@ -1,228 +1,176 @@
-# indicators_main.py — расчёт технических индикаторов (исправленная версия с get_enabled_tickers)
+# indicators_main.py — реактивный расчёт индикаторов по сигналу из Redis
 
-print("🚀 INDICATORS WORKER STARTED", flush=True)
-
-# === Импорты ===
 import asyncio
-import os
-import asyncpg
-import redis.asyncio as redis
-import numpy as np
 import json
+import math
+import os
 from datetime import datetime
-from math import atan, degrees
+from sqlalchemy import create_engine, Table, MetaData, select, func
+from sqlalchemy.orm import sessionmaker
+import redis.asyncio as redis
+import logging
 
-# === Подключение к Redis ===
-print("[INIT] Connecting to Redis...", flush=True)
-r = redis.Redis(
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Подключение к БД
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+Session = sessionmaker(bind=engine)
+session = Session()
+metadata = MetaData()
+metadata.reflect(bind=engine)
+
+# Получение таблиц
+ohlcv_table = metadata.tables['ohlcv_m5']
+settings_table = metadata.tables['indicator_settings']
+
+# Подключение к Redis
+redis_client = redis.Redis(
     host=os.getenv("REDIS_HOST"),
     port=int(os.getenv("REDIS_PORT", 6379)),
     password=os.getenv("REDIS_PASSWORD"),
-    ssl=True
+    ssl=True,
+    decode_responses=True
 )
-print("[OK] Connected to Redis", flush=True)
 
-# === Загрузка параметров индикаторов из базы ===
-async def load_indicator_settings():
-    db_url = os.getenv("DATABASE_URL")
+# EMA-расчёт
+def ema(data, period):
+    if len(data) < period:
+        return None
+    alpha = 2 / (period + 1)
+    ema_values = [sum(data[:period]) / period]
+    for price in data[period:]:
+        ema_values.append((price - ema_values[-1]) * alpha + ema_values[-1])
+    return ema_values[-1]
+
+# Основная функция расчёта по тикеру и времени
+async def process_candle(symbol, timestamp):
     try:
-        conn = await asyncpg.connect(dsn=db_url)
-        rows = await conn.fetch("SELECT indicator, param, value FROM indicator_settings")
-        await conn.close()
+        # Получение настроек
+        settings_row = session.execute(
+            select(settings_table).where(settings_table.c.symbol == symbol).limit(1)
+        ).fetchone()
 
-        result = {}
-        for row in rows:
-            ind = row["indicator"]
-            param = row["param"]
-            val = row["value"]
-            if ind not in result:
-                result[ind] = {}
-            try:
-                val = float(val)
-                if val.is_integer():
-                    val = int(val)
-            except:
-                pass
-            result[ind][param] = val
+        lr_length = settings_row.lr_length if settings_row and settings_row.lr_length else 50
+        angle_up_threshold = settings_row.angle_up_threshold if settings_row and settings_row.angle_up_threshold is not None else 2.0
+        angle_down_threshold = settings_row.angle_down_threshold if settings_row and settings_row.angle_down_threshold is not None else -2.0
+        rsi_period = settings_row.rsi_period if settings_row and settings_row.rsi_period else 14
+        smi_k = settings_row.smi_k if settings_row and settings_row.smi_k else 13
+        smi_d = settings_row.smi_d if settings_row and settings_row.smi_d else 5
+        smi_smooth = settings_row.smi_smooth if settings_row and settings_row.smi_smooth else 3
 
-        print(f"[SETTINGS] Loaded indicator settings: {result}", flush=True)
-        return result
+        lookback = max(lr_length, rsi_period, smi_k + smi_d + smi_smooth)
 
-    except Exception as e:
-        print(f"[ERROR] Failed to load indicator settings: {e}", flush=True)
-        return {}
+        candles = session.query(ohlcv_table) \
+            .filter(ohlcv_table.c.symbol == symbol) \
+            .filter(ohlcv_table.c.timestamp <= timestamp) \
+            .filter(ohlcv_table.c.complete == True) \
+            .order_by(ohlcv_table.c.timestamp.desc()) \
+            .limit(lookback) \
+            .all()
 
-# === Получение списка активных тикеров ===
-async def get_enabled_tickers():
-    db_url = os.getenv("DATABASE_URL")
-    try:
-        conn = await asyncpg.connect(dsn=db_url)
-        rows = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled' ORDER BY symbol ASC")
-        await conn.close()
-        return [row["symbol"] for row in rows]
-    except Exception as e:
-        print(f"[ERROR] DB connection failed: {e}", flush=True)
-        return []
+        candles = list(reversed(candles))
 
-# === Получение последних N свечей M5 по тикеру ===
-async def get_last_m5_candles(symbol, limit=100):
-    db_url = os.getenv("DATABASE_URL")
-    try:
-        conn = await asyncpg.connect(dsn=db_url)
-        rows = await conn.fetch(
-            """
-            SELECT open_time, high, low, close FROM ohlcv_m5
-            WHERE symbol = $1
-            ORDER BY open_time DESC
-            LIMIT $2
-            """,
-            symbol, limit
+        if len(candles) < lookback:
+            logging.warning(f"Недостаточно данных для расчёта: {symbol} @ {timestamp}")
+            return
+
+        closes = [c.close for c in candles]
+        highs = [c.high for c in candles]
+        lows = [c.low for c in candles]
+
+        # === Линейный канал ===
+        lr_closes = closes[-lr_length:]
+        x = list(range(len(lr_closes)))
+        n = len(lr_closes)
+        x_mean = sum(x) / n
+        y_mean = sum(lr_closes) / n
+        numerator = sum((x[i] - x_mean) * (lr_closes[i] - y_mean) for i in range(n))
+        denominator = sum((x[i] - x_mean) ** 2 for i in range(n))
+        slope = numerator / denominator if denominator != 0 else 0
+        angle_rad = math.atan(slope)
+        angle_deg = angle_rad * 180 / math.pi
+
+        trend = 'up' if angle_deg > angle_up_threshold else 'down' if angle_deg < angle_down_threshold else 'flat'
+        regression_line = [y_mean + slope * (i - x_mean) for i in x]
+        upper = max(lr_closes[i] - regression_line[i] for i in range(n))
+        lower = min(lr_closes[i] - regression_line[i] for i in range(n))
+        lr_upper = lr_closes[-1] + upper
+        lr_lower = lr_closes[-1] + lower
+
+        # === RSI ===
+        gains = [max(closes[i+1] - closes[i], 0) for i in range(-rsi_period - 1, -1)]
+        losses = [abs(min(closes[i+1] - closes[i], 0)) for i in range(-rsi_period - 1, -1)]
+        avg_gain = sum(gains) / rsi_period
+        avg_loss = sum(losses) / rsi_period
+        rs = avg_gain / avg_loss if avg_loss != 0 else 0
+        rsi = 100 - (100 / (1 + rs)) if avg_loss != 0 else 100
+
+        # === SMI ===
+        midpoints = [(highs[i] + lows[i]) / 2 for i in range(len(closes))]
+        high_low_diff = [highs[i] - lows[i] for i in range(len(closes))]
+        close_mid_diff = [closes[i] - midpoints[i] for i in range(len(closes))]
+        hl_ema = ema(high_low_diff[-smi_k:], smi_k)
+        cmd_ema = ema(close_mid_diff[-smi_k:], smi_k)
+        hl_ema_smoothed = ema([hl_ema], smi_smooth) if hl_ema else None
+        cmd_ema_smoothed = ema([cmd_ema], smi_smooth) if cmd_ema else None
+        smi = (cmd_ema_smoothed / hl_ema_smoothed * 100) if hl_ema_smoothed and hl_ema_smoothed != 0 else None
+
+        # Получение precision
+        precision_result = session.execute(
+            select(ohlcv_table.c.precision_price).where(ohlcv_table.c.symbol == symbol).limit(1)
+        ).fetchone()
+        precision = precision_result[0] if precision_result else 4
+
+        # Обновление строки в базе
+        session.execute(ohlcv_table.update()
+            .where(ohlcv_table.c.symbol == symbol)
+            .where(ohlcv_table.c.timestamp == timestamp)
+            .values(
+                lr_upper=round(lr_upper, precision),
+                lr_lower=round(lr_lower, precision),
+                lr_angle=round(angle_deg, 2),
+                trend=trend,
+                rsi=round(rsi, 2),
+                smi=round(smi, 2) if smi else None
+            )
         )
-        await conn.close()
+        session.commit()
 
-        if rows:
-            sorted_rows = sorted(rows, key=lambda r: r["open_time"])
-            return sorted_rows
-        else:
-            return []
+        # Публикация индикаторов в Redis
+        redis_msg = {
+            "symbol": symbol,
+            "timestamp": timestamp.isoformat(),
+            "trend": trend,
+            "rsi": round(rsi, 2),
+            "smi": round(smi, 2) if smi else None
+        }
+        await redis_client.publish("indicators_updates", json.dumps(redis_msg))
+
+        logging.info(f"🔔 Индикаторы обновлены: {symbol} @ {timestamp} → trend={trend}, rsi={rsi:.2f}, smi={redis_msg['smi']}")
 
     except Exception as e:
-        print(f"[ERROR] Failed to fetch M5 candles for {symbol}: {e}", flush=True)
-        return []
+        logging.error(f"Ошибка при расчёте индикаторов: {e}")
+        session.rollback()
 
-# === Основной цикл воркера ===
-async def main():
-    print("[INIT] Starting indicators loop", flush=True)
+# Подписка на канал Redis и запуск расчётов
+async def redis_listener():
+    pubsub = redis_client.pubsub()
+    await pubsub.subscribe("ohlcv_m5_complete")
+    logging.info("[Redis] Подписка на канал 'ohlcv_m5_complete'")
 
-    while True:
-        now = datetime.utcnow()
-        if now.minute % 5 == 0 and now.second < 5:
-            print("[INFO] New M5 interval detected — starting indicator calculation", flush=True)
+    async for message in pubsub.listen():
+        if message["type"] == "message":
+            try:
+                data = json.loads(message["data"])
+                symbol = data.get("symbol")
+                timestamp = datetime.fromisoformat(data.get("timestamp"))
+                if symbol and timestamp:
+                    await process_candle(symbol, timestamp)
+            except Exception as e:
+                logging.error(f"Ошибка обработки сообщения из Redis: {e}")
 
-            settings = await load_indicator_settings()
-            tickers = await get_enabled_tickers()
-
-            for symbol in tickers:
-                candles = await get_last_m5_candles(symbol, limit=100)
-
-                angle = mid = upper = lower = rsi = smi_val = smi_signal_val = atr = None
-
-                # === LR канал ===
-                lr_len = settings.get("lr", {}).get("length", 50)
-                angle_up = settings.get("lr", {}).get("angle_up", 2)
-                angle_down = settings.get("lr", {}).get("angle_down", -2)
-                trend = None
-
-                if len(candles) >= lr_len:
-                    closes = np.array([float(c["close"]) for c in candles[-lr_len:]])
-                    x = np.arange(len(closes))
-                    norm = (closes - closes.mean()) / closes.std()
-                    slope, _ = np.polyfit(x, norm, 1)
-                    angle = round(degrees(atan(slope)), 2)
-
-                    if angle > angle_up:
-                        trend = "up"
-                    elif angle < angle_down:
-                        trend = "down"
-                    else:
-                        trend = "flat"
-
-                    slope_real, intercept_real = np.polyfit(x, closes, 1)
-                    regression_line = slope_real * x + intercept_real
-                    std_dev = np.std(closes - regression_line)
-                    mid = round(regression_line[-1], 4)
-                    upper = round(mid + 2 * std_dev, 4)
-                    lower = round(mid - 2 * std_dev, 4)
-
-                    print(f"[LR] {symbol}: angle={angle}°, trend={trend}, mid={mid}, upper={upper}, lower={lower}", flush=True)
-
-                # === RSI ===
-                rsi_period = settings.get("rsi", {}).get("period", 14)
-                if len(candles) >= rsi_period + 1:
-                    closes = np.array([float(c["close"]) for c in candles[-(rsi_period + 1):]])
-                    deltas = np.diff(closes)
-                    gain = np.where(deltas > 0, deltas, 0).sum() / rsi_period
-                    loss = -np.where(deltas < 0, deltas, 0).sum() / rsi_period
-                    rsi = 100.0 if loss == 0 else round(100 - (100 / (1 + gain / loss)), 2)
-                    print(f"[RSI] {symbol}: RSI={rsi}", flush=True)
-
-                # === SMI ===
-                k = settings.get("smi", {}).get("k", 13)
-                d = settings.get("smi", {}).get("d", 5)
-                s = settings.get("smi", {}).get("s", 3)
-                required = k + d + s
-                if len(candles) >= required:
-                    hlc3 = np.array([(float(c['high']) + float(c['low']) + float(c['close'])) / 3 for c in candles])
-                    hh = np.array([max(hlc3[j-k:j]) for j in range(k, len(hlc3))])
-                    ll = np.array([min(hlc3[j-k:j]) for j in range(k, len(hlc3))])
-                    center = (hh + ll) / 2
-                    diff = hlc3[k:] - center
-                    smoothed_diff = np.convolve(diff, np.ones(d)/d, mode='valid')
-                    smoothed_range = np.convolve(hh - ll, np.ones(d)/d, mode='valid')
-                    smi_raw = 100 * smoothed_diff / (smoothed_range + 1e-9)
-                    smi = np.convolve(smi_raw, np.ones(s)/s, mode='valid')
-                    if len(smi) > 0:
-                        smi_val = round(smi_raw[-1], 2)
-                        smi_signal_val = round(smi[-1], 2)
-                        print(f"[SMI] {symbol}: SMI={smi_val}, Signal={smi_signal_val}", flush=True)
-
-                # === ATR ===
-                atr_period = settings.get("atr", {}).get("period", 14)
-                if len(candles) >= atr_period + 1:
-                    highs = np.array([float(c['high']) for c in candles[-(atr_period + 1):]])
-                    lows = np.array([float(c['low']) for c in candles[-(atr_period + 1):]])
-                    closes = np.array([float(c['close']) for c in candles[-(atr_period + 1):]])
-                    tr = [
-                        max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1]))
-                        for i in range(1, len(highs))
-                    ]
-                    atr = round(sum(tr) / atr_period, 4)
-                    print(f"[ATR] {symbol}: ATR={atr}", flush=True)
-
-                # === Публикация в Redis ===
-                await r.set(f"indicators:{symbol}", json.dumps({
-                    "trend": trend,
-                    "rsi": rsi,
-                    "smi": smi_val,
-                    "smi_signal": smi_signal_val,
-                    "atr": atr,
-                    "angle": angle,
-                    "mid": mid,
-                    "upper": upper,
-                    "lower": lower
-                }))
-
-                # === Запись индикаторов в таблицу ohlcv_m5 ===
-                if candles:
-                    open_time = candles[-2]["open_time"]
-                    db_url = os.getenv("DATABASE_URL")
-                    try:
-                        conn = await asyncpg.connect(dsn=db_url)
-                        await conn.execute("""
-                            UPDATE ohlcv_m5 SET
-                                rsi = $1,
-                                smi = $2,
-                                smi_signal = $3,
-                                atr = $4,
-                                lr_angle = $5,
-                                lr_mid = $6,
-                                lr_upper = $7,
-                                lr_lower = $8,
-                                lr_trend = $9
-                            WHERE symbol = $10 AND open_time = $11
-                        """,
-                        rsi, smi_val, smi_signal_val, atr,
-                        angle, mid, upper, lower, trend,
-                        symbol, open_time)
-                        await conn.close()
-                        print(f"[DB] Обновлена свеча {symbol} @ {open_time} с индикаторами", flush=True)
-                    except Exception as e:
-                        print(f"[ERROR] Не удалось обновить ohlcv_m5 для {symbol}: {e}", flush=True)
-
-            await asyncio.sleep(5)
-        else:
-            await asyncio.sleep(1)
-
-# === Запуск ===
+# Точка входа
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(redis_listener())
