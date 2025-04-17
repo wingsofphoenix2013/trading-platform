@@ -210,6 +210,7 @@ async def main():
                 "lr_lower": lr_lower
             }
             await redis_client.publish(REDIS_CHANNEL_OUT, json.dumps(publish_data))
+            await redis_client.set(f"indicators:{symbol}", json.dumps(publish_data))
             print(f"[REDIS → {REDIS_CHANNEL_OUT}] Публикация индикаторов: {publish_data}", flush=True)
 
         except Exception as e:
