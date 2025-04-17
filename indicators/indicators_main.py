@@ -1,4 +1,4 @@
-# indicators_main.py — шаг 6.3.3: возвращение к классической формуле SMI (hlc3 + SMA)
+# indicators_main.py — шаг 6.4.1: восстановление расчёта линейного канала с нормализацией угла
 
 import asyncio
 import json
@@ -64,15 +64,14 @@ async def process_candle(symbol, timestamp):
 
         print(f"[DEBUG] Построенные настройки: {settings}", flush=True)
 
-        rsi_period = settings.get("rsi", {}).get("period", 14)
-        smi_k = settings.get("smi", {}).get("k", 13)
-        smi_d = settings.get("smi", {}).get("d", 5)
-        smi_s = settings.get("smi", {}).get("s", 3)
+        lr_len = settings.get("lr", {}).get("length", 50)
+        angle_up = settings.get("lr", {}).get("angle_up", 2)
+        angle_down = settings.get("lr", {}).get("angle_down", -2)
 
         lookback = max(
-            rsi_period,
-            smi_k + smi_d + smi_s,
-            settings.get("lr", {}).get("length", 50)
+            settings.get("rsi", {}).get("period", 14),
+            settings.get("smi", {}).get("k", 13) + settings.get("smi", {}).get("d", 5) + settings.get("smi", {}).get("s", 3),
+            lr_len
         )
 
         candles = session.query(ohlcv_table) \
@@ -90,45 +89,34 @@ async def process_candle(symbol, timestamp):
             print(f"[WARNING] Недостаточно данных для индикаторов ({len(candles)} < {lookback})", flush=True)
             return
 
-        closes = [float(c.close) for c in candles]
-        highs = [float(c.high) for c in candles]
-        lows = [float(c.low) for c in candles]
+        closes = np.array([float(c.close) for c in candles])
 
-        # === RSI ===
-        gains, losses = [], []
-        for i in range(-rsi_period - 1, -1):
-            delta = closes[i + 1] - closes[i]
-            gains.append(max(delta, 0))
-            losses.append(abs(min(delta, 0)))
+        # === Линейный канал с нормализацией угла ===
+        if len(closes) >= lr_len:
+            y = closes[-lr_len:]
+            x = np.arange(len(y))
+            slope, intercept = np.polyfit(x, y, 1)
 
-        avg_gain = sum(gains) / rsi_period
-        avg_loss = sum(losses) / rsi_period
-        rs = avg_gain / avg_loss if avg_loss != 0 else 0
-        rsi = 100 - (100 / (1 + rs)) if avg_loss != 0 else 100
-        print(f"[DEBUG] RSI для {symbol} @ {timestamp}: {rsi:.2f}", flush=True)
+            # нормализация угла
+            slope_normalized = slope * 1000 / y[-1]  # масштабирование
+            angle_rad = math.atan(slope_normalized)
+            angle_deg = angle_rad * 180 / math.pi
 
-        # === Классический SMI (hlc3 + SMA) ===
-        k, d, s = smi_k, smi_d, smi_s
-        required = k + d + s
+            regression = slope * x + intercept
+            diffs = y - regression
+            upper = y[-1] + max(diffs)
+            lower = y[-1] + min(diffs)
 
-        if len(candles) >= required:
-            hlc3 = np.array([(h + l + c) / 3 for h, l, c in zip(highs, lows, closes)])
-            hh = np.array([max(hlc3[j - k:j]) for j in range(k, len(hlc3))])
-            ll = np.array([min(hlc3[j - k:j]) for j in range(k, len(hlc3))])
-            center = (hh + ll) / 2
-            diff = hlc3[k:] - center
-
-            smoothed_diff = np.convolve(diff, np.ones(d) / d, mode='valid')
-            smoothed_range = np.convolve(hh - ll, np.ones(d) / d, mode='valid')
-            smi_raw = 100 * smoothed_diff / (smoothed_range + 1e-9)
-            smi = np.convolve(smi_raw, np.ones(s) / s, mode='valid')
-
-            if len(smi) > 0:
-                smi_val = round(smi_raw[-1], 2)
-                smi_signal_val = round(smi[-1], 2)
-                print(f"[SMI] {symbol}: SMI={smi_val}, Signal={smi_signal_val}", flush=True)
+            if angle_deg > angle_up:
+                trend = "up"
+            elif angle_deg < angle_down:
+                trend = "down"
             else:
-                print(f"[WARNING] SMI не рассчитан для {symbol}", flush=True)
+                trend = "flat"
+
+            print(f"[LR] {symbol}: угол={angle_deg:.2f}°, тренд={trend}, верх={upper:.4f}, низ={lower:.4f}", flush=True)
+        else:
+            print(f"[WARNING] Недостаточно данных для LR ({len(closes)} < {lr_len})", flush=True)
 
     except Exception as e:
         print(f"[ERROR] Ошибка в process_candle: {e}", flush=True)
