@@ -153,7 +153,7 @@ async def process_candle(symbol, timestamp):
     except Exception as e:
         logging.error(f"Ошибка при расчёте индикаторов: {e}")
         session.rollback()
-# Слушает Redis канал и запускает расчёт индикаторов по завершённой свече
+# Минимальный отладочный redis_listener
 async def redis_listener():
     pubsub = redis_client.pubsub()
     await pubsub.subscribe("ohlcv_m5_complete")
@@ -161,52 +161,32 @@ async def redis_listener():
 
     async for message in pubsub.listen():
         if message["type"] == "message":
+            raw_data = message["data"]
+            if isinstance(raw_data, bytes):
+                raw_data = raw_data.decode()
+
+            print(f"[DEBUG] raw_data repr: {repr(raw_data)}", flush=True)
+
             try:
-                raw_data = message["data"]
-
-                # Отладка: исходное сообщение
-                print(f"[DEBUG] raw_data repr: {repr(raw_data)}", flush=True)
-                print(f"[DEBUG] raw_data type: {type(raw_data)}", flush=True)
-
-                # Декодирование байтов
-                if isinstance(raw_data, bytes):
-                    raw_data = raw_data.decode()
-
-                # Попытка парсинга JSON
-                try:
-                    data = json.loads(raw_data)
-                except json.JSONDecodeError as e:
-                    print(f"[ERROR] JSON decode error: {e} | raw: {repr(raw_data)}", flush=True)
-                    continue
-
-                # Отладка: что распарсилось
-                print(f"[DEBUG] parsed data: {repr(data)}", flush=True)
-                print(f"[DEBUG] parsed data type: {type(data)}", flush=True)
-
-                # Проверка ключей
-                symbol = data.get("symbol")
-                timestamp_str = data.get("timestamp")
-
-                if not symbol or not timestamp_str:
-                    print(f"[ERROR] Отсутствуют ключи 'symbol' или 'timestamp': {data}", flush=True)
-                    continue
-
-                # Преобразование времени
-                try:
-                    timestamp = datetime.fromisoformat(timestamp_str)
-                except ValueError as e:
-                    print(f"[ERROR] Неверный формат времени: {timestamp_str} | {e}", flush=True)
-                    continue
-
-                # Отдельный блок отладки вызова process_candle
-                try:
-                    await process_candle(symbol, timestamp)
-                except Exception as e:
-                    print(f"[ERROR] Ошибка в process_candle: {e}", flush=True)
-
+                data = json.loads(raw_data)
             except Exception as e:
-                print(f"[ERROR] Общая ошибка обработки сообщения из Redis: {e}", flush=True)
-                
+                print(f"[ERROR] JSON decode error: {e}", flush=True)
+                continue
+
+            symbol = data.get("symbol")
+            timestamp_str = data.get("timestamp")
+
+            try:
+                timestamp = datetime.fromisoformat(timestamp_str)
+            except Exception as e:
+                print(f"[ERROR] timestamp parse error: {e}", flush=True)
+                continue
+
+            # 🔥 Отдельная диагностика вызова process_candle
+            try:
+                await process_candle(symbol, timestamp)
+            except Exception as e:
+                print(f"[ERROR] ВНУТРИ process_candle: {e}", flush=True)
 # Точка входа
 if __name__ == "__main__":
     asyncio.run(redis_listener())
