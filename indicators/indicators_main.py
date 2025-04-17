@@ -1,4 +1,4 @@
-# indicators_main.py — шаг 6: расчёт RSI на основе загруженных свечей
+# indicators_main.py — шаг 6.2: расчёт RSI и SMI (через EMA)
 
 import asyncio
 import json
@@ -29,7 +29,17 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# Шаг 6: расчёт RSI
+# EMA расчёт
+def ema(data, period):
+    if len(data) < period:
+        return None
+    alpha = 2 / (period + 1)
+    ema_values = [sum(data[:period]) / period]
+    for price in data[period:]:
+        ema_values.append((price - ema_values[-1]) * alpha + ema_values[-1])
+    return ema_values[-1]
+
+# Расчёт индикаторов
 async def process_candle(symbol, timestamp):
     print(f"[DEBUG] ВХОД: process_candle(symbol={symbol}, timestamp={timestamp})", flush=True)
 
@@ -64,14 +74,17 @@ async def process_candle(symbol, timestamp):
 
         print(f"[DEBUG] Построенные настройки: {settings}", flush=True)
 
-        # Вычисление необходимой глубины выборки
+        rsi_period = settings.get("rsi", {}).get("period", 14)
+        smi_k = settings.get("smi", {}).get("k", 13)
+        smi_d = settings.get("smi", {}).get("d", 5)
+        smi_s = settings.get("smi", {}).get("s", 3)
+
         lookback = max(
-            settings.get("rsi", {}).get("period", 14),
-            settings.get("smi", {}).get("k", 13) + settings.get("smi", {}).get("d", 5) + settings.get("smi", {}).get("s", 3),
+            rsi_period,
+            smi_k + smi_d + smi_s,
             settings.get("lr", {}).get("length", 50)
         )
 
-        # Загрузка свечей
         candles = session.query(ohlcv_table) \
             .filter(ohlcv_table.c.symbol == symbol) \
             .filter(ohlcv_table.c.open_time <= timestamp) \
@@ -83,31 +96,42 @@ async def process_candle(symbol, timestamp):
         candles = list(reversed(candles))
         print(f"[DEBUG] Загружено {len(candles)} свечей для {symbol}", flush=True)
 
-        # === Расчёт RSI ===
-        rsi_period = settings.get("rsi", {}).get("period", 14)
-        if len(candles) < rsi_period + 1:
-            print(f"[WARNING] Недостаточно данных для RSI ({len(candles)} < {rsi_period + 1})", flush=True)
+        if len(candles) < lookback:
+            print(f"[WARNING] Недостаточно данных для индикаторов ({len(candles)} < {lookback})", flush=True)
             return
 
+        # === RSI ===
         closes = [c.close for c in candles]
-        gains = []
-        losses = []
-
+        gains, losses = [], []
         for i in range(-rsi_period - 1, -1):
             delta = closes[i + 1] - closes[i]
-            if delta > 0:
-                gains.append(delta)
-                losses.append(0)
-            else:
-                gains.append(0)
-                losses.append(abs(delta))
+            gains.append(max(delta, 0))
+            losses.append(abs(min(delta, 0)))
 
         avg_gain = sum(gains) / rsi_period
         avg_loss = sum(losses) / rsi_period
         rs = avg_gain / avg_loss if avg_loss != 0 else 0
         rsi = 100 - (100 / (1 + rs)) if avg_loss != 0 else 100
-
         print(f"[DEBUG] RSI для {symbol} @ {timestamp}: {rsi:.2f}", flush=True)
+
+        # === SMI ===
+        highs = [c.high for c in candles]
+        lows = [c.low for c in candles]
+        midpoints = [(h + l) / 2 for h, l in zip(highs, lows)]
+        diffs = [h - l for h, l in zip(highs, lows)]
+        close_minus_mid = [c - m for c, m in zip(closes, midpoints)]
+
+        cmd_ema = ema(close_minus_mid[-(smi_k + smi_d + smi_s):], smi_k)
+        hl_ema = ema(diffs[-(smi_k + smi_d + smi_s):], smi_k)
+
+        cmd_smoothed = ema([cmd_ema], smi_s) if cmd_ema is not None else None
+        hl_smoothed = ema([hl_ema], smi_s) if hl_ema is not None else None
+
+        if cmd_smoothed is not None and hl_smoothed and hl_smoothed != 0:
+            smi = 100 * cmd_smoothed / hl_smoothed
+            print(f"[DEBUG] SMI для {symbol} @ {timestamp}: {smi:.2f}", flush=True)
+        else:
+            print(f"[WARNING] SMI не рассчитан для {symbol}", flush=True)
 
     except Exception as e:
         print(f"[ERROR] Ошибка в process_candle: {e}", flush=True)
