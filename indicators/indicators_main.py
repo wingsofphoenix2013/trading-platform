@@ -164,32 +164,44 @@ async def redis_listener():
             try:
                 raw_data = message["data"]
 
+                # Отладка: выводим исходное сообщение
+                print(f"[DEBUG] raw_data repr: {repr(raw_data)}", flush=True)
+                print(f"[DEBUG] raw_data type: {type(raw_data)}", flush=True)
+
                 # Если Redis отдает байты — декодируем
                 if isinstance(raw_data, bytes):
                     raw_data = raw_data.decode()
 
                 # Парсим JSON
-                data = json.loads(raw_data)
+                try:
+                    data = json.loads(raw_data)
+                except json.JSONDecodeError as e:
+                    print(f"[ERROR] JSON decode error: {e} | raw: {repr(raw_data)}", flush=True)
+                    continue
+
+                # Отладка: что получилось после парсинга
+                print(f"[DEBUG] parsed data: {repr(data)}", flush=True)
+                print(f"[DEBUG] parsed data type: {type(data)}", flush=True)
 
                 # Проверяем наличие ключей
                 symbol = data.get("symbol")
                 timestamp_str = data.get("timestamp")
                 if not symbol or not timestamp_str:
-                    logging.error(f"[ERROR] Не хватает ключей в сообщении: {data}")
+                    print(f"[ERROR] Отсутствуют ключи 'symbol' или 'timestamp': {data}", flush=True)
                     continue
 
                 # Преобразуем timestamp
                 try:
                     timestamp = datetime.fromisoformat(timestamp_str)
-                except ValueError:
-                    logging.error(f"[ERROR] Неверный формат времени: {timestamp_str}")
+                except ValueError as e:
+                    print(f"[ERROR] Неверный формат времени: {timestamp_str} | {e}", flush=True)
                     continue
 
                 # Запускаем расчёт
                 await process_candle(symbol, timestamp)
 
             except Exception as e:
-                logging.error(f"[ERROR] Общая ошибка обработки сообщения из Redis: {e}")
+                print(f"[ERROR] Общая ошибка обработки сообщения из Redis: {e}", flush=True)
                 
 # Точка входа
 if __name__ == "__main__":
