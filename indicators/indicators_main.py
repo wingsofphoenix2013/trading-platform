@@ -154,7 +154,7 @@ async def process_candle(symbol, timestamp):
         logging.error(f"Ошибка при расчёте индикаторов: {e}")
         session.rollback()
 
-# Слушает Redis канал и активирует новые тикеры по команде
+# Слушает Redis канал и запускает расчёт индикаторов по завершённой свече
 async def redis_listener():
     pubsub = redis_client.pubsub()
     await pubsub.subscribe("ohlcv_m5_complete")
@@ -163,18 +163,43 @@ async def redis_listener():
     async for message in pubsub.listen():
         if message["type"] == "message":
             try:
-                logging.debug(f"[DEBUG] RAW REDIS MESSAGE: {message}")
-                data = json.loads(message["data"])
-                logging.debug(f"[DEBUG] PARSED: {data} ({type(data)})")
+                raw_data = message["data"]
+
+                # Декодируем байты, если нужно
+                if isinstance(raw_data, bytes):
+                    raw_data = raw_data.decode()
+
+                logging.debug(f"[DEBUG] RAW MESSAGE DATA: {repr(raw_data)}")
+
+                # Пытаемся распарсить JSON
+                try:
+                    data = json.loads(raw_data)
+                except json.JSONDecodeError as e:
+                    logging.error(f"[ERROR] JSON decode error: {e} | raw={repr(raw_data)}")
+                    continue
+
+                # Проверяем, что data — это словарь
+                if not isinstance(data, dict):
+                    logging.error(f"[ERROR] Parsed data is not a dict: {data} ({type(data)})")
+                    continue
 
                 symbol = data.get("symbol")
-                timestamp = datetime.fromisoformat(data.get("timestamp"))
-                if symbol and timestamp:
-                    await process_candle(symbol, timestamp)
+                timestamp_str = data.get("timestamp")
+
+                if not symbol or not timestamp_str:
+                    logging.error(f"[ERROR] Отсутствуют ключи 'symbol' или 'timestamp' в сообщении: {data}")
+                    continue
+
+                try:
+                    timestamp = datetime.fromisoformat(timestamp_str)
+                except Exception as e:
+                    logging.error(f"[ERROR] Невозможно распарсить timestamp: {timestamp_str} | {e}")
+                    continue
+
+                await process_candle(symbol, timestamp)
 
             except Exception as e:
-                logging.error(f"Ошибка обработки сообщения из Redis: {e}")
-
+                logging.error(f"[ERROR] Общая ошибка обработки сообщения из Redis: {e}")
 # Точка входа
 if __name__ == "__main__":
     asyncio.run(redis_listener())
