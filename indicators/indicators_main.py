@@ -109,6 +109,10 @@ async def main():
 
                 # === LR канал ===
                 lr_len = settings.get("lr", {}).get("length", 50)
+                angle_up = settings.get("lr", {}).get("angle_up", 2)
+                angle_down = settings.get("lr", {}).get("angle_down", -2)
+                trend = None
+
                 if len(candles) >= lr_len:
                     closes = np.array([float(c["close"]) for c in candles[-lr_len:]])
                     x = np.arange(len(closes))
@@ -116,13 +120,21 @@ async def main():
                     slope, _ = np.polyfit(x, norm, 1)
                     angle = round(degrees(atan(slope)), 2)
 
+                    if angle > angle_up:
+                        trend = "up"
+                    elif angle < angle_down:
+                        trend = "down"
+                    else:
+                        trend = "flat"
+
                     slope_real, intercept_real = np.polyfit(x, closes, 1)
                     regression_line = slope_real * x + intercept_real
                     std_dev = np.std(closes - regression_line)
                     mid = round(regression_line[-1], 4)
                     upper = round(mid + 2 * std_dev, 4)
                     lower = round(mid - 2 * std_dev, 4)
-                    print(f"[LR] {symbol}: angle={angle}°, mid={mid}, upper={upper}, lower={lower}", flush=True)
+
+                    print(f"[LR] {symbol}: angle={angle}°, trend={trend}, mid={mid}, upper={upper}, lower={lower}", flush=True)
 
                 # === RSI ===
                 rsi_period = settings.get("rsi", {}).get("period", 14)
@@ -169,6 +181,7 @@ async def main():
 
                 # === Публикация в Redis ===
                 await r.set(f"indicators:{symbol}", json.dumps({
+                    "trend": trend,
                     "rsi": rsi,
                     "smi": smi_val,
                     "smi_signal": smi_signal_val,
