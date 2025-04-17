@@ -192,6 +192,33 @@ async def main():
                     "lower": lower
                 }))
 
+                # === Запись индикаторов в таблицу ohlcv_m5 ===
+                if candles:
+                    open_time = candles[-1]["open_time"]
+                    db_url = os.getenv("DATABASE_URL")
+                    try:
+                        conn = await asyncpg.connect(dsn=db_url)
+                        await conn.execute("""
+                            UPDATE ohlcv_m5 SET
+                                rsi = $1,
+                                smi = $2,
+                                smi_signal = $3,
+                                atr = $4,
+                                lr_angle = $5,
+                                lr_mid = $6,
+                                lr_upper = $7,
+                                lr_lower = $8,
+                                lr_trend = $9
+                            WHERE symbol = $10 AND open_time = $11
+                        """,
+                        rsi, smi_val, smi_signal_val, atr,
+                        angle, mid, upper, lower, trend,
+                        symbol, open_time)
+                        await conn.close()
+                        print(f"[DB] Обновлена свеча {symbol} @ {open_time} с индикаторами", flush=True)
+                    except Exception as e:
+                        print(f"[ERROR] Не удалось обновить ohlcv_m5 для {symbol}: {e}", flush=True)
+
             await asyncio.sleep(5)
         else:
             await asyncio.sleep(1)
