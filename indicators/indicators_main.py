@@ -1,4 +1,4 @@
-# indicators/indicators_main.py — расчёт технических индикаторов (этап 1)
+# indicators/indicators_main.py — расчёт технических индикаторов (этап 2)
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -8,6 +8,7 @@ import os
 import asyncpg
 import redis.asyncio as redis
 import json
+import pandas as pd
 from datetime import datetime
 
 # === Конфигурация ===
@@ -56,8 +57,44 @@ async def main():
             try:
                 data = json.loads(message['data'])
                 symbol = data.get("symbol")
-                ts = data.get("timestamp")
-                print(f"[REDIS] Получено сообщение: symbol={symbol}, timestamp={ts}", flush=True)
+                ts_str = data.get("timestamp")
+                print(f"[REDIS] Получено сообщение: symbol={symbol}, timestamp={ts_str}", flush=True)
+
+                # === ЭТАП 2: Загрузка последних 100 свечей по тикеру ===
+                query_candles = """
+                    SELECT timestamp, open, high, low, close, volume
+                    FROM ohlcv_m5
+                    WHERE symbol = $1 AND complete = true
+                    ORDER BY timestamp DESC
+                    LIMIT 100
+                """
+                rows = await pg_conn.fetch(query_candles, symbol)
+                if not rows or len(rows) < 20:
+                    print(f"[SKIP] Недостаточно данных для {symbol} ({len(rows)} свечей)", flush=True)
+                    continue
+
+                df = pd.DataFrame(rows, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                df = df.sort_values('timestamp')  # от старых к новым
+
+                print(f"[DATA] Загружено {len(df)} свечей для {symbol}", flush=True)
+
+                # === Загрузка всех параметров из indicator_settings ===
+                query_settings = """
+                    SELECT indicator, param, value
+                    FROM indicator_settings
+                """
+                rows = await pg_conn.fetch(query_settings)
+                settings = {}
+                for row in rows:
+                    indicator = row['indicator']
+                    param = row['param']
+                    value = float(row['value'])
+                    if indicator not in settings:
+                        settings[indicator] = {}
+                    settings[indicator][param] = value
+
+                print(f"[DATA] Загружены параметры индикаторов: {settings}", flush=True)
+
             except Exception as e:
                 print(f"[ERROR] Ошибка при обработке сообщения: {e}", flush=True)
 
