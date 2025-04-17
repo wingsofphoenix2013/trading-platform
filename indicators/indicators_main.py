@@ -1,4 +1,4 @@
-# indicators_main.py — шаг 6.2.1: приведение Decimal к float для SMI и RSI
+# indicators_main.py — шаг 6.3: реализация SMI в методологии TradingView (двойное EMA, ×200)
 
 import asyncio
 import json
@@ -49,7 +49,6 @@ async def process_candle(symbol, timestamp):
             print(f"[ERROR] Таблица indicator_settings пуста", flush=True)
             return
 
-        # Построение словаря настроек
         settings = {}
         for row in result:
             row_dict = dict(row._mapping)
@@ -100,7 +99,6 @@ async def process_candle(symbol, timestamp):
             print(f"[WARNING] Недостаточно данных для индикаторов ({len(candles)} < {lookback})", flush=True)
             return
 
-        # Приведение к float
         closes = [float(c.close) for c in candles]
         highs = [float(c.high) for c in candles]
         lows = [float(c.low) for c in candles]
@@ -118,19 +116,21 @@ async def process_candle(symbol, timestamp):
         rsi = 100 - (100 / (1 + rs)) if avg_loss != 0 else 100
         print(f"[DEBUG] RSI для {symbol} @ {timestamp}: {rsi:.2f}", flush=True)
 
-        # === SMI ===
+        # === SMI по методологии TradingView ===
         midpoints = [(h + l) / 2 for h, l in zip(highs, lows)]
         diffs = [h - l for h, l in zip(highs, lows)]
         close_minus_mid = [c - m for c, m in zip(closes, midpoints)]
 
-        cmd_ema = ema(close_minus_mid[-(smi_k + smi_d + smi_s):], smi_k)
-        hl_ema = ema(diffs[-(smi_k + smi_d + smi_s):], smi_k)
+        # Первая EMA
+        cmd_ema1 = ema(close_minus_mid, smi_d)
+        hl_ema1 = ema(diffs, smi_d)
 
-        cmd_smoothed = ema([cmd_ema], smi_s) if cmd_ema is not None else None
-        hl_smoothed = ema([hl_ema], smi_s) if hl_ema is not None else None
+        # Вторая EMA (по результатам первой)
+        cmd_ema2 = ema([cmd_ema1] * smi_s, smi_s) if cmd_ema1 is not None else None
+        hl_ema2 = ema([hl_ema1] * smi_s, smi_s) if hl_ema1 is not None else None
 
-        if cmd_smoothed is not None and hl_smoothed and hl_smoothed != 0:
-            smi = 100 * cmd_smoothed / hl_smoothed
+        if cmd_ema2 is not None and hl_ema2 and hl_ema2 != 0:
+            smi = 200 * cmd_ema2 / hl_ema2
             print(f"[DEBUG] SMI для {symbol} @ {timestamp}: {smi:.2f}", flush=True)
         else:
             print(f"[WARNING] SMI не рассчитан для {symbol}", flush=True)
