@@ -1,4 +1,4 @@
-# indicators_main.py — шаг 5: загрузка свечей по symbol и timestamp
+# indicators_main.py — шаг 6: расчёт RSI на основе загруженных свечей
 
 import asyncio
 import json
@@ -29,7 +29,7 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# Шаг 5: загрузка свечей из ohlcv_m5 для расчёта индикаторов
+# Шаг 6: расчёт RSI
 async def process_candle(symbol, timestamp):
     print(f"[DEBUG] ВХОД: process_candle(symbol={symbol}, timestamp={timestamp})", flush=True)
 
@@ -64,14 +64,14 @@ async def process_candle(symbol, timestamp):
 
         print(f"[DEBUG] Построенные настройки: {settings}", flush=True)
 
-        # Получаем lookback: максимум из всех нужных периодов
+        # Вычисление необходимой глубины выборки
         lookback = max(
             settings.get("rsi", {}).get("period", 14),
             settings.get("smi", {}).get("k", 13) + settings.get("smi", {}).get("d", 5) + settings.get("smi", {}).get("s", 3),
             settings.get("lr", {}).get("length", 50)
         )
 
-        # Запрос последних N свечей для тикера
+        # Загрузка свечей
         candles = session.query(ohlcv_table) \
             .filter(ohlcv_table.c.symbol == symbol) \
             .filter(ohlcv_table.c.open_time <= timestamp) \
@@ -81,11 +81,36 @@ async def process_candle(symbol, timestamp):
             .all()
 
         candles = list(reversed(candles))
-
         print(f"[DEBUG] Загружено {len(candles)} свечей для {symbol}", flush=True)
 
+        # === Расчёт RSI ===
+        rsi_period = settings.get("rsi", {}).get("period", 14)
+        if len(candles) < rsi_period + 1:
+            print(f"[WARNING] Недостаточно данных для RSI ({len(candles)} < {rsi_period + 1})", flush=True)
+            return
+
+        closes = [c.close for c in candles]
+        gains = []
+        losses = []
+
+        for i in range(-rsi_period - 1, -1):
+            delta = closes[i + 1] - closes[i]
+            if delta > 0:
+                gains.append(delta)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(abs(delta))
+
+        avg_gain = sum(gains) / rsi_period
+        avg_loss = sum(losses) / rsi_period
+        rs = avg_gain / avg_loss if avg_loss != 0 else 0
+        rsi = 100 - (100 / (1 + rs)) if avg_loss != 0 else 100
+
+        print(f"[DEBUG] RSI для {symbol} @ {timestamp}: {rsi:.2f}", flush=True)
+
     except Exception as e:
-        print(f"[ERROR] Ошибка при загрузке настроек или свечей: {e}", flush=True)
+        print(f"[ERROR] Ошибка в process_candle: {e}", flush=True)
 
 # Слушает Redis канал и запускает расчёт индикаторов по завершённой свече
 async def redis_listener():
