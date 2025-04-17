@@ -154,52 +154,25 @@ async def process_candle(symbol, timestamp):
         logging.error(f"Ошибка при расчёте индикаторов: {e}")
         session.rollback()
 
-# Слушает Redis канал и запускает расчёт индикаторов по завершённой свече
+# Временная версия: только печать входящих сообщений из Redis
 async def redis_listener():
     pubsub = redis_client.pubsub()
     await pubsub.subscribe("ohlcv_m5_complete")
-    logging.info("[Redis] Подписка на канал 'ohlcv_m5_complete'")
+    print("[Redis] Подписка на канал 'ohlcv_m5_complete'", flush=True)
 
     async for message in pubsub.listen():
         if message["type"] == "message":
             try:
                 raw_data = message["data"]
 
-                # Декодируем байты, если нужно
                 if isinstance(raw_data, bytes):
                     raw_data = raw_data.decode()
 
-                logging.debug(f"[DEBUG] RAW MESSAGE DATA: {repr(raw_data)}")
-
-                # Пытаемся распарсить JSON
-                try:
-                    data = json.loads(raw_data)
-                except json.JSONDecodeError as e:
-                    logging.error(f"[ERROR] JSON decode error: {e} | raw={repr(raw_data)}")
-                    continue
-
-                # Проверяем, что data — это словарь
-                if not isinstance(data, dict):
-                    logging.error(f"[ERROR] Parsed data is not a dict: {data} ({type(data)})")
-                    continue
-
-                symbol = data.get("symbol")
-                timestamp_str = data.get("timestamp")
-
-                if not symbol or not timestamp_str:
-                    logging.error(f"[ERROR] Отсутствуют ключи 'symbol' или 'timestamp' в сообщении: {data}")
-                    continue
-
-                try:
-                    timestamp = datetime.fromisoformat(timestamp_str)
-                except Exception as e:
-                    logging.error(f"[ERROR] Невозможно распарсить timestamp: {timestamp_str} | {e}")
-                    continue
-
-                await process_candle(symbol, timestamp)
+                print(f"[RECEIVED] raw_data repr: {repr(raw_data)}", flush=True)
+                print(f"[RECEIVED] raw_data type: {type(raw_data)}", flush=True)
 
             except Exception as e:
-                logging.error(f"[ERROR] Общая ошибка обработки сообщения из Redis: {e}")
+                print(f"[ERROR] Exception while printing Redis message: {e}", flush=True)
 # Точка входа
 if __name__ == "__main__":
     asyncio.run(redis_listener())
