@@ -1,4 +1,4 @@
-# Шаг 1. Инициализация: подключение к Redis, PostgreSQL и подписка на канал завершённых свечей
+# indicators_main.py — пересобран до конца расчёта LR (Шаг 3), с корректной структурой и отступами
 
 import asyncio
 import os
@@ -11,11 +11,10 @@ from datetime import datetime
 from math import atan, degrees
 
 REDIS_CHANNEL_IN = 'ohlcv_m5_complete'
-
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
 async def main():
-    # Подключение к Redis
+    # Шаг 1. Подключение к Redis и PostgreSQL
     print("[INIT] Connecting to Redis...", flush=True)
     try:
         redis_client = redis.Redis(
@@ -32,12 +31,10 @@ async def main():
         pubsub = redis_client.pubsub()
         await pubsub.subscribe(REDIS_CHANNEL_IN)
         print(f"[INIT] Subscribed to Redis channel: {REDIS_CHANNEL_IN}", flush=True)
-
     except Exception as e:
         print(f"[ERROR] Redis connection or subscription failed: {e}", flush=True)
         return
 
-    # Подключение к PostgreSQL
     print("[INIT] Connecting to PostgreSQL...", flush=True)
     try:
         pg_conn = await asyncpg.connect(
@@ -52,7 +49,10 @@ async def main():
         print(f"[ERROR] Failed to connect PostgreSQL: {e}", flush=True)
         return
 
-    # Шаг 3. Расчёт линейного канала (LR) на основе последних N свечей
+    # Шаг 2. Основной цикл: получение сообщений из Redis и загрузка данных
+    async for message in pubsub.listen():
+        if message['type'] != 'message':
+            continue
 
         try:
             data = json.loads(message['data'])
@@ -60,7 +60,7 @@ async def main():
             ts_str = data.get("timestamp")
             print(f"[REDIS] Получено сообщение: symbol={symbol}, timestamp={ts_str}", flush=True)
 
-            # Загрузка последних 100 завершённых свечей
+            # Загрузка 100 завершённых свечей
             query_candles = """
                 SELECT open_time AS timestamp, open, high, low, close, volume
                 FROM ohlcv_m5
@@ -73,7 +73,6 @@ async def main():
                 print(f"[SKIP] Недостаточно данных для {symbol} ({len(rows)} свечей)", flush=True)
                 continue
 
-            import pandas as pd
             df = pd.DataFrame(rows, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             for col in ['open', 'high', 'low', 'close', 'volume']:
                 df[col] = df[col].astype(float)
@@ -99,33 +98,27 @@ async def main():
             precision_digits = int(precision_row['precision_price']) if precision_row else 2
             print(f"[DATA] Точность цен для {symbol}: {precision_digits} знаков после запятой", flush=True)
 
-        # Расчёт линейного канала (LR)
+            # Шаг 3. Расчёт линейного канала (LR)
             try:
-                # Получаем параметры из настроек
                 lr_length = int(settings.get('lr', {}).get('length', 50))
                 angle_up = settings.get('lr', {}).get('angle_up', 2)
                 angle_down = settings.get('lr', {}).get('angle_down', -2)
 
-                # Проверка достаточности данных
                 if len(df) < lr_length:
                     raise ValueError(f"Недостаточно данных для LR: нужно {lr_length}, есть {len(df)}")
 
-                # Подготовка данных: последние N значений close
                 lr_df = df.tail(lr_length).copy()
                 x = np.arange(lr_length)
                 y = lr_df['close'].values
 
-                # Линейная регрессия: расчёт коэффициентов
                 coef = np.polyfit(x, y, 1)
                 slope = coef[0]
                 intercept = coef[1]
                 regression_line = slope * x + intercept
 
-                # Угол наклона в градусах, с нормализацией
                 norm_slope = slope / np.mean(y)
                 angle_deg = round(degrees(atan(norm_slope)), 2)
 
-                # Определение направления тренда по углу наклона
                 if angle_deg > angle_up:
                     trend = 'up'
                 elif angle_deg < angle_down:
@@ -133,13 +126,11 @@ async def main():
                 else:
                     trend = 'flat'
 
-                # Границы канала: ±2 стандартных отклонения от линии регрессии
                 std_dev = np.std(y - regression_line)
                 lr_mid = round(regression_line[-1], precision_digits)
                 lr_upper = round(regression_line[-1] + 2 * std_dev, precision_digits)
                 lr_lower = round(regression_line[-1] - 2 * std_dev, precision_digits)
 
-                # Лог результатов
                 print(f"[LR] {symbol}: угол={angle_deg}°, тренд={trend}, середина={lr_mid}, верх={lr_upper}, низ={lr_lower}", flush=True)
 
             except Exception as e:
