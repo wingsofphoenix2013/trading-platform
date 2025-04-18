@@ -10,6 +10,12 @@ import numpy as np
 from datetime import datetime
 from math import atan, degrees
 
+def safe(x, digits=2):
+    try:
+        return round(float(x), digits)
+    except:
+        return x
+
 REDIS_CHANNEL_IN = 'ohlcv_m5_complete'
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
@@ -174,12 +180,12 @@ async def main():
                 """
 
                 await pg_conn.execute(update_query,
-                    angle_deg,
+                    safe(angle_deg, 2),
                     trend,
-                    lr_upper,
-                    lr_lower,
-                    lr_mid,
-                    atr_value,
+                    safe(lr_upper, precision_digits),
+                    safe(lr_lower, precision_digits),
+                    safe(lr_mid, precision_digits),
+                    safe(atr_value, precision_digits),
                     symbol,
                     ts_dt
                 )
@@ -193,12 +199,12 @@ async def main():
             try:
                 publish_data = {
                     "symbol": symbol,
-                    "lr_angle": angle_deg,
+                    "lr_angle": safe(angle_deg, 2),
                     "lr_trend": trend,
-                    "lr_mid": lr_mid,
-                    "lr_upper": lr_upper,
-                    "lr_lower": lr_lower,
-                    "atr": atr_value
+                    "lr_mid": safe(lr_mid, precision_digits),
+                    "lr_upper": safe(lr_upper, precision_digits),
+                    "lr_lower": safe(lr_lower, precision_digits),
+                    "atr": safe(atr_value, precision_digits)
                 }
 
                 await redis_client.publish("indicators_m5_live", json.dumps(publish_data))
@@ -207,12 +213,12 @@ async def main():
                     "rsi": None,
                     "smi": None,
                     "smi_signal": None,
-                    "atr": atr_value,
-                    "angle": angle_deg,
+                    "atr": safe(atr_value, precision_digits),
+                    "angle": safe(angle_deg, 2),
                     "trend": trend,
-                    "mid": lr_mid,
-                    "upper": lr_upper,
-                    "lower": lr_lower
+                    "mid": safe(lr_mid, precision_digits),
+                    "upper": safe(lr_upper, precision_digits),
+                    "lower": safe(lr_lower, precision_digits)
                 }
 
                 await redis_client.set(f"indicators:{symbol}", json.dumps(ui_data))
