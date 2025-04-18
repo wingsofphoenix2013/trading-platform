@@ -516,4 +516,24 @@ async def update_indicator_settings(
             """, indicator, param, str(value))
     await conn.close()
 
-    return RedirectResponse("/indicators/settings", status_code=303)    
+    return RedirectResponse("/indicators/settings", status_code=303)
+# 22. Страница всех индикаторов по тикерам
+@app.get("/indicators/all", response_class=HTMLResponse)
+async def all_indicators_page(request: Request):
+    conn = await get_db()
+    rows = await conn.fetch("""
+        SELECT symbol, rsi, smi, smi_signal, atr,
+               lr_angle, lr_trend, lr_mid, lr_upper, lr_lower
+        FROM ohlcv_m5
+        WHERE complete = true
+        AND open_time = (
+            SELECT MAX(open_time) FROM ohlcv_m5 o2 WHERE o2.symbol = ohlcv_m5.symbol
+        )
+        ORDER BY symbol
+    """)
+    await conn.close()
+
+    return templates.TemplateResponse("ticker_indicators.html", {
+        "request": request,
+        "indicators": rows
+    })        

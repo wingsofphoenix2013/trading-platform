@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Индикаторы по тикерам</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; background: #f8f9fa; }
+        .card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 900px; margin: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #ddd; text-align: center; }
+        th { background: #f1f1f1; font-weight: 600; }
+        .title { margin-bottom: 1rem; font-size: 1.4rem; font-weight: bold; }
+        .submit-row { text-align: right; margin-top: 1.5rem; }
+        input[type=number], input[type=text] { width: 60px; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="title">Текущие значения технических индикаторов</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Тикер</th>
+                <th>RSI</th>
+                <th>SMI<br>(основной / сигнальный)</th>
+                <th>ATR</th>
+                <th>Линейный канал<br>(тренд, угол, нижняя / средняя / верхняя)</th>
+            </tr>
+        </thead>
+        
+<tbody>
+{% for row in indicators %}
+    <tr>
+        <td>{{ row.symbol }}</td>
+        <td>{{ row.rsi or 'n/a' }}</td>
+        <td>{{ row.smi or 'n/a' }} / {{ row.smi_signal or 'n/a' }}</td>
+        <td>{{ row.atr or 'n/a' }}</td>
+        <td>
+            {% if row.lr_trend %}
+                {{ row.lr_trend }}, {{ row.lr_angle or 'n/a' }}°, 
+                {{ row.lr_lower or 'n/a' }} / {{ row.lr_mid or 'n/a' }} / {{ row.lr_upper or 'n/a' }}
+            {% else %}
+                n/a
+            {% endif %}
+        </td>
+    </tr>
+{% endfor %}
+</tbody>
+
+    </table>
+</div>
+
+    <div style="text-align: center; margin-top: 2rem;">
+        <a href="https://trading-ui-75e2.onrender.com/indicators/settings" style="text-decoration: none; font-weight: bold;">
+            Перейти к настройкам индикаторов
+        </a>
+    </div>
+</body>
+</html>
