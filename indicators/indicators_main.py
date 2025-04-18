@@ -52,10 +52,7 @@ async def main():
         print(f"[ERROR] Failed to connect PostgreSQL: {e}", flush=True)
         return
 
-    # Шаг 2. Загрузка свечей, настроек и точности по каждому сообщению из Redis
-    async for message in pubsub.listen():
-        if message['type'] != 'message':
-            continue
+    # Шаг 3. Расчёт линейного канала (LR) на основе последних N свечей
 
         try:
             data = json.loads(message['data'])
@@ -102,8 +99,51 @@ async def main():
             precision_digits = int(precision_row['precision_price']) if precision_row else 2
             print(f"[DATA] Точность цен для {symbol}: {precision_digits} знаков после запятой", flush=True)
 
-        except Exception as e:
-            print(f"[ERROR] Ошибка при обработке сообщения: {e}", flush=True)
+        # Расчёт линейного канала (LR)
+            try:
+                # Получаем параметры из настроек
+                lr_length = int(settings.get('lr', {}).get('length', 50))
+                angle_up = settings.get('lr', {}).get('angle_up', 2)
+                angle_down = settings.get('lr', {}).get('angle_down', -2)
+
+                # Проверка достаточности данных
+                if len(df) < lr_length:
+                    raise ValueError(f"Недостаточно данных для LR: нужно {lr_length}, есть {len(df)}")
+
+                # Подготовка данных: последние N значений close
+                lr_df = df.tail(lr_length).copy()
+                x = np.arange(lr_length)
+                y = lr_df['close'].values
+
+                # Линейная регрессия: расчёт коэффициентов
+                coef = np.polyfit(x, y, 1)
+                slope = coef[0]
+                intercept = coef[1]
+                regression_line = slope * x + intercept
+
+                # Угол наклона в градусах, с нормализацией
+                norm_slope = slope / np.mean(y)
+                angle_deg = round(degrees(atan(norm_slope)), 2)
+
+                # Определение направления тренда по углу наклона
+                if angle_deg > angle_up:
+                    trend = 'up'
+                elif angle_deg < angle_down:
+                    trend = 'down'
+                else:
+                    trend = 'flat'
+
+                # Границы канала: ±2 стандартных отклонения от линии регрессии
+                std_dev = np.std(y - regression_line)
+                lr_mid = round(regression_line[-1], precision_digits)
+                lr_upper = round(regression_line[-1] + 2 * std_dev, precision_digits)
+                lr_lower = round(regression_line[-1] - 2 * std_dev, precision_digits)
+
+                # Лог результатов
+                print(f"[LR] {symbol}: угол={angle_deg}°, тренд={trend}, середина={lr_mid}, верх={lr_upper}, низ={lr_lower}", flush=True)
+
+            except Exception as e:
+                print(f"[ERROR] LR calculation failed for {symbol}: {e}", flush=True)
 
 if __name__ == '__main__':
     try:
