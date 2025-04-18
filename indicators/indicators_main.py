@@ -188,6 +188,39 @@ async def main():
 
             except Exception as e:
                 print(f"[ERROR] Ошибка при записи в БД: {e}", flush=True)
+                
+            # Шаг 6. Публикация результатов в Redis
+            try:
+                publish_data = {
+                    "symbol": symbol,
+                    "lr_angle": angle_deg,
+                    "lr_trend": trend,
+                    "lr_mid": lr_mid,
+                    "lr_upper": lr_upper,
+                    "lr_lower": lr_lower,
+                    "atr": atr_value
+                }
+
+                await redis_client.publish("indicators_m5_live", json.dumps(publish_data))
+
+                ui_data = {
+                    "rsi": None,
+                    "smi": None,
+                    "smi_signal": None,
+                    "atr": atr_value,
+                    "angle": angle_deg,
+                    "trend": trend,
+                    "mid": lr_mid,
+                    "upper": lr_upper,
+                    "lower": lr_lower
+                }
+
+                await redis_client.set(f"indicators:{symbol}", json.dumps(ui_data))
+
+                print(f"[REDIS] Публикация индикаторов: {publish_data}", flush=True)
+
+            except Exception as e:
+                print(f"[ERROR] Публикация в Redis не удалась: {e}", flush=True)    
             
         except Exception as e:
             print(f"[ERROR] Ошибка при обработке сообщения: {e}", flush=True)
