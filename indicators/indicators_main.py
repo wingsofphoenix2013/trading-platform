@@ -13,6 +13,9 @@ from math import atan, degrees
 REDIS_CHANNEL_IN = 'ohlcv_m5_complete'
 REDIS_CHANNEL_OUT = 'indicators_m5_live'
 
+def safe(x, digits=2):
+    return round(x, digits) if isinstance(x, (int, float)) else x
+
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
 async def main():
@@ -194,36 +197,46 @@ async def main():
                     lr_angle = $5, lr_trend = $6, lr_upper = $7, lr_lower = $8, lr_mid = $9
                 WHERE symbol = $10 AND open_time = $11
             """
-            await pg_conn.execute(update_query, rsi_value, smi_value, smi_sig_value, atr_value,
-                                   angle_deg, trend, lr_upper, lr_lower, lr_mid, symbol, ts_dt)
-
+            await pg_conn.execute(update_query,
+                safe(rsi_value),
+                safe(smi_value),
+                safe(smi_sig_value),
+                safe(atr_value, precision_digits),
+                safe(angle_deg, 2),
+                trend,
+                safe(lr_upper, precision_digits),
+                safe(lr_lower, precision_digits),
+                safe(lr_mid, precision_digits),
+                symbol,
+                ts_dt
+            )
             publish_data = {
                 "symbol": symbol,
-                "rsi": rsi_value,
-                "smi": smi_value,
-                "smi_signal": smi_sig_value,
-                "atr": atr_value,
-                "lr_angle": angle_deg,
+                "rsi": safe(rsi_value),
+                "smi": safe(smi_value),
+                "smi_signal": safe(smi_sig_value),
+                "atr": safe(atr_value, precision_digits),
+                "lr_angle": safe(angle_deg, 2),
                 "lr_trend": trend,
-                "lr_mid": lr_mid,
-                "lr_upper": lr_upper,
-                "lr_lower": lr_lower
+                "lr_mid": safe(lr_mid, precision_digits),
+                "lr_upper": safe(lr_upper, precision_digits),
+                "lr_lower": safe(lr_lower, precision_digits)
             }
             await redis_client.publish(REDIS_CHANNEL_OUT, json.dumps(publish_data))
 
             ui_data = {
-                "rsi": rsi_value,
-                "smi": smi_value,
-                "smi_signal": smi_sig_value,
-                "atr": atr_value,
-                "angle": angle_deg,
+                "rsi": safe(rsi_value),
+                "smi": safe(smi_value),
+                "smi_signal": safe(smi_sig_value),
+                "atr": safe(atr_value, precision_digits),
+                "angle": safe(angle_deg, 2),
                 "trend": trend,
-                "mid": lr_mid,
-                "upper": lr_upper,
-                "lower": lr_lower
+                "mid": safe(lr_mid, precision_digits),
+                "upper": safe(lr_upper, precision_digits),
+                "lower": safe(lr_lower, precision_digits)
             }
             await redis_client.set(f"indicators:{symbol}", json.dumps(ui_data))
-
+            
             print(f"[REDIS → {REDIS_CHANNEL_OUT}] Публикация индикаторов: {publish_data}", flush=True)
 
         except Exception as e:
