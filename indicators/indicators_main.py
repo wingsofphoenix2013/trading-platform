@@ -157,7 +157,38 @@ async def main():
 
             except Exception as e:
                 print(f"[ERROR] ATR calculation failed for {symbol}: {e}", flush=True)                
+        # Шаг 5. Запись расчётных значений в таблицу ohlcv_m5
+        try:
+            ts_dt = datetime.fromisoformat(ts_str)
 
+            update_query = """
+                UPDATE ohlcv_m5
+                SET
+                    lr_angle = $1,
+                    lr_trend = $2,
+                    lr_upper = $3,
+                    lr_lower = $4,
+                    lr_mid   = $5,
+                    atr      = $6
+                WHERE symbol = $7 AND open_time = $8
+            """
+
+            await pg_conn.execute(update_query,
+                angle_deg,
+                trend,
+                lr_upper,
+                lr_lower,
+                lr_mid,
+                atr_value,
+                symbol,
+                ts_dt
+            )
+
+            print(f"[DB] Данные записаны в ohlcv_m5 для {symbol} @ {ts_str}", flush=True)
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка при записи в БД: {e}", flush=True)
+            
         except Exception as e:
             print(f"[ERROR] Ошибка при обработке сообщения: {e}", flush=True)
 
