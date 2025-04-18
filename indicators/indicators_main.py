@@ -1,4 +1,4 @@
-# indicators_main.py — полный пересобранный файл с корректными отступами и Redis SET
+# Шаг 1. Инициализация: подключение к Redis, PostgreSQL и подписка на канал завершённых свечей
 
 import asyncio
 import os
@@ -11,14 +11,11 @@ from datetime import datetime
 from math import atan, degrees
 
 REDIS_CHANNEL_IN = 'ohlcv_m5_complete'
-REDIS_CHANNEL_OUT = 'indicators_m5_live'
-
-def safe(x, digits=2):
-    return round(x, digits) if isinstance(x, (int, float)) else x
 
 print("🚀 INDICATORS WORKER STARTED", flush=True)
 
 async def main():
+    # Подключение к Redis
     print("[INIT] Connecting to Redis...", flush=True)
     try:
         redis_client = redis.Redis(
@@ -40,6 +37,7 @@ async def main():
         print(f"[ERROR] Redis connection or subscription failed: {e}", flush=True)
         return
 
+    # Подключение к PostgreSQL
     print("[INIT] Connecting to PostgreSQL...", flush=True)
     try:
         pg_conn = await asyncpg.connect(
@@ -54,6 +52,7 @@ async def main():
         print(f"[ERROR] Failed to connect PostgreSQL: {e}", flush=True)
         return
 
+    # Шаг 2. Загрузка свечей, настроек и точности по каждому сообщению из Redis
     async for message in pubsub.listen():
         if message['type'] != 'message':
             continue
@@ -64,6 +63,7 @@ async def main():
             ts_str = data.get("timestamp")
             print(f"[REDIS] Получено сообщение: symbol={symbol}, timestamp={ts_str}", flush=True)
 
+            # Загрузка последних 100 завершённых свечей
             query_candles = """
                 SELECT open_time AS timestamp, open, high, low, close, volume
                 FROM ohlcv_m5
@@ -76,15 +76,14 @@ async def main():
                 print(f"[SKIP] Недостаточно данных для {symbol} ({len(rows)} свечей)", flush=True)
                 continue
 
+            import pandas as pd
             df = pd.DataFrame(rows, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             for col in ['open', 'high', 'low', 'close', 'volume']:
                 df[col] = df[col].astype(float)
             df = df.sort_values('timestamp')
+            print(f"[DATA] Загружено {len(df)} свечей для {symbol}", flush=True)
 
-            query_precision = "SELECT precision_price FROM tickers WHERE symbol = $1"
-            precision_row = await pg_conn.fetchrow(query_precision, symbol)
-            precision_digits = int(precision_row['precision_price']) if precision_row else 2
-
+            # Загрузка параметров индикаторов
             query_settings = "SELECT indicator, param, value FROM indicator_settings"
             rows = await pg_conn.fetch(query_settings)
             settings = {}
@@ -95,149 +94,13 @@ async def main():
                 if indicator not in settings:
                     settings[indicator] = {}
                 settings[indicator][param] = value
+            print(f"[DATA] Загружены параметры индикаторов: {settings}", flush=True)
 
-            rsi_period = int(settings.get('rsi', {}).get('period', 14))
-            delta = df['close'].diff()
-            gain = np.where(delta > 0, delta, 0)
-            loss = np.where(delta < 0, -delta, 0)
-            avg_gain = pd.Series(gain).rolling(window=rsi_period).mean()
-            avg_loss = pd.Series(loss).rolling(window=rsi_period).mean()
-            rs = avg_gain / avg_loss
-            rsi_series = 100 - (100 / (1 + rs))
-            rsi_value = round(rsi_series.iloc[-1], 2)
-            print(f"[RSI] {symbol}: {rsi_value}", flush=True)
-
-            try:
-                smi_k = int(settings.get('smi', {}).get('k', 13))
-                smi_d = int(settings.get('smi', {}).get('d', 5))
-                smi_s = int(settings.get('smi', {}).get('s', 3))
-
-                hl2 = (df['high'] + df['low']) / 2
-                min_low = hl2.rolling(window=smi_k).min()
-                max_high = hl2.rolling(window=smi_k).max()
-                smi_raw = hl2 - (max_high + min_low) / 2
-                smi_div = (max_high - min_low) / 2
-                smi_base = 100 * smi_raw / smi_div.replace(0, np.nan)
-
-                smi_ema = smi_base.ewm(span=smi_s).mean()
-                smi_signal = smi_ema.ewm(span=smi_d).mean()
-
-                smi_value = round(smi_ema.iloc[-1], 2)
-                smi_sig_value = round(smi_signal.iloc[-1], 2)
-
-                print(f"[SMI] {symbol}: {smi_value}, сигнальная: {smi_sig_value}", flush=True)
-
-            except Exception as e:
-                print(f"[ERROR] SMI calculation failed for {symbol}: {e}", flush=True)
-                continue
-
-            try:
-                atr_period = int(settings.get('atr', {}).get('period', 14))
-                high = df['high']
-                low = df['low']
-                close = df['close']
-                prev_close = close.shift(1)
-
-                tr1 = high - low
-                tr2 = (high - prev_close).abs()
-                tr3 = (low - prev_close).abs()
-
-                tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-                atr_series = tr.ewm(alpha=1/atr_period, adjust=False).mean()
-
-                atr_value = round(atr_series.iloc[-1], precision_digits)
-                print(f"[ATR] {symbol}: {atr_value} (точность: {precision_digits})", flush=True)
-
-            except Exception as e:
-                print(f"[ERROR] ATR calculation failed for {symbol}: {e}", flush=True)
-                continue
-
-            try:
-                lr_length = int(settings.get('lr', {}).get('length', 50))
-                angle_up = settings.get('lr', {}).get('angle_up', 2)
-                angle_down = settings.get('lr', {}).get('angle_down', -2)
-
-                if len(df) < lr_length:
-                    raise ValueError(f"Недостаточно данных для LR: нужно {lr_length}, есть {len(df)}")
-
-                lr_df = df.tail(lr_length).copy()
-                x = np.arange(lr_length)
-                y = lr_df['close'].values
-
-                coef = np.polyfit(x, y, 1)
-                slope = coef[0]
-                intercept = coef[1]
-                regression_line = slope * x + intercept
-
-                norm_slope = slope / np.mean(y)
-                angle_deg = round(degrees(atan(norm_slope)), 2)
-
-                if angle_deg > angle_up:
-                    trend = 'up'
-                elif angle_deg < angle_down:
-                    trend = 'down'
-                else:
-                    trend = 'flat'
-
-                std_dev = np.std(y - regression_line)
-                lr_mid = round(regression_line[-1], precision_digits)
-                lr_upper = round(regression_line[-1] + 2 * std_dev, precision_digits)
-                lr_lower = round(regression_line[-1] - 2 * std_dev, precision_digits)
-
-                print(f"[LR] {symbol}: угол={angle_deg}°, тренд={trend}, середина={lr_mid}, верх={lr_upper}, низ={lr_lower}", flush=True)
-
-            except Exception as e:
-                print(f"[ERROR] LR calculation failed for {symbol}: {e}", flush=True)
-                continue
-
-            ts_dt = datetime.fromisoformat(ts_str)
-            update_query = """
-                UPDATE ohlcv_m5
-                SET rsi = $1, smi = $2, smi_signal = $3, atr = $4,
-                    lr_angle = $5, lr_trend = $6, lr_upper = $7, lr_lower = $8, lr_mid = $9
-                WHERE symbol = $10 AND open_time = $11
-            """
-            await pg_conn.execute(update_query,
-                safe(rsi_value),
-                safe(smi_value),
-                safe(smi_sig_value),
-                safe(atr_value, precision_digits),
-                safe(angle_deg, 2),
-                trend,
-                safe(lr_upper, precision_digits),
-                safe(lr_lower, precision_digits),
-                safe(lr_mid, precision_digits),
-                symbol,
-                ts_dt
-            )
-            publish_data = {
-                "symbol": symbol,
-                "rsi": safe(rsi_value),
-                "smi": safe(smi_value),
-                "smi_signal": safe(smi_sig_value),
-                "atr": safe(atr_value, precision_digits),
-                "lr_angle": safe(angle_deg, 2),
-                "lr_trend": trend,
-                "lr_mid": safe(lr_mid, precision_digits),
-                "lr_upper": safe(lr_upper, precision_digits),
-                "lr_lower": safe(lr_lower, precision_digits)
-            }
-            await redis_client.publish(REDIS_CHANNEL_OUT, json.dumps(publish_data))
-
-            ui_data = {
-                "rsi": safe(rsi_value),
-                "smi": safe(smi_value),
-                "smi_signal": safe(smi_sig_value),
-                "atr": safe(atr_value, precision_digits),
-                "angle": safe(angle_deg, 2),
-                "trend": trend,
-                "mid": safe(lr_mid, precision_digits),
-                "upper": safe(lr_upper, precision_digits),
-                "lower": safe(lr_lower, precision_digits)
-            }
-            await redis_client.set(f"indicators:{symbol}", json.dumps(ui_data))
-            
-            print(f"[REDIS → {REDIS_CHANNEL_OUT}] Публикация индикаторов: {publish_data}", flush=True)
+            # Загрузка precision_price
+            query_precision = "SELECT precision_price FROM tickers WHERE symbol = $1"
+            precision_row = await pg_conn.fetchrow(query_precision, symbol)
+            precision_digits = int(precision_row['precision_price']) if precision_row else 2
+            print(f"[DATA] Точность цен для {symbol}: {precision_digits} знаков после запятой", flush=True)
 
         except Exception as e:
             print(f"[ERROR] Ошибка при обработке сообщения: {e}", flush=True)
