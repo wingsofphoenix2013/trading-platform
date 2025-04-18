@@ -133,6 +133,26 @@ async def main():
 
                 print(f"[LR] {symbol}: угол={angle_deg}°, тренд={trend}, середина={lr_mid}, верх={lr_upper}, низ={lr_lower}", flush=True)
 
+            # Расчёт ATR (среднего истинного диапазона) по формуле Wilder (RMA)
+            try:
+                atr_period = int(settings.get('atr', {}).get('period', 14))
+                high = df['high']
+                low = df['low']
+                close = df['close']
+                prev_close = close.shift(1)
+
+                tr1 = high - low
+                tr2 = (high - prev_close).abs()
+                tr3 = (low - prev_close).abs()
+                tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+                atr_series = tr.ewm(alpha=1/atr_period, adjust=False).mean()
+
+                atr_value = round(atr_series.iloc[-1], precision_digits)
+                print(f"[ATR] {symbol}: {atr_value} (точность: {precision_digits})", flush=True)
+
+            except Exception as e:
+                print(f"[ERROR] ATR calculation failed for {symbol}: {e}", flush=True)
+
             except Exception as e:
                 print(f"[ERROR] LR calculation failed for {symbol}: {e}", flush=True)
 
