@@ -145,6 +145,9 @@ async def main():
             except Exception as e:
                 print(f"[ERROR] LR calculation failed for {symbol}: {e}", flush=True)
 
+        except Exception as e:
+            print(f"[ERROR] Ошибка при обработке сообщения: {e}", flush=True)
+
 if __name__ == '__main__':
     try:
         asyncio.run(main())
