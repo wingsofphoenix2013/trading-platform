@@ -48,52 +48,7 @@ async def save_m1_candle(symbol, kline):
     except Exception as e:
         print(f"[ERROR] Ошибка при записи M1-свечи: {e}", flush=True)
         
-# 🧩 Агрегация M5-свечей из M1 с установкой флага complete и публикацией в Redis
-async def aggregate_m5_candles():
-    db_url = os.getenv("DATABASE_URL")
 
-    while True:
-        now = datetime.utcnow()
-        if now.minute % 5 == 0 and now.second < 5:
-            try:
-                conn = await asyncpg.connect(dsn=db_url)
-                for symbol in active_tickers.keys():
-                    rows = await conn.fetch("""
-                        SELECT * FROM ohlcv_m1
-                        WHERE symbol = $1
-                        ORDER BY open_time DESC
-                        LIMIT 5
-                    """, symbol)
-
-                    if len(rows) == 5:
-                        rows = sorted(rows, key=lambda r: r["open_time"])
-                        open_time = rows[0]["open_time"]
-                        open = rows[0]["open"]
-                        high = max(r["high"] for r in rows)
-                        low = min(r["low"] for r in rows)
-                        close = rows[-1]["close"]
-                        volume = sum(r["volume"] for r in rows)
-
-                        # Вставка свечи M5 с флагом complete = TRUE
-                        await conn.execute("""
-                            INSERT INTO ohlcv_m5 (symbol, open_time, open, high, low, close, volume, complete)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)
-                        """, symbol, open_time, open, high, low, close, volume)
-
-                        # Публикация сообщения о готовности свечи в Redis
-                        message = {
-                            "symbol": symbol,
-                            "timestamp": open_time.isoformat()
-                        }
-                        await r.publish("ohlcv_m5_complete", json.dumps(message))
-
-                await conn.close()
-
-            except Exception as e:
-                print(f"[ERROR] Агрегация M5: {e}", flush=True)
-
-        # Периодический запуск цикла с шагом в 5 секунд
-        await asyncio.sleep(5)
 # Агрегация M15-свечей из M1
 async def aggregate_m15_candles():
     db_url = os.getenv("DATABASE_URL")
@@ -149,7 +104,11 @@ async def subscribe_ticker(symbol):
                     data = json.loads(message)
                     price = data.get("p")
                     if price:
-                        pass # логи по mark price отключены
+                        try:
+                            await r.set(f"price:{symbol}", float(price))
+                            # print(f"[MARK PRICE] {symbol} → {price}", flush=True)
+                        except Exception as e:
+                            print(f"[MARK PRICE] Ошибка Redis set для {symbol}: {e}", flush=True)
             except websockets.ConnectionClosed:
                 print(f"[MARK PRICE] reconnecting: {symbol}", flush=True)
                 continue
