@@ -1,7 +1,6 @@
 """
 Стратегия vilarso_m5_flex: реверсивная логика входов по управляющему сигналу.
 Работает в обе стороны (long/short). При каждом сигнале открывает позицию в его направлении.
-Если позиция уже есть и направление противоположно — переворачивается.
 Если включён стоп-лосс — рассчитывает его и фиксирует в журнале.
 """
 
@@ -14,7 +13,7 @@ async def get_pg_connection():
     db_url = os.getenv("DATABASE_URL")
     return await asyncpg.connect(db_url)
 
-# --- Получение текущей цены (эмуляция через ohlcv_m5.close ORDER BY open_time DESC) ---
+# --- Получение текущей цены (по close последней свечи ohlcv_m5)
 async def get_current_price(symbol: str):
     try:
         conn = await get_pg_connection()
@@ -31,7 +30,7 @@ async def get_current_price(symbol: str):
         print(f"[get_current_price] Ошибка для {symbol}: {e}", flush=True)
         return None
 
-# --- Получение последнего значения ATR ---
+# --- Получение последнего значения ATR
 async def get_latest_atr(symbol: str):
     try:
         conn = await get_pg_connection()
@@ -48,7 +47,7 @@ async def get_latest_atr(symbol: str):
         print(f"[get_latest_atr] Ошибка для {symbol}: {e}", flush=True)
         return None
 
-# --- Обновление записи в журнале сигналов ---
+# --- Обновление записи в журнале действий стратегии
 async def update_signal_log(log_id: int, status: str, note: str):
     try:
         conn = await get_pg_connection()
@@ -73,7 +72,6 @@ async def process_signal(log_id: int):
         # --- Загрузка строки из журнала сигналов и параметров стратегии
         row = await pg.fetchrow("""
             SELECT sle.id AS entry_id,
-                   sg.id AS signal_id,
                    sg.name AS signal_name,
                    sl.ticker_symbol AS symbol,
                    sl.direction AS signal_direction,
@@ -85,8 +83,7 @@ async def process_signal(log_id: int):
                    s.use_all_tickers,
                    s.use_stoploss,
                    s.sl_type,
-                   s.sl_value,
-                   s.action_signal_id
+                   s.sl_value
             FROM signal_log_entries sle
             JOIN signal_logs sl ON sle.log_id = sl.id
             JOIN signals sg ON sl.signal_id = sg.id
@@ -103,12 +100,6 @@ async def process_signal(log_id: int):
         if not row["enabled"]:
             print(f"[STRATEGY] стратегия отключена (id={row['strategy_id']})", flush=True)
             await update_signal_log(log_id, "ignored", "strategy disabled")
-            return
-
-        # --- Проверка: управляющий ли это сигнал
-        if row["signal_id"] != row["action_signal_id"]:
-            print(f"[STRATEGY] сигнал не является управляющим, пропуск", flush=True)
-            await update_signal_log(log_id, "ignored", "not action signal")
             return
 
         symbol = row["symbol"]
@@ -133,7 +124,7 @@ async def process_signal(log_id: int):
                     sl_price = entry_price * (1 - sl_value / 100)
                 else:
                     sl_price = entry_price * (1 + sl_value / 100)
-                sl_note = f"SL ({sl_type}) = {sl_price:.6f}"
+                sl_note = f"SL (percent) = {sl_price:.6f}"
 
             elif sl_type == "atr":
                 atr = await get_latest_atr(symbol)
@@ -146,7 +137,7 @@ async def process_signal(log_id: int):
                     sl_price = entry_price - sl_value * atr
                 else:
                     sl_price = entry_price + sl_value * atr
-                sl_note = f"SL ({sl_type}) = {sl_price:.6f} (ATR={atr:.6f})"
+                sl_note = f"SL (ATR) = {sl_price:.6f} (ATR={atr:.6f})"
 
         # --- Пока считаем, что позиции нет — всегда открываем
         note = f"open {signal_dir} @ {entry_price:.6f}; {sl_note}"
