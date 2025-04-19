@@ -2,8 +2,15 @@
 <html>
 <head>
     <title>{% if mode == "edit" %}Редактировать стратегию{% else %}Создать стратегию{% endif %}</title>
+    <script>
+        function toggleStoplossFields() {
+            const checkbox = document.getElementById('use_stoploss');
+            const fields = document.getElementById('stoploss_fields');
+            fields.style.display = checkbox.checked ? 'block' : 'none';
+        }
+    </script>
 </head>
-<body>
+<body onload="toggleStoplossFields()">
     <h1>{% if mode == "edit" %}Редактировать стратегию{% else %}Создать стратегию{% endif %}</h1>
 
     <form method="post" action="{% if mode == 'edit' %}/strategies/{{ strategy.id }}{% else %}/strategies{% endif %}">
@@ -27,19 +34,39 @@
         <input type="checkbox" name="use_all_tickers" value="true"
                {% if mode != 'edit' or strategy.use_all_tickers %}checked{% endif %}><br><br>
 		
-		<label>Управляющий сигнал (action):</label><br>
-		<select name="action_signal_id">
-    		{% for sig in signals %}
-        	<option value="{{ sig.id }}"
-            {% if mode == 'edit' and sig.id == current_signal_id %}selected{% endif %}>
-            {{ sig.name }}
-        	</option>
-    		{% endfor %}
-			</select><br><br>
+        <label>Управляющий сигнал (action):</label><br>
+        <select name="action_signal_id">
+            {% for sig in signals %}
+            <option value="{{ sig.id }}"
+                {% if mode == 'edit' and sig.id == current_signal_id %}selected{% endif %}>
+                {{ sig.name }}
+            </option>
+            {% endfor %}
+        </select><br><br>
 
         <label>Активна:</label>
         <input type="checkbox" name="enabled" value="true"
                {% if mode != 'edit' or strategy.enabled %}checked{% endif %}><br><br>
+
+        <!-- Новый блок: Стоп-лосс -->
+        <label>Использовать стоп-лосс:</label>
+        <input type="checkbox" id="use_stoploss" name="use_stoploss" value="true"
+               onchange="toggleStoplossFields()"
+               {% if mode != 'edit' or strategy.use_stoploss %}checked{% endif %}><br><br>
+
+        <div id="stoploss_fields" style="display: none; margin-left: 20px;">
+            <label>Тип стоп-лосса:</label><br>
+            <select name="sl_type">
+                <option value="percent"
+                    {% if strategy.sl_type == 'percent' %}selected{% endif %}>Процент</option>
+                <option value="atr"
+                    {% if strategy.sl_type == 'atr' %}selected{% endif %}>ATR</option>
+            </select><br><br>
+
+            <label>Значение SL:</label><br>
+            <input type="number" step="0.0001" name="sl_value"
+                   value="{{ strategy.sl_value if mode == 'edit' else '' }}"><br><br>
+        </div>
 
         <button type="submit">Сохранить</button>
     </form>
