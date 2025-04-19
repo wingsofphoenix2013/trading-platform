@@ -87,6 +87,7 @@ async def handle_incoming_signal(data):
         direction = signal_info["direction"]
         status = "new"
 
+    # --- Логирование сигнала в signal_logs
     conn = await get_db()
     await conn.execute("""
         INSERT INTO signal_logs (signal_id, ticker_symbol, direction, source, raw_message, received_at, status)
@@ -95,6 +96,63 @@ async def handle_incoming_signal(data):
     await conn.close()
 
     print(f"[signal] Получен сигнал: '{message}' → status={status}, direction={direction}, ticker={ticker}", flush=True)
+
+    # --- Если сигнал "новый", запускаем стратегическую обработку
+    if status == "new":
+        conn = await get_db()
+
+        # 1. Все активные стратегии, где сигнал — action
+        strategies = await conn.fetch("""
+            SELECT s.id, s.use_all_tickers
+            FROM strategies s
+            JOIN strategy_signal ss ON ss.strategy_id = s.id
+            WHERE s.enabled = true AND ss.signal_id = $1 AND ss.role = 'action'
+        """, signal_id)
+
+        if not strategies:
+            print(f"[signal] Нет стратегий, реагирующих на сигнал {signal_id}", flush=True)
+            await conn.close()
+            return
+
+        # 2. Redis для публикации log_id
+        redis_conn = redis.Redis(
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            password=REDIS_PASSWORD,
+            ssl=True
+        )
+
+        for s in strategies:
+            strategy_id = s["id"]
+            allowed = False
+
+            if s["use_all_tickers"]:
+                allowed = True
+            else:
+                allowed = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM strategy_tickers st
+                        JOIN tickers t ON st.ticker_id = t.id
+                        WHERE st.enabled = true AND st.strategy_id = $1 AND t.symbol = $2
+                    )
+                """, strategy_id, ticker)
+
+            if not allowed:
+                print(f"[signal] Стратегия {strategy_id} не разрешает тикер {ticker}, пропуск", flush=True)
+                continue
+
+            # 3. Запись в журнал стратегии
+            log_id = await conn.fetchval("""
+                INSERT INTO signal_log_entries (signal_id, strategy_id, symbol, signal_direction, status, logged_at)
+                VALUES ($1, $2, $3, $4, 'new', NOW())
+                RETURNING log_id
+            """, signal_id, strategy_id, ticker, direction)
+
+            # 4. Публикация log_id
+            await redis_conn.publish("signal_logs_ready", str(log_id))
+            print(f"[signal] Записан log_id={log_id} и отправлен в Redis для strategy_id={strategy_id}", flush=True)
+
+        await conn.close()
 
 # --- Обработка сообщений из Redis ---
 async def redis_listener():
