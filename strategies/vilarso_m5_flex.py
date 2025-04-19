@@ -5,14 +5,8 @@
 Если включён стоп-лосс — рассчитывает его и фиксирует в журнале.
 """
 
-import sys
-import os
 import asyncpg
 from datetime import datetime
-
-# Добавляем корень проекта в sys.path, чтобы импортировать общие модули
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-
 from db import get_pg_connection
 from utils import get_current_price, get_latest_atr, update_signal_log
 
