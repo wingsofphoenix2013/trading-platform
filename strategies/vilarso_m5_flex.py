@@ -13,21 +13,20 @@ async def get_pg_connection():
     db_url = os.getenv("DATABASE_URL")
     return await asyncpg.connect(db_url)
 
-# --- Получение текущей цены (по close последней свечи ohlcv_m5)
+# --- Получение текущей цены из Redis (ключ price:{symbol})
 async def get_current_price(symbol: str):
     try:
-        conn = await get_pg_connection()
-        row = await conn.fetchrow("""
-            SELECT close
-            FROM ohlcv_m5
-            WHERE symbol = $1
-            ORDER BY open_time DESC
-            LIMIT 1
-        """, symbol)
-        await conn.close()
-        return float(row["close"]) if row else None
+        import redis.asyncio as redis_lib
+        redis = redis_lib.Redis(
+            host=os.getenv("REDIS_HOST"),
+            port=int(os.getenv("REDIS_PORT", 6379)),
+            password=os.getenv("REDIS_PASSWORD"),
+            ssl=True
+        )
+        price_str = await redis.get(f"price:{symbol}")
+        return float(price_str) if price_str else None
     except Exception as e:
-        print(f"[get_current_price] Ошибка для {symbol}: {e}", flush=True)
+        print(f"[get_current_price] Redis error for {symbol}: {e}", flush=True)
         return None
 
 # --- Получение последнего значения ATR
