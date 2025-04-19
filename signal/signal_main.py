@@ -146,7 +146,7 @@ async def handle_incoming_signal(data):
             """, log_id, strategy_id)
 
             # --- Публикуем log_id (а не entry_id) для запуска стратегии
-            await redis_conn.publish("signal_logs_ready", str(entry_id))
+            await redis_conn.publish("signal_logs_ready", str(log_id))
             print(f"[signal] Стратегия {strategy_id} добавлена в очередь, log_entry_id={entry_id}", flush=True)
 
     await conn.close()
