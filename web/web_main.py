@@ -318,10 +318,14 @@ async def create_strategy(
     position_limit: float = Form(...),
     use_all_tickers: str = Form(None),
     enabled: str = Form(None),
-    action_signal_id: int = Form(...)
+    action_signal_id: int = Form(...),
+    use_stoploss: str = Form(None),
+    sl_type: str = Form(None),
+    sl_value: float = Form(None)
 ):
     use_all_tickers_bool = use_all_tickers == "true"
     enabled_bool = enabled == "true"
+    use_stoploss_bool = use_stoploss == "true"
 
     conn = await get_db()
 
@@ -329,12 +333,19 @@ async def create_strategy(
     row = await conn.fetchrow("""
         INSERT INTO strategies (
             name, description, deposit, position_limit,
-            use_all_tickers, enabled, created_at
+            use_all_tickers, enabled,
+            use_stoploss, sl_type, sl_value,
+            created_at
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, NOW()
+            $1, $2, $3, $4,
+            $5, $6,
+            $7, $8, $9,
+            NOW()
         )
         RETURNING id
-    """, name, description, deposit, position_limit, use_all_tickers_bool, enabled_bool)
+    """, name, description, deposit, position_limit,
+         use_all_tickers_bool, enabled_bool,
+         use_stoploss_bool, sl_type, sl_value)
     strategy_id = row["id"]
 
     # Привязка управляющего сигнала (action)
@@ -382,6 +393,8 @@ async def edit_strategy_form(strategy_id: int, request: Request):
     })
 # 18. Сохранение изменений стратегии (POST)
 # Обновляет стратегию и её управляющий сигнал
+# 18. Сохранение изменений стратегии (POST)
+# Обновляет стратегию и её управляющий сигнал
 
 @app.post("/strategies/{strategy_id}")
 async def update_strategy(
@@ -392,10 +405,14 @@ async def update_strategy(
     position_limit: float = Form(...),
     use_all_tickers: str = Form(None),
     enabled: str = Form(None),
-    action_signal_id: int = Form(...)
+    action_signal_id: int = Form(...),
+    use_stoploss: str = Form(None),
+    sl_type: str = Form(None),
+    sl_value: float = Form(None)
 ):
     use_all_tickers_bool = use_all_tickers == "true"
     enabled_bool = enabled == "true"
+    use_stoploss_bool = use_stoploss == "true"
 
     conn = await get_db()
 
@@ -406,9 +423,15 @@ async def update_strategy(
             deposit = $2,
             position_limit = $3,
             use_all_tickers = $4,
-            enabled = $5
-        WHERE id = $6
-    """, description, deposit, position_limit, use_all_tickers_bool, enabled_bool, strategy_id)
+            enabled = $5,
+            use_stoploss = $6,
+            sl_type = $7,
+            sl_value = $8
+        WHERE id = $9
+    """, description, deposit, position_limit,
+         use_all_tickers_bool, enabled_bool,
+         use_stoploss_bool, sl_type, sl_value,
+         strategy_id)
 
     # Удаляем старую связь сигнала
     await conn.execute("""
@@ -536,4 +559,4 @@ async def all_indicators_page(request: Request):
     return templates.TemplateResponse("ticker_indicators.html", {
         "request": request,
         "indicators": rows
-    })        
+    })      
