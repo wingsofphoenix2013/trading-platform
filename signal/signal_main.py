@@ -87,21 +87,18 @@ async def handle_incoming_signal(data):
         direction = signal_info["direction"]
         status = "new"
 
-    # --- Логирование сигнала в signal_logs
+    # --- Сохраняем сигнал в signal_logs и получаем log_id
     conn = await get_db()
-    await conn.execute("""
+    log_id = await conn.fetchval("""
         INSERT INTO signal_logs (signal_id, ticker_symbol, direction, source, raw_message, received_at, status)
         VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+        RETURNING id
     """, signal_id, ticker, direction, source, message, status)
-    await conn.close()
 
     print(f"[signal] Получен сигнал: '{message}' → status={status}, direction={direction}, ticker={ticker}", flush=True)
 
-    # --- Если сигнал "новый", запускаем стратегическую обработку
+    # --- Если статус new, находим стратегии и записываем log_entries
     if status == "new":
-        conn = await get_db()
-
-        # 1. Все активные стратегии, где сигнал — action
         strategies = await conn.fetch("""
             SELECT s.id, s.use_all_tickers
             FROM strategies s
@@ -114,7 +111,7 @@ async def handle_incoming_signal(data):
             await conn.close()
             return
 
-        # 2. Redis для публикации log_id
+        # --- Redis клиент
         redis_conn = redis.Redis(
             host=REDIS_HOST,
             port=REDIS_PORT,
@@ -141,19 +138,19 @@ async def handle_incoming_signal(data):
                 print(f"[signal] Стратегия {strategy_id} не разрешает тикер {ticker}, пропуск", flush=True)
                 continue
 
-            # 3. Запись в журнал стратегии
-            log_id = await conn.fetchval("""
-                INSERT INTO signal_log_entries (signal_id, strategy_id, symbol, signal_direction, status, logged_at)
-                VALUES ($1, $2, $3, $4, 'new', NOW())
-                RETURNING log_id
-            """, signal_id, strategy_id, ticker, direction)
+            # --- Запись действия стратегии по сигналу
+            entry_id = await conn.fetchval("""
+                INSERT INTO signal_log_entries (log_id, strategy_id, status, logged_at)
+                VALUES ($1, $2, 'new', NOW())
+                RETURNING id
+            """, log_id, strategy_id)
 
-            # 4. Публикация log_id
-            await redis_conn.publish("signal_logs_ready", str(log_id))
-            print(f"[signal] Записан log_id={log_id} и отправлен в Redis для strategy_id={strategy_id}", flush=True)
+            # --- Публикуем log_id (а не entry_id) для запуска стратегии
+            await redis_conn.publish("signal_logs_ready", str(entry_id))
+            print(f"[signal] Стратегия {strategy_id} добавлена в очередь, log_entry_id={entry_id}", flush=True)
 
-        await conn.close()
-
+    await conn.close()
+    
 # --- Обработка сообщений из Redis ---
 async def redis_listener():
     r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, ssl=True)
