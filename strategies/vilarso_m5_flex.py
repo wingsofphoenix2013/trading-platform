@@ -5,20 +5,65 @@
 Если включён стоп-лосс — рассчитывает его и фиксирует в журнале.
 """
 
-import sys
 import os
 import asyncpg
 from datetime import datetime
 
-# Добавляем путь к корню проекта, чтобы корректно импортировать db и utils
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# --- Подключение к БД ---
+async def get_pg_connection():
+    db_url = os.getenv("DATABASE_URL")
+    return await asyncpg.connect(db_url)
 
-from db import get_pg_connection
-from utils import get_current_price, get_latest_atr, update_signal_log
+# --- Получение текущей цены (эмуляция через ohlcv_m5.close ORDER BY open_time DESC) ---
+async def get_current_price(symbol: str):
+    try:
+        conn = await get_pg_connection()
+        row = await conn.fetchrow("""
+            SELECT close
+            FROM ohlcv_m5
+            WHERE symbol = $1
+            ORDER BY open_time DESC
+            LIMIT 1
+        """, symbol)
+        await conn.close()
+        return float(row["close"]) if row else None
+    except Exception as e:
+        print(f"[get_current_price] Ошибка для {symbol}: {e}", flush=True)
+        return None
 
-# Основная точка входа
+# --- Получение последнего значения ATR ---
+async def get_latest_atr(symbol: str):
+    try:
+        conn = await get_pg_connection()
+        row = await conn.fetchrow("""
+            SELECT atr
+            FROM ohlcv_m5
+            WHERE symbol = $1 AND atr IS NOT NULL
+            ORDER BY open_time DESC
+            LIMIT 1
+        """, symbol)
+        await conn.close()
+        return float(row["atr"]) if row else None
+    except Exception as e:
+        print(f"[get_latest_atr] Ошибка для {symbol}: {e}", flush=True)
+        return None
+
+# --- Обновление записи в журнале сигналов ---
+async def update_signal_log(log_id: int, status: str, note: str):
+    try:
+        conn = await get_pg_connection()
+        await conn.execute("""
+            UPDATE signal_log_entries
+            SET status = $1,
+                note = $2,
+                logged_at = NOW()
+            WHERE log_id = $3
+        """, status, note, log_id)
+        await conn.close()
+    except Exception as e:
+        print(f"[update_signal_log] Ошибка при обновлении log_id={log_id}: {e}", flush=True)
+
+# --- Основная функция стратегии ---
 async def process_signal(log_id: int):
     print(f"[STRATEGY] vilarso_m5_flex: запуск обработки log_id={log_id}", flush=True)
 
@@ -36,6 +81,8 @@ async def process_signal(log_id: int):
             JOIN signals sig ON sig.id = sl.signal_id
             WHERE sl.log_id = $1
         """, log_id)
+
+        await pg.close()
 
         if not row:
             print(f"[STRATEGY] log_id={log_id}: не найден в базе", flush=True)
@@ -89,7 +136,7 @@ async def process_signal(log_id: int):
                     sl_price = entry_price + sl_value * atr
                 sl_note = f"SL ({sl_type}) = {sl_price:.6f} (ATR={atr:.6f})"
 
-        # --- Заглушка: считаем, что позиции нет
+        # --- Пока считаем, что позиции нет — всегда открываем
         note = f"open {signal_dir} @ {entry_price:.6f}; {sl_note}"
         await update_signal_log(log_id, "approved", note)
         print(f"[STRATEGY] log_id={log_id}: {note}", flush=True)
