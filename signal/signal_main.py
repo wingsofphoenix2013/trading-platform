@@ -105,7 +105,7 @@ async def handle_incoming_signal(data):
         strategies = await conn.fetch("""
             SELECT s.id, s.use_all_tickers
             FROM strategies s
-            JOIN strategy_signal ss ON ss.strategy_id = s.id
+            JOIN strategy_signals ss ON ss.strategy_id = s.id
             WHERE s.enabled = true AND ss.signal_id = $1 AND ss.role = 'action'
         """, signal_id)
 
