@@ -7,7 +7,7 @@ import os
 import json
 from datetime import datetime
 # --- Блок импорта стратегий ---
-from strategies.logic import vilarso_m5_flex
+from logic import vilarso_m5_flex
 
 # --- Конфигурация окружения ---
 DATABASE_URL = os.getenv("DATABASE_URL")
