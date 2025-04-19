@@ -75,20 +75,16 @@ async def handle_incoming_signal(data):
 
     signal_info = active_signals.get(phrase)
     if not signal_info:
-        signal_id = None
-        direction = "unknown"
-        status = "ignored"
-    elif ticker not in active_tickers:
-        signal_id = signal_info["id"]
-        direction = signal_info["direction"]
-        status = "ignored"
-    else:
-        signal_id = signal_info["id"]
-        direction = signal_info["direction"]
-        status = "new"
+        print(f"[signal] Фраза '{phrase}' не распознана — сигнал проигнорирован", flush=True)
+        return
 
-    # --- Сохраняем сигнал в signal_logs и получаем log_id
+    signal_id = signal_info["id"]
+    direction = signal_info["direction"]
+    status = "new" if ticker in active_tickers else "ignored"
+
     conn = await get_db()
+
+    # --- Логирование сигнала
     log_id = await conn.fetchval("""
         INSERT INTO signal_logs (signal_id, ticker_symbol, direction, source, raw_message, received_at, status)
         VALUES ($1, $2, $3, $4, $5, NOW(), $6)
@@ -97,57 +93,59 @@ async def handle_incoming_signal(data):
 
     print(f"[signal] Получен сигнал: '{message}' → status={status}, direction={direction}, ticker={ticker}", flush=True)
 
-    # --- Если статус new, находим стратегии и записываем log_entries
-    if status == "new":
-        strategies = await conn.fetch("""
-            SELECT s.id, s.use_all_tickers
-            FROM strategies s
-            JOIN strategy_signals ss ON ss.strategy_id = s.id
-            WHERE s.enabled = true AND ss.signal_id = $1 AND ss.role = 'action'
-        """, signal_id)
+    if status != "new":
+        await conn.close()
+        return
 
-        if not strategies:
-            print(f"[signal] Нет стратегий, реагирующих на сигнал {signal_id}", flush=True)
-            await conn.close()
-            return
+    # --- Поиск всех стратегий, у которых этот сигнал является управляющим
+    strategies = await conn.fetch("""
+        SELECT s.id, s.use_all_tickers
+        FROM strategies s
+        JOIN strategy_signals ss ON ss.strategy_id = s.id
+        WHERE s.enabled = true AND ss.signal_id = $1 AND ss.role = 'action'
+    """, signal_id)
 
-        # --- Redis клиент
-        redis_conn = redis.Redis(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            password=REDIS_PASSWORD,
-            ssl=True
-        )
+    if not strategies:
+        print(f"[signal] Нет стратегий, реагирующих на сигнал {signal_id}", flush=True)
+        await conn.close()
+        return
 
-        for s in strategies:
-            strategy_id = s["id"]
-            allowed = False
+    # --- Redis клиент
+    redis_conn = redis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        password=REDIS_PASSWORD,
+        ssl=True
+    )
 
-            if s["use_all_tickers"]:
-                allowed = True
-            else:
-                allowed = await conn.fetchval("""
-                    SELECT EXISTS (
-                        SELECT 1 FROM strategy_tickers st
-                        JOIN tickers t ON st.ticker_id = t.id
-                        WHERE st.enabled = true AND st.strategy_id = $1 AND t.symbol = $2
-                    )
-                """, strategy_id, ticker)
+    for s in strategies:
+        strategy_id = s["id"]
 
-            if not allowed:
-                print(f"[signal] Стратегия {strategy_id} не разрешает тикер {ticker}, пропуск", flush=True)
-                continue
+        # --- Проверка: стратегия разрешает тикер?
+        allowed = s["use_all_tickers"]
+        if not allowed:
+            allowed = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM strategy_tickers st
+                    JOIN tickers t ON st.ticker_id = t.id
+                    WHERE st.enabled = true AND st.strategy_id = $1 AND t.symbol = $2
+                )
+            """, strategy_id, ticker)
 
-            # --- Запись действия стратегии по сигналу
-            entry_id = await conn.fetchval("""
-                INSERT INTO signal_log_entries (log_id, strategy_id, status, logged_at)
-                VALUES ($1, $2, 'new', NOW())
-                RETURNING id
-            """, log_id, strategy_id)
+        if not allowed:
+            print(f"[signal] Стратегия {strategy_id} не разрешает тикер {ticker}, пропуск", flush=True)
+            continue
 
-            # --- Публикуем log_id (а не entry_id) для запуска стратегии
-            await redis_conn.publish("signal_logs_ready", str(log_id))
-            print(f"[signal] Стратегия {strategy_id} добавлена в очередь, log_entry_id={entry_id}", flush=True)
+        # --- Запись действия стратегии
+        entry_id = await conn.fetchval("""
+            INSERT INTO signal_log_entries (log_id, strategy_id, status, logged_at)
+            VALUES ($1, $2, 'new', NOW())
+            RETURNING id
+        """, log_id, strategy_id)
+
+        # --- Публикация log_id (не entry_id)
+        await redis_conn.publish("signal_logs_ready", str(log_id))
+        print(f"[signal] Стратегия {strategy_id} добавлена в очередь, log_entry_id={entry_id}", flush=True)
 
     await conn.close()
     
