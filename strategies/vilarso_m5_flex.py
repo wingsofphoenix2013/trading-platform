@@ -47,6 +47,21 @@ async def get_latest_atr(symbol: str):
         print(f"[get_latest_atr] Ошибка для {symbol}: {e}", flush=True)
         return None
 
+# --- Получение точности цены из тикера
+async def get_price_precision(symbol: str):
+    try:
+        conn = await get_pg_connection()
+        row = await conn.fetchrow("""
+            SELECT precision_price
+            FROM tickers
+            WHERE symbol = $1
+        """, symbol)
+        await conn.close()
+        return int(row["precision_price"]) if row else 6
+    except Exception as e:
+        print(f"[get_price_precision] Ошибка получения точности для {symbol}: {e}", flush=True)
+        return 6
+
 # --- Обновление записи в журнале действий стратегии
 async def update_signal_log(log_id: int, status: str, note: str):
     try:
@@ -106,7 +121,7 @@ async def process_signal(log_id: int):
         signal_dir = row["signal_direction"]  # 'long' или 'short'
         use_sl = row["use_stoploss"]
         sl_type = row["sl_type"]
-        sl_value = row["sl_value"]
+        sl_value = float(row["sl_value"])
 
         # --- Получение текущей цены
         entry_price = await get_current_price(symbol)
@@ -114,6 +129,9 @@ async def process_signal(log_id: int):
             print(f"[STRATEGY] не удалось получить цену для {symbol}", flush=True)
             await update_signal_log(log_id, "error", "no price")
             return
+
+        # --- Получение точности округления
+        precision = await get_price_precision(symbol)
 
         sl_note = "SL: none"
 
@@ -124,7 +142,8 @@ async def process_signal(log_id: int):
                     sl_price = entry_price * (1 - sl_value / 100)
                 else:
                     sl_price = entry_price * (1 + sl_value / 100)
-                sl_note = f"SL (percent) = {sl_price:.6f}"
+                sl_price = round(sl_price, precision)
+                sl_note = f"SL (percent) = {sl_price}"
 
             elif sl_type == "atr":
                 atr = await get_latest_atr(symbol)
@@ -137,10 +156,11 @@ async def process_signal(log_id: int):
                     sl_price = entry_price - sl_value * atr
                 else:
                     sl_price = entry_price + sl_value * atr
-                sl_note = f"SL (ATR) = {sl_price:.6f} (ATR={atr:.6f})"
+                sl_price = round(sl_price, precision)
+                sl_note = f"SL (ATR) = {sl_price} (ATR={round(atr, precision)})"
 
         # --- Пока считаем, что позиции нет — всегда открываем
-        note = f"open {signal_dir} @ {entry_price:.6f}; {sl_note}"
+        note = f"open {signal_dir} @ {entry_price:.{precision}f}; {sl_note}"
         await update_signal_log(log_id, "approved", note)
         print(f"[STRATEGY] log_id={log_id}: {note}", flush=True)
 
