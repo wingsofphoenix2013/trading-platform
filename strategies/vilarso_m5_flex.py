@@ -70,16 +70,28 @@ async def process_signal(log_id: int):
     try:
         pg: asyncpg.Connection = await get_pg_connection()
 
-        # --- Загрузка строки из журнала сигналов
+        # --- Загрузка строки из журнала сигналов и параметров стратегии
         row = await pg.fetchrow("""
-            SELECT sl.log_id, sl.symbol, sl.signal_direction, sl.strategy_id,
-                   s.name AS strategy_name, s.enabled, s.deposit, s.position_limit,
-                   s.use_all_tickers, s.use_stoploss, s.sl_type, s.sl_value,
-                   sig.name AS signal_name, sig.id AS signal_id, s.action_signal_id
-            FROM signal_log_entries sl
-            JOIN strategies s ON s.id = sl.strategy_id
-            JOIN signals sig ON sig.id = sl.signal_id
-            WHERE sl.log_id = $1
+            SELECT sle.id AS entry_id,
+                   sg.id AS signal_id,
+                   sg.name AS signal_name,
+                   sl.ticker_symbol AS symbol,
+                   sl.direction AS signal_direction,
+                   sle.strategy_id,
+                   s.name AS strategy_name,
+                   s.enabled,
+                   s.deposit,
+                   s.position_limit,
+                   s.use_all_tickers,
+                   s.use_stoploss,
+                   s.sl_type,
+                   s.sl_value,
+                   s.action_signal_id
+            FROM signal_log_entries sle
+            JOIN signal_logs sl ON sle.log_id = sl.id
+            JOIN signals sg ON sl.signal_id = sg.id
+            JOIN strategies s ON sle.strategy_id = s.id
+            WHERE sle.log_id = $1
         """, log_id)
 
         await pg.close()
