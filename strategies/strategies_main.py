@@ -6,6 +6,8 @@ import redis.asyncio as redis
 import os
 import json
 from datetime import datetime
+# --- Блок импорта стратегий ---
+from strategies.logic import vilarso_m5_flex
 
 # --- Конфигурация окружения ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -46,9 +48,34 @@ async def load_strategy_tickers():
         mapping.setdefault(r["strategy_id"], set()).add(r["ticker_id"])
     return mapping
 
-# --- Обработка сигнала (будет доопределена позже) ---
+# --- Обработка сигнала: вызов нужной стратегии ---
 async def handle_signal(signal_log_id: int):
-    print(f"[signal] Получен signal_log_id={signal_log_id} — логика в разработке", flush=True)
+    try:
+        print(f"[strategies_main] Обработка signal_log_id={signal_log_id}", flush=True)
+        conn = await get_db()
+
+        row = await conn.fetchrow("""
+            SELECT s.name
+            FROM signal_log_entries sl
+            JOIN strategies s ON s.id = sl.strategy_id
+            WHERE sl.log_id = $1
+        """, signal_log_id)
+
+        await conn.close()
+
+        if not row:
+            print(f"[strategies_main] Стратегия для log_id={signal_log_id} не найдена", flush=True)
+            return
+
+        strategy_name = row["name"]
+
+        if strategy_name == "vilarso_m5_flex":
+            await vilarso_m5_flex.process_signal(signal_log_id)
+        else:
+            print(f"[strategies_main] Стратегия '{strategy_name}' пока не поддерживается", flush=True)
+
+    except Exception as e:
+        print(f"[strategies_main] Ошибка при обработке сигнала: {e}", flush=True)
 
 # --- Периодическая проверка на случай потери Redis-сообщений ---
 async def periodic_refresh():
