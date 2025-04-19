@@ -132,7 +132,6 @@ async def aggregate_m15_candles():
         await asyncio.sleep(5)
 # Словарь активных тикеров
 active_tickers = {}
-
 # Запускает WebSocket-потоки по тикеру
 async def subscribe_ticker(symbol):
     if symbol in active_tickers:
@@ -149,7 +148,11 @@ async def subscribe_ticker(symbol):
                     data = json.loads(message)
                     price = data.get("p")
                     if price:
-                        pass # логи по mark price отключены
+                        try:
+                            await r.set(f"price:{symbol}", float(price))
+                            # print(f"[MARK PRICE] {symbol} → {price}", flush=True)
+                        except Exception as e:
+                            print(f"[MARK PRICE] Ошибка Redis set для {symbol}: {e}", flush=True)
             except websockets.ConnectionClosed:
                 print(f"[MARK PRICE] reconnecting: {symbol}", flush=True)
                 continue
@@ -171,7 +174,7 @@ async def subscribe_ticker(symbol):
     task1 = asyncio.create_task(mark_price())
     task2 = asyncio.create_task(m1_kline())
     active_tickers[symbol] = (task1, task2)
-
+    
 # Слушает Redis канал и активирует новые тикеры по команде
 async def redis_listener():
     pubsub = r.pubsub()
