@@ -62,6 +62,17 @@ async def check_positions():
             print(f"[WORKER] Целей для позиции {position_id}: {len(targets)}", flush=True)
             for t in targets:
                 print(f"[WORKER] → {t['type']} L{t['level'] or '-'} @ {t['price']} qty={t['quantity']}", flush=True)
+                target_price = Decimal(t["price"]).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+
+                if t["type"] == "sl":
+                    if (direction == "long" and current_price <= target_price) or \
+                       (direction == "short" and current_price >= target_price):
+                        print(f"[WORKER] SL сработал @ {current_price} {'<=' if direction == 'long' else '>='} {target_price}", flush=True)
+
+                elif t["type"] == "tp":
+                    if (direction == "long" and current_price >= target_price) or \
+                       (direction == "short" and current_price <= target_price):
+                        print(f"[WORKER] TP сработал @ {current_price} {'>=' if direction == 'long' else '<='} {target_price}", flush=True)                
                 
             # TODO: здесь будет логика проверки SL/TP
 
