@@ -9,6 +9,7 @@
 import os
 import asyncpg
 from datetime import datetime
+from decimal import Decimal, ROUND_DOWN
 
 # --- Подключение к БД ---
 async def get_pg_connection():
@@ -148,20 +149,17 @@ async def process_signal(log_id: int):
         direction = row["direction"]
         strategy_id = row["strategy_id"]
 
-        # --- Проверка разрешения на торговлю по тикеру ---
         precision_info = await get_precision_and_permission(symbol)
         if not precision_info or precision_info["tradepermission"] != "enabled":
             print(f"[CHECK] Торговля по тикеру {symbol} отключена", flush=True)
             await update_signal_log(log_id, "ignored_by_check", f"{symbol}: trade disabled")
             return
 
-        # --- Проверка параметров стратегии ---
         strategy_params = await get_strategy_params(strategy_id)
         if not strategy_params:
             await update_signal_log(log_id, "error", "strategy not found")
             return
 
-        # --- Проверка текущего объёма открытых позиций ---
         conn = await get_pg_connection()
         total_open = float(await conn.fetchval("""
             SELECT COALESCE(SUM(notional_value), 0)
@@ -175,7 +173,6 @@ async def process_signal(log_id: int):
             await update_signal_log(log_id, "ignored_by_check", "deposit limit exceeded")
             return
 
-        # --- Проверка: есть ли уже открытая позиция по тикеру ---
         existing_position = await get_open_position(strategy_id, symbol)
         if existing_position:
             if existing_position["direction"] == direction:
@@ -187,19 +184,19 @@ async def process_signal(log_id: int):
                 await update_signal_log(log_id, "ignored_by_check", "reverse not implemented yet")
                 return
 
-        # --- Открытие новой позиции ---
-        entry_price = await get_current_price(symbol)
-        if entry_price is None:
+        # --- Открытие новой позиции с точным округлением через Decimal ---
+        entry_price_raw = await get_current_price(symbol)
+        if entry_price_raw is None:
             await update_signal_log(log_id, "error", "price not available")
             return
 
         precision_price = precision_info["precision_price"]
         precision_qty = precision_info["precision_qty"]
-        entry_price = round(entry_price, precision_price)
 
-        position_limit = strategy_params["position_limit"]
-        quantity = round(position_limit / entry_price, precision_qty)
-        notional_value = round(entry_price * quantity, precision_price)
+        entry_price = Decimal(entry_price_raw).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+        position_limit = Decimal(strategy_params["position_limit"])
+        quantity = (position_limit / entry_price).quantize(Decimal(f'1e-{precision_qty}'), rounding=ROUND_DOWN)
+        notional_value = (entry_price * quantity).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
 
         conn = await get_pg_connection()
         result = await conn.fetchrow("""
@@ -212,40 +209,38 @@ async def process_signal(log_id: int):
         """, strategy_id, log_id, symbol, direction, entry_price, quantity, notional_value)
         position_id = result["id"]
 
-        # --- SL ---
         if strategy_params["use_stoploss"]:
             if strategy_params["sl_type"] == "percent":
-                sl_offset = entry_price * (strategy_params["sl_value"] / 100)
+                sl_offset = (entry_price * Decimal(strategy_params["sl_value"] / 100)).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
             elif strategy_params["sl_type"] == "atr":
                 atr = await get_latest_atr(symbol)
                 if atr is None:
                     await update_signal_log(log_id, "error", "ATR not available")
                     await conn.close()
                     return
-                sl_offset = atr * strategy_params["sl_value"]
+                sl_offset = (Decimal(atr) * Decimal(strategy_params["sl_value"])).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
             else:
-                sl_offset = 0
+                sl_offset = Decimal("0")
 
             sl_price = entry_price - sl_offset if direction == "long" else entry_price + sl_offset
-            sl_price = round(sl_price, precision_price)
+            sl_price = sl_price.quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
 
             await conn.execute("""
                 INSERT INTO position_targets (position_id, type, price, quantity, hit)
                 VALUES ($1, 'sl', $2, $3, false)
             """, position_id, sl_price, quantity)
 
-        # --- TP1 ---
-        tp_offset = entry_price * 0.005
+        tp_offset = (entry_price * Decimal("0.005")).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
         tp_price = entry_price + tp_offset if direction == "long" else entry_price - tp_offset
-        tp_price = round(tp_price, precision_price)
-        tp_quantity = round(quantity * 0.5, precision_qty)
+        tp_price = tp_price.quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+        tp_quantity = (quantity * Decimal("0.5")).quantize(Decimal(f'1e-{precision_qty}'), rounding=ROUND_DOWN)
 
         await conn.execute("""
             INSERT INTO position_targets (position_id, type, level, price, quantity, hit)
             VALUES ($1, 'tp', 1, $2, $3, false)
         """, position_id, tp_price, tp_quantity)
 
-        await update_signal_log(log_id, "position_opened", f"entry={entry_price}, qty={quantity}")
+        await update_signal_log(log_id, "position_opened", f"entry={str(entry_price)}, qty={str(quantity)}")
         await conn.close()
 
     except Exception as e:
