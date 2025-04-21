@@ -102,6 +102,13 @@ async def check_positions():
                         """, current_price, pnl, close_reason, position_id)
 
                         print(f"[WORKER] Позиция {position_id} закрыта по SL @ {current_price}, pnl={pnl}", flush=True)
+                        
+                        # --- Очистить оставшиеся цели (например, TP) после закрытия позиции ---
+                        await pg.execute("""
+                            UPDATE position_targets
+                            SET canceled = true
+                            WHERE position_id = $1 AND hit = false AND canceled = false
+                        """, position_id)
                     
                 elif t["type"] == "tp":
                     if (direction == "long" and current_price >= target_price) or \
