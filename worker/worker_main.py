@@ -72,8 +72,58 @@ async def check_positions():
                 elif t["type"] == "tp":
                     if (direction == "long" and current_price >= target_price) or \
                        (direction == "short" and current_price <= target_price):
-                        print(f"[WORKER] TP сработал @ {current_price} {'>=' if direction == 'long' else '<='} {target_price}", flush=True)                
-                
+                        print(f"[WORKER] TP сработал @ {current_price} {'>=' if direction == 'long' else '<='} {target_price}", flush=True)
+
+                        # --- Отметить цель как исполненную ---
+                        await pg.execute("""
+                            UPDATE position_targets
+                            SET hit = true, hit_at = NOW()
+                            WHERE id = $1
+                        """, t["id"])
+
+                        # --- Расчёт PnL за эту цель ---
+                        realized_qty = Decimal(t["quantity"])
+                        price_diff = (Decimal(t["price"]) - entry_price) if direction == "long" else (entry_price - Decimal(t["price"]))
+                        pnl_gain = (price_diff * realized_qty).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+
+                        # --- Учитываем часть комиссии (на выход) ---
+                        commission = (realized_qty * Decimal(t["price"]) * Decimal("0.04") / 100).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+                        pnl_gain -= commission
+
+                        # --- Обновить позицию: quantity_left и накопленный pnl ---
+                        updated = await pg.fetchrow("""
+                            UPDATE positions
+                            SET
+                                quantity_left = quantity_left - $1,
+                                pnl = pnl + $2,
+                                close_reason = $3
+                            WHERE id = $4
+                            RETURNING quantity_left, quantity
+                        """, realized_qty, pnl_gain, "tp1-hit" if t["level"] == 1 else "tp-hit", position_id)
+
+                        new_left = Decimal(updated["quantity_left"])
+                        original_qty = Decimal(updated["quantity"])
+
+                        # --- Перенос SL в безубыток при TP1 ---
+                        if t["level"] == 1:
+                            await pg.execute("""
+                                UPDATE position_targets
+                                SET price = $1
+                                WHERE position_id = $2 AND type = 'sl' AND hit = false AND canceled = false
+                            """, entry_price, position_id)
+
+                        # --- Закрытие позиции, если всё реализовано ---
+                        if new_left <= 0:
+                            await pg.execute("""
+                                UPDATE positions
+                                SET status = 'closed', closed_at = NOW(), exit_price = $1, close_reason = $2
+                                WHERE id = $3
+                            """, current_price, "tp", position_id)
+
+                            print(f"[WORKER] Позиция {position_id} полностью закрыта по TP", flush=True)
+                        else:
+                            print(f"[WORKER] Позиция {position_id} частично реализована: осталось {new_left}", flush=True)
+                                            
             # TODO: здесь будет логика проверки SL/TP
 
     except Exception as e:
