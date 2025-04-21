@@ -133,7 +133,7 @@ async def process_signal(log_id: int):
     try:
         conn = await get_pg_connection()
         row = await conn.fetchrow("""
-            SELECT sl.symbol, sl.direction, sle.strategy_id
+            SELECT sl.ticker_symbol AS symbol, sl.direction, sle.strategy_id
             FROM signal_log_entries sle
             JOIN signal_logs sl ON sle.log_id = sl.id
             WHERE sle.log_id = $1
