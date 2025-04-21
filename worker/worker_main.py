@@ -117,7 +117,8 @@ async def check_positions():
 
                         # --- Расчёт PnL за эту цель ---
                         realized_qty = Decimal(t["quantity"])
-                        price_diff = (Decimal(t["price"]) - entry_price) if direction == "long" else (entry_price - Decimal(t["price"]))
+                        tp_price = Decimal(t["price"]).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+                        price_diff = (tp_price - entry_price) if direction == "long" else (entry_price - tp_price)
                         pnl_gain = (price_diff * realized_qty).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
 
                         # --- Учитываем часть комиссии (на выход) ---
