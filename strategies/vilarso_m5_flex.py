@@ -249,5 +249,7 @@ async def process_signal(log_id: int):
         await conn.close()
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"[STRATEGY] Ошибка в process_signal: {e}", flush=True)
         await update_signal_log(log_id, "error", str(e))
