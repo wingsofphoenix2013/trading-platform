@@ -43,11 +43,12 @@ async def check_positions():
             qty_left = Decimal(row["quantity_left"])
             precision_price = int(row["precision_price"])
 
-            price_str = await r.get(f"price:{symbol}")
-            if not price_str:
+            price_raw = await r.get(f"price:{symbol}")
+            if not price_raw:
                 print(f"[WORKER] Нет цены в Redis для {symbol}", flush=True)
                 continue
 
+            price_str = price_raw.decode("utf-8")
             current_price = Decimal(price_str).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
             print(f"[WORKER] {symbol}: current={current_price}, direction={direction}", flush=True)
 
