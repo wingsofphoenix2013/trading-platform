@@ -168,7 +168,8 @@ async def process_signal(log_id: int):
             FROM positions
             WHERE strategy_id = $1 AND status IN ('open', 'partial')
         """, strategy_id))
-      
+        await conn.close()
+
         if total_open + strategy_params["position_limit"] > strategy_params["deposit"]:
             print(f"[CHECK] Превышен лимит депозита: {total_open} + {strategy_params['position_limit']} > {strategy_params['deposit']}", flush=True)
             await update_signal_log(log_id, "ignored_by_check", "deposit limit exceeded")
@@ -183,12 +184,69 @@ async def process_signal(log_id: int):
                 return
             else:
                 print(f"[CHECK] Обнаружен реверс — будет выполнено закрытие текущей позиции", flush=True)
-                # Здесь будет логика реверса — Шаг 4
                 await update_signal_log(log_id, "ignored_by_check", "reverse not implemented yet")
                 return
 
-        # Если дошли сюда — можно открывать новую позицию (Шаг 3)
-        print(f"[CHECK] Все проверки пройдены — можно открывать позицию", flush=True)
+        # --- Открытие новой позиции ---
+        entry_price = await get_current_price(symbol)
+        if entry_price is None:
+            await update_signal_log(log_id, "error", "price not available")
+            return
+
+        precision_price = precision_info["precision_price"]
+        precision_qty = precision_info["precision_qty"]
+        entry_price = round(entry_price, precision_price)
+
+        position_limit = strategy_params["position_limit"]
+        quantity = round(position_limit / entry_price, precision_qty)
+        notional_value = round(entry_price * quantity, precision_price)
+
+        conn = await get_pg_connection()
+        result = await conn.fetchrow("""
+            INSERT INTO positions (
+                strategy_id, log_id, symbol, direction,
+                entry_price, quantity, quantity_left,
+                notional_value, status, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $6, $7, 'open', NOW())
+            RETURNING id
+        """, strategy_id, log_id, symbol, direction, entry_price, quantity, notional_value)
+        position_id = result["id"]
+
+        # --- SL ---
+        if strategy_params["use_stoploss"]:
+            if strategy_params["sl_type"] == "percent":
+                sl_offset = entry_price * (strategy_params["sl_value"] / 100)
+            elif strategy_params["sl_type"] == "atr":
+                atr = await get_latest_atr(symbol)
+                if atr is None:
+                    await update_signal_log(log_id, "error", "ATR not available")
+                    await conn.close()
+                    return
+                sl_offset = atr * strategy_params["sl_value"]
+            else:
+                sl_offset = 0
+
+            sl_price = entry_price - sl_offset if direction == "long" else entry_price + sl_offset
+            sl_price = round(sl_price, precision_price)
+
+            await conn.execute("""
+                INSERT INTO position_targets (position_id, type, price, quantity, hit)
+                VALUES ($1, 'sl', $2, $3, false)
+            """, position_id, sl_price, quantity)
+
+        # --- TP1 ---
+        tp_offset = entry_price * 0.005
+        tp_price = entry_price + tp_offset if direction == "long" else entry_price - tp_offset
+        tp_price = round(tp_price, precision_price)
+        tp_quantity = round(quantity * 0.5, precision_qty)
+
+        await conn.execute("""
+            INSERT INTO position_targets (position_id, type, level, price, quantity, hit)
+            VALUES ($1, 'tp', 1, $2, $3, false)
+        """, position_id, tp_price, tp_quantity)
+
+        await update_signal_log(log_id, "position_opened", f"entry={entry_price}, qty={quantity}")
+        await conn.close()
 
     except Exception as e:
         print(f"[STRATEGY] Ошибка в process_signal: {e}", flush=True)
