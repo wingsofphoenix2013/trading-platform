@@ -163,13 +163,12 @@ async def process_signal(log_id: int):
 
         # --- Проверка текущего объёма открытых позиций ---
         conn = await get_pg_connection()
-        total_open = await conn.fetchval("""
+        total_open = float(await conn.fetchval("""
             SELECT COALESCE(SUM(notional_value), 0)
             FROM positions
             WHERE strategy_id = $1 AND status IN ('open', 'partial')
-        """, strategy_id)
-        await conn.close()
-
+        """, strategy_id))
+      
         if total_open + strategy_params["position_limit"] > strategy_params["deposit"]:
             print(f"[CHECK] Превышен лимит депозита: {total_open} + {strategy_params['position_limit']} > {strategy_params['deposit']}", flush=True)
             await update_signal_log(log_id, "ignored_by_check", "deposit limit exceeded")
