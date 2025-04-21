@@ -52,6 +52,17 @@ async def check_positions():
             current_price = Decimal(price_str).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
             print(f"[WORKER] {symbol}: current={current_price}, direction={direction}", flush=True)
 
+            # --- Получение целей позиции ---
+            targets = await pg.fetch("""
+                SELECT id, type, level, price, quantity
+                FROM position_targets
+                WHERE position_id = $1 AND hit = false AND canceled = false
+            """, position_id)
+
+            print(f"[WORKER] Целей для позиции {position_id}: {len(targets)}", flush=True)
+            for t in targets:
+                print(f"[WORKER] → {t['type']} L{t['level'] or '-'} @ {t['price']} qty={t['quantity']}", flush=True)
+                
             # TODO: здесь будет логика проверки SL/TP
 
     except Exception as e:
