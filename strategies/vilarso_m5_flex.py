@@ -148,6 +148,16 @@ async def process_signal(log_id: int):
         symbol = row["symbol"]
         direction = row["direction"]
         strategy_id = row["strategy_id"]
+        # --- Защита от повторного открытия позиции по тому же сигналу ---
+        conn = await get_pg_connection()
+        existing_by_log = await conn.fetchrow("""
+            SELECT id FROM positions WHERE log_id = $1
+        """, log_id)
+        await conn.close()
+
+        if existing_by_log:
+            print(f"[CHECK] Позиция уже существует по log_id={log_id} — повторное открытие отменено", flush=True)
+            return
         precision_info = await get_precision_and_permission(symbol)
         precision_price = precision_info["precision_price"]
         precision_qty = precision_info["precision_qty"]
