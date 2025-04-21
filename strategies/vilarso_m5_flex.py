@@ -199,14 +199,18 @@ async def process_signal(log_id: int):
         notional_value = (entry_price * quantity).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
 
         conn = await get_pg_connection()
+        commission_rate = Decimal("0.04")
+        commission = (notional_value * (commission_rate / Decimal("100"))).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+        pnl = -commission
+
         result = await conn.fetchrow("""
             INSERT INTO positions (
                 strategy_id, log_id, symbol, direction,
                 entry_price, quantity, quantity_left,
-                notional_value, status, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $6, $7, 'open', NOW())
+                notional_value, pnl, status, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, 'open', NOW())
             RETURNING id
-        """, strategy_id, log_id, symbol, direction, entry_price, quantity, notional_value)
+        """, strategy_id, log_id, symbol, direction, entry_price, quantity, notional_value, pnl)
         position_id = result["id"]
 
         if strategy_params["use_stoploss"]:
@@ -241,7 +245,7 @@ async def process_signal(log_id: int):
         """, position_id, tp_price, tp_quantity)
 
         await update_signal_log(log_id, "position_opened", f"entry={entry_price}, qty={quantity}")
-        print(f"[STRATEGY] Позиция открыта: entry={entry_price}, qty={quantity}", flush=True)
+print(f"[STRATEGY] Позиция открыта: entry={entry_price}, qty={quantity}", flush=True)
         await conn.close()
 
     except Exception as e:
