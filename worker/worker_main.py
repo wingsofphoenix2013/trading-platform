@@ -41,6 +41,7 @@ async def check_positions():
             direction = row["direction"]
             entry_price = Decimal(row["entry_price"])
             qty_left = Decimal(row["quantity_left"])
+            quantity = Decimal(row["quantity"])
             precision_price = int(row["precision_price"])
             notional_value = (entry_price * qty_left).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
 
@@ -69,37 +70,38 @@ async def check_positions():
                     if (direction == "long" and current_price <= target_price) or \
                        (direction == "short" and current_price >= target_price):
                         print(f"[WORKER] SL сработал @ {current_price} {'<=' if direction == 'long' else '>='} {target_price}", flush=True)
-                    # --- Отметить SL как исполненный ---
-                    await pg.execute("""
-                        UPDATE position_targets
-                        SET hit = true, hit_at = NOW(), canceled = true
-                        WHERE id = $1
-                    """, t["id"])
+                        
+                        # --- Отметить SL как исполненный ---
+                        await pg.execute("""
+                            UPDATE position_targets
+                            SET hit = true, hit_at = NOW(), canceled = true
+                            WHERE id = $1
+                        """, t["id"])
 
-                    # --- Закрытие позиции полностью ---
-                    # комиссия считается от notional_value всей позиции
-                    commission = (notional_value * Decimal("0.04") / 100).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+                        # --- Закрытие позиции полностью ---
+                        # комиссия считается от notional_value всей позиции
+                        commission = (notional_value * Decimal("0.04") / 100).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
 
-                    if direction == "long":
-                        pnl = ((current_price - entry_price) * quantity).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN) - commission
-                    else:
-                        pnl = ((entry_price - current_price) * quantity).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN) - commission
+                        if direction == "long":
+                            pnl = ((current_price - entry_price) * quantity).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN) - commission
+                        else:
+                            pnl = ((entry_price - current_price) * quantity).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN) - commission
 
-                    # определить причину закрытия
-                    close_reason = "sl-after-take" if quantity_left < quantity else "sl"
+                        # определить причину закрытия
+                        close_reason = "sl-after-take" if qty_left < quantity else "sl"
 
-                    await pg.execute("""
-                        UPDATE positions
-                        SET status = 'closed',
-                            exit_price = $1,
-                            closed_at = NOW(),
-                            pnl = $2,
-                            close_reason = $3,
-                            quantity_left = 0
-                        WHERE id = $4
-                    """, current_price, pnl, close_reason, position_id)
+                        await pg.execute("""
+                            UPDATE positions
+                            SET status = 'closed',
+                                exit_price = $1,
+                                closed_at = NOW(),
+                                pnl = $2,
+                                close_reason = $3,
+                                quantity_left = 0
+                            WHERE id = $4
+                        """, current_price, pnl, close_reason, position_id)
 
-                    print(f"[WORKER] Позиция {position_id} закрыта по SL @ {current_price}, pnl={pnl}", flush=True)
+                        print(f"[WORKER] Позиция {position_id} закрыта по SL @ {current_price}, pnl={pnl}", flush=True)
                     
                 elif t["type"] == "tp":
                     if (direction == "long" and current_price >= target_price) or \
@@ -155,8 +157,6 @@ async def check_positions():
                             print(f"[WORKER] Позиция {position_id} полностью закрыта по TP", flush=True)
                         else:
                             print(f"[WORKER] Позиция {position_id} частично реализована: осталось {new_left}", flush=True)
-                                            
-            # TODO: здесь будет логика проверки SL/TP
 
     except Exception as e:
         print(f"[WORKER] Ошибка при проверке позиций: {e}", flush=True)
