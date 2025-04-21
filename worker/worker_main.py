@@ -108,9 +108,9 @@ async def check_positions():
                         if t["level"] == 1:
                             await pg.execute("""
                                 UPDATE position_targets
-                                SET price = $1
-                                WHERE position_id = $2 AND type = 'sl' AND hit = false AND canceled = false
-                            """, entry_price, position_id)
+                                SET price = $1, quantity = $2
+                                WHERE position_id = $3 AND type = 'sl' AND hit = false AND canceled = false
+                            """, entry_price, new_left, position_id)
 
                         # --- Закрытие позиции, если всё реализовано ---
                         if new_left <= 0:
