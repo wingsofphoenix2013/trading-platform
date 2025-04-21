@@ -148,6 +148,9 @@ async def process_signal(log_id: int):
         symbol = row["symbol"]
         direction = row["direction"]
         strategy_id = row["strategy_id"]
+        precision_info = await get_precision_and_permission(symbol)
+        precision_price = precision_info["precision_price"]
+        precision_qty = precision_info["precision_qty"]
 
         precision_info = await get_precision_and_permission(symbol)
         if not precision_info or precision_info["tradepermission"] != "enabled":
