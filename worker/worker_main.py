@@ -42,6 +42,7 @@ async def check_positions():
             entry_price = Decimal(row["entry_price"])
             qty_left = Decimal(row["quantity_left"])
             precision_price = int(row["precision_price"])
+            notional_value = (entry_price * qty_left).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
 
             price_raw = await r.get(f"price:{symbol}")
             if not price_raw:
