@@ -284,7 +284,7 @@ async def process_signal(log_id: int):
                 VALUES ($1, 'sl', $2, $3, false)
             """, position_id, sl_price, quantity)
 
-        tp_offset = (entry_price * Decimal("0.005")).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+        tp_offset = (entry_price * Decimal("0.0075")).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
         tp_price = entry_price + tp_offset if direction == "long" else entry_price - tp_offset
         tp_price = tp_price.quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
         tp_quantity = (quantity * Decimal("0.5")).quantize(Decimal(f'1e-{precision_qty}'), rounding=ROUND_DOWN)
