@@ -217,7 +217,7 @@ async def process_signal(log_id: int):
 
                 await conn.execute("""
                     UPDATE position_targets
-                    SET hit = false, hit_at = NULL
+                    SET hit = false, hit_at = NULL, canceled = true
                     WHERE position_id = $1
                 """, position_id)
 
