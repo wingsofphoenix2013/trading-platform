@@ -77,7 +77,7 @@ async def check_positions():
                         # --- Отметить цель как исполненную ---
                         await pg.execute("""
                             UPDATE position_targets
-                            SET hit = true, hit_at = NOW()
+                            SET hit = true, hit_at = NOW(), canceled = true
                             WHERE id = $1
                         """, t["id"])
 
