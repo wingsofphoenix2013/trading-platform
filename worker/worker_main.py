@@ -27,8 +27,7 @@ async def check_positions():
 
     try:
         rows = await pg.fetch("""
-            SELECT p.id, p.symbol, p.direction, p.entry_price, p.quantity_left,
-                   t.precision_price
+            SELECT p.id, p.symbol, p.direction, p.entry_price, p.quantity_left, p.quantity, t.precision_price
             FROM positions p
             JOIN tickers t ON p.symbol = t.symbol
             WHERE p.status = 'open'
