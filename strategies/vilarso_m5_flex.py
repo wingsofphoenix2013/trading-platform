@@ -181,8 +181,45 @@ async def process_signal(log_id: int):
                 return
             else:
                 print(f"[CHECK] Обнаружен реверс — будет выполнено закрытие текущей позиции", flush=True)
-                await update_signal_log(log_id, "ignored_by_check", "reverse not implemented yet")
-                return
+
+                entry_price = Decimal(existing_position["entry_price"])
+                quantity = Decimal(existing_position["quantity"])
+                notional_value = Decimal(existing_position["notional_value"])
+                position_id = existing_position["id"]
+                current_direction = existing_position["direction"]
+
+                exit_price_raw = await get_current_price(symbol)
+                if exit_price_raw is None:
+                    await update_signal_log(log_id, "error", "no exit price for reverse")
+                    return
+
+                exit_price = Decimal(exit_price_raw).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+
+                commission = (notional_value * Decimal("0.04") / 100).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+                if current_direction == "long":
+                    pnl = ((exit_price - entry_price) * quantity - commission).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+                else:
+                    pnl = ((entry_price - exit_price) * quantity - commission).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+
+                conn = await get_pg_connection()
+                await conn.execute("""
+                    UPDATE positions
+                    SET status = 'closed',
+                        exit_price = $1,
+                        closed_at = NOW(),
+                        close_reason = 'reverse',
+                        pnl = $2
+                    WHERE id = $3
+                """, exit_price, pnl, position_id)
+
+                await conn.execute("""
+                    UPDATE position_targets
+                    SET hit = false, hit_at = NULL
+                    WHERE position_id = $1
+                """, position_id)
+
+                await conn.close()
+                await update_signal_log(log_id, "position_closed", f"reverse closed @ {exit_price}")
 
         # --- Открытие новой позиции с точным округлением через Decimal ---
         entry_price_raw = await get_current_price(symbol)
