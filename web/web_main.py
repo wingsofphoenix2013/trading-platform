@@ -593,15 +593,13 @@ async def all_indicators_page(request: Request):
         "indicators": rows
     })
 # 23. Просмотр стратегии по ID (GET)
-# Загружает стратегию, управляющий сигнал, открытые и закрытые позиции с агрегацией
-
-from datetime import datetime, timedelta, timezone
+# Загружает стратегию, управляющий сигнал, открытые и закрытые позиции, метрики и историю сделок
 
 @app.get("/strategies/{strategy_id}", response_class=HTMLResponse)
-async def view_strategy(strategy_id: int, request: Request, period: str = "today"):
+async def view_strategy(strategy_id: int, request: Request, period: str = "today", page: int = 1):
     conn = await get_db()
 
-    # Получаем стратегию
+    # Стратегия
     strategy = await conn.fetchrow("SELECT * FROM strategies WHERE id = $1", strategy_id)
     if not strategy:
         await conn.close()
@@ -624,29 +622,27 @@ async def view_strategy(strategy_id: int, request: Request, period: str = "today
         ORDER BY created_at DESC
     """, strategy_id)
 
-    # --- Метрика: закрытые сделки за период ---
-    now = datetime.utcnow()  # naive datetime в UTC
-
+    # Определение периода
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
     date_filter_sql = ""
     params = [strategy_id]
-
     if period == "today":
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        date_filter_sql = "AND closed_at >= $2"
-        params.append(start)
-
+        date_filter_sql = "AND closed_at >= $2 AND closed_at < $3"
+        params += [start, start + timedelta(days=1)]
     elif period == "yesterday":
         start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=1)
         date_filter_sql = "AND closed_at >= $2 AND closed_at < $3"
-        params.extend([start, end])
-
+        params += [start, end]
     elif period == "week":
-        week_ago = now - timedelta(days=7)
+        start = now - timedelta(days=7)
         date_filter_sql = "AND closed_at >= $2"
-        params.append(week_ago)
-                
-    result = await conn.fetchrow(f"""
+        params += [start]
+
+    # Метрики
+    metric_result = await conn.fetchrow(f"""
         SELECT
             COUNT(*) AS total,
             COUNT(*) FILTER (WHERE pnl > 0) AS wins,
@@ -656,14 +652,26 @@ async def view_strategy(strategy_id: int, request: Request, period: str = "today
         {date_filter_sql}
     """, *params)
 
-    await conn.close()
-
-    # Подготовка итогов
-    total = result["total"] or 0
-    wins = result["wins"] or 0
-    pnl_sum = float(result["pnl"]) if result["pnl"] is not None else None
+    total = metric_result["total"] or 0
+    wins = metric_result["wins"] or 0
+    pnl_sum = float(metric_result["pnl"]) if metric_result["pnl"] is not None else None
     winrate = int((wins / total) * 100) if total > 0 else None
     roi = round((pnl_sum / float(strategy["deposit"])) * 100, 4) if pnl_sum is not None and strategy["deposit"] else None
+
+    # Закрытые сделки: пагинация
+    limit = 20
+    offset = (page - 1) * limit
+    closed_query = f"""
+        SELECT id, symbol, created_at, entry_price, closed_at, close_reason, pnl
+        FROM positions
+        WHERE strategy_id = $1 AND status = 'closed'
+        {date_filter_sql}
+        ORDER BY closed_at DESC
+        LIMIT {limit} OFFSET {offset}
+    """
+    closed_positions = await conn.fetch(closed_query, *params)
+
+    await conn.close()
 
     return templates.TemplateResponse("strategy_detail.html", {
         "request": request,
@@ -671,6 +679,8 @@ async def view_strategy(strategy_id: int, request: Request, period: str = "today
         "signal_name": signal or "n/a",
         "open_positions": open_positions,
         "period": period,
+        "page": page,
+        "closed_positions": closed_positions,
         "metrics": {
             "total": total if total > 0 else "n/a",
             "winrate": f"{winrate}%" if winrate is not None else "n/a",

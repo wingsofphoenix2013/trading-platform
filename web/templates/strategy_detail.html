@@ -10,7 +10,7 @@
         th, td { padding: 0.75rem; border-bottom: 1px solid #ddd; text-align: center; }
         th { background: #f1f1f1; font-weight: 600; }
         .title { margin-bottom: 1rem; font-size: 1.4rem; font-weight: bold; }
-        .submit-row { text-align: right; margin-top: 1.5rem; }
+        .submit-row { text-align: left; margin-top: 1.5rem; }
         input[type=number], input[type=text] { width: 60px; text-align: center; }
     </style>
 </head>
@@ -80,6 +80,50 @@
         </tr>
     </tbody>
 </table>
+<h2 class="title">Закрытые сделки</h2>
+
+{% if closed_positions %}
+<table>
+    <thead>
+        <tr>
+            <th>№</th>
+            <th>Тикер</th>
+            <th>Открыта</th>
+            <th>Курс входа</th>
+            <th>Закрыта</th>
+            <th>Статус</th>
+            <th>PnL</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for pos in closed_positions %}
+        <tr>
+            <td>{{ loop.index + ((page - 1) * 20) }}</td>
+            <td>{{ pos.symbol }}</td>
+            <td>{{ pos.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ '%.4f' | format(pos.entry_price) }}</td>
+            <td>{{ pos.closed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ pos.close_reason or 'n/a' }}</td>
+            <td>{{ '%.4f' | format(pos.pnl or 0.0) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Пагинация -->
+<div class="submit-row">
+    {% if page > 1 %}
+        <a href="?period={{ period }}&page={{ page - 1 }}">← Назад</a>
+    {% endif %}
+    <span style="margin: 0 1rem;">Страница {{ page }}</span>
+    {% if closed_positions|length == 20 %}
+        <a href="?period={{ period }}&page={{ page + 1 }}">Вперёд →</a>
+    {% endif %}
+</div>
+
+{% else %}
+<p>Сделок за выбранный период не найдено.</p>
+{% endif %}
         <p class="submit-row"><a href="/strategies">← Назад к списку стратегий</a></p>
     </div>
 </body>
