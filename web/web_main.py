@@ -559,4 +559,30 @@ async def all_indicators_page(request: Request):
     return templates.TemplateResponse("ticker_indicators.html", {
         "request": request,
         "indicators": rows
-    })      
+    })
+# 23. Просмотр стратегии по ID (GET)
+# Загружает стратегию и отображает отдельную страницу с её параметрами
+@app.get("/strategies/{strategy_id}", response_class=HTMLResponse)
+async def view_strategy(strategy_id: int, request: Request):
+    conn = await get_db()
+
+    strategy = await conn.fetchrow("SELECT * FROM strategies WHERE id = $1", strategy_id)
+    if not strategy:
+        await conn.close()
+        return HTMLResponse("Стратегия не найдена", status_code=404)
+
+    signal = await conn.fetchval("""
+        SELECT name FROM signals
+        WHERE id = (
+            SELECT signal_id FROM strategy_signals
+            WHERE strategy_id = $1 AND role = 'action'
+        )
+    """, strategy_id)
+
+    await conn.close()
+
+    return templates.TemplateResponse("strategy_detail.html", {
+        "request": request,
+        "strategy": strategy,
+        "signal_name": signal or "n/a"
+    })          
