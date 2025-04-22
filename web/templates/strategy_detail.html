@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Детали стратегии</title>
+</head>
+<body>
+    <h1>Стратегия #{{ strategy.id }} — {{ strategy.name }}</h1>
+
+    <p><strong>Депозит:</strong> {{ strategy.deposit }}</p>
+    <p><strong>Лимит позиции:</strong> {{ strategy.position_limit }}</p>
+    <p><strong>Управляющий сигнал:</strong> {{ signal_name }}</p>
+    <p><strong>Включена:</strong> {{ "Да" if strategy.enabled else "Нет" }}</p>
+    <p><strong>Режим тикеров:</strong> {{ "Все" if strategy.use_all_tickers else "Выборочно" }}</p>
+
+    <p><a href="/strategies">← Назад к списку стратегий</a></p>
+</body>
+</html>
