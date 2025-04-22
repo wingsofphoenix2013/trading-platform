@@ -595,6 +595,9 @@ async def view_strategy(strategy_id: int, request: Request, period: str = "today
     # --- Метрика: закрытые сделки за период ---
     now = datetime.utcnow()  # naive datetime в UTC
 
+    date_filter_sql = ""
+    params = [strategy_id]
+
     if period == "today":
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         date_filter_sql = "AND closed_at >= $2"
