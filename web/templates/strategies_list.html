@@ -2,33 +2,49 @@
 <html>
 <head>
     <title>Список стратегий</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; background: #f8f9fa; }
+        .card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 1100px; margin: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #ddd; text-align: center; }
+        th { background: #f1f1f1; font-weight: 600; }
+        .title { margin-bottom: 1rem; font-size: 1.4rem; font-weight: bold; }
+        .submit-row { text-align: right; margin-top: 1.5rem; }
+        a.button { display: inline-block; padding: 0.5rem 1rem; background: #007bff; color: white; text-decoration: none; border-radius: 6px; }
+        .green { color: green; font-weight: bold; }
+        .red { color: red; font-weight: bold; }
+    </style>
 </head>
 <body>
-    <h1>Стратегии</h1>
-    <a href="/strategies/new">Добавить стратегию</a>
-    <table border="1" cellpadding="5" cellspacing="0">
+<div class="card">
+    <div class="submit-row">
+        <a href="/strategies/new" class="button">Добавить стратегию</a>
+    </div>
+    <h1 class="title">Стратегии</h1>
+    <table>
         <tr>
             <th>ID</th>
             <th>Название</th>
-            <th>Депозит</th>
-            <th>Лимит позиции</th>
-            <th>Тикеры</th>
             <th>Упр. сигнал</th>
             <th>Вкл</th>
+            <th>Кол-во сделок</th>
+            <th>Winrate</th>
+            <th>PnL</th>
             <th></th>
         </tr>
         {% for s in strategies %}
         <tr>
             <td>{{ s.id }}</td>
             <td><a href="/strategies/{{ s.id }}">{{ s.name }}</a></td>
-			<td>{{ '%.2f' | format(s.deposit) }}</td>
-			<td>{{ '%.2f' | format(s.position_limit) }}</td>
-            <td>{% if s.use_all_tickers %}Все{% else %}Выборочно{% endif %}</td>
             <td>{{ s.signal_name or "n/a" }}</td>
-            <td>{{ "Да" if s.enabled else "Нет" }}</td>
+            <td>{% if s.enabled %}<span class="green">Да</span>{% else %}<span class="red">Нет</span>{% endif %}</td>
+            <td>{{ s.metrics.total if s.metrics.total is not none else 'n/a' }}</td>
+            <td>{{ s.metrics.winrate if s.metrics.winrate is not none else 'n/a' }}</td>
+            <td>{{ s.metrics.pnl if s.metrics.pnl is not none else 'n/a' }}</td>
             <td><a href="/strategies/{{ s.id }}/edit">Редактировать</a></td>
         </tr>
         {% endfor %}
     </table>
+</div>
 </body>
 </html>

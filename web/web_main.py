@@ -259,20 +259,16 @@ async def receive_webhook(request: Request):
 
     return PlainTextResponse("Signal accepted", status_code=200)            
 # 14. Отображение списка стратегий
-# Страница /strategies — отображает все стратегии в виде таблицы.
-# Включает: депозит, лимит, статус, режим тикеров, и управляющий сигнал (action-сигнал)
+# Страница /strategies — отображает все стратегии в виде таблицы с метриками за текущие сутки (UTC)
 
 @app.get("/strategies", response_class=HTMLResponse)
 async def list_strategies(request: Request):
-    # Загружаем стратегии + связанный управляющий сигнал (если есть)
+    # Шаг 1. Загружаем стратегии и управляющий сигнал
     conn = await get_db()
-    rows = await conn.fetch("""
+    strategy_rows = await conn.fetch("""
         SELECT
             s.id,
             s.name,
-            s.deposit,
-            s.position_limit,
-            s.use_all_tickers,
             s.enabled,
             sig.name AS signal_name
         FROM strategies s
@@ -280,14 +276,50 @@ async def list_strategies(request: Request):
         LEFT JOIN signals sig ON sig.id = ss.signal_id
         ORDER BY s.created_at DESC
     """)
+
+    # Шаг 2. Загружаем метрики по закрытым сделкам за сегодня (UTC)
+    from datetime import datetime, timedelta
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = today + timedelta(days=1)
+
+    metrics_rows = await conn.fetch("""
+        SELECT
+            strategy_id,
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE pnl > 0) AS wins,
+            SUM(pnl) AS pnl
+        FROM positions
+        WHERE status = 'closed'
+          AND closed_at >= $1 AND closed_at < $2
+        GROUP BY strategy_id
+    """, today, tomorrow)
+
     await conn.close()
 
-    # Возвращаем шаблон с данными
+    # Шаг 3. Построение словаря: strategy_id → метрики
+    metrics_map = {
+        row["strategy_id"]: {
+            "total": row["total"],
+            "winrate": f"{int((row['wins'] / row['total']) * 100)}%" if row["total"] > 0 else "n/a",
+            "pnl": f"{row['pnl']:.2f}" if row["pnl"] is not None else "n/a"
+        }
+        for row in metrics_rows
+    }
+
+    # Шаг 4. Объединяем стратегии и метрики
+    strategies = []
+    for s in strategy_rows:
+        s = dict(s)
+        s["metrics"] = metrics_map.get(s["id"], {
+            "total": "n/a", "winrate": "n/a", "pnl": "n/a"
+        })
+        strategies.append(s)
+
+    # Шаг 5. Отдаём шаблон
     return templates.TemplateResponse("strategies_list.html", {
         "request": request,
-        "strategies": rows
+        "strategies": strategies
     })
-    
 # 15. Форма создания стратегии (GET)
 # Отображает пустую форму для добавления новой стратегии
 @app.get("/strategies/new", response_class=HTMLResponse)
