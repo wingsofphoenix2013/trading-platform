@@ -20,7 +20,7 @@
         {% for s in strategies %}
         <tr>
             <td>{{ s.id }}</td>
-            <td>{{ s.name }}</td>
+            <td><a href="/strategies/{{ s.id }}">{{ s.name }}</a></td>
 			<td>{{ '%.2f' | format(s.deposit) }}</td>
 			<td>{{ '%.2f' | format(s.position_limit) }}</td>
             <td>{% if s.use_all_tickers %}Все{% else %}Выборочно{% endif %}</td>
