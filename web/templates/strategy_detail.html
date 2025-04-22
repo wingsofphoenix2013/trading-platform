@@ -2,16 +2,58 @@
 <html>
 <head>
     <title>Детали стратегии</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; background: #f8f9fa; }
+        .card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 900px; margin: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #ddd; text-align: center; }
+        th { background: #f1f1f1; font-weight: 600; }
+        .title { margin-bottom: 1rem; font-size: 1.4rem; font-weight: bold; }
+        .submit-row { text-align: right; margin-top: 1.5rem; }
+        input[type=number], input[type=text] { width: 60px; text-align: center; }
+    </style>
 </head>
 <body>
-    <h1>Стратегия #{{ strategy.id }} — {{ strategy.name }}</h1>
+    <div class="card">
+        <h1 class="title">Стратегия #{{ strategy.id }} — {{ strategy.name }}</h1>
 
-    <p><strong>Депозит:</strong> {{ strategy.deposit }}</p>
-    <p><strong>Лимит позиции:</strong> {{ strategy.position_limit }}</p>
-    <p><strong>Управляющий сигнал:</strong> {{ signal_name }}</p>
-    <p><strong>Включена:</strong> {{ "Да" if strategy.enabled else "Нет" }}</p>
-    <p><strong>Режим тикеров:</strong> {{ "Все" if strategy.use_all_tickers else "Выборочно" }}</p>
+        <p><strong>Депозит:</strong> {{ '%.2f' | format(strategy.deposit) }}</p>
+        <p><strong>Лимит позиции:</strong> {{ '%.2f' | format(strategy.position_limit) }}</p>
+        <p><strong>Управляющий сигнал:</strong> {{ signal_name }}</p>
+        <p><strong>Включена:</strong> {{ "Да" if strategy.enabled else "Нет" }}</p>
+        <p><strong>Режим тикеров:</strong> {{ "Все" if strategy.use_all_tickers else "Выборочно" }}</p>
 
-    <p><a href="/strategies">← Назад к списку стратегий</a></p>
+        <h2 class="title">Открытые сделки</h2>
+        {% if open_positions %}
+        <table>
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>Тикер</th>
+                    <th>Открыта</th>
+                    <th>Направление</th>
+                    <th>Статус</th>
+                    <th>PnL</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pos in open_positions %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ pos.symbol }}</td>
+                    <td>{{ pos.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{{ pos.direction }}</td>
+                    <td>{{ pos.close_reason or "в работе" }}</td>
+                    <td>{{ '%.4f' | format(pos.pnl or 0.0) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>Открытых сделок нет.</p>
+        {% endif %}
+
+        <p class="submit-row"><a href="/strategies">← Назад к списку стратегий</a></p>
+    </div>
 </body>
 </html>

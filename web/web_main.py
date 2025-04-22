@@ -561,16 +561,19 @@ async def all_indicators_page(request: Request):
         "indicators": rows
     })
 # 23. Просмотр стратегии по ID (GET)
-# Загружает стратегию и отображает отдельную страницу с её параметрами
+# Загружает стратегию, управляющий сигнал и открытые позиции
+
 @app.get("/strategies/{strategy_id}", response_class=HTMLResponse)
 async def view_strategy(strategy_id: int, request: Request):
     conn = await get_db()
 
+    # Загружаем стратегию
     strategy = await conn.fetchrow("SELECT * FROM strategies WHERE id = $1", strategy_id)
     if not strategy:
         await conn.close()
         return HTMLResponse("Стратегия не найдена", status_code=404)
 
+    # Получаем название управляющего сигнала
     signal = await conn.fetchval("""
         SELECT name FROM signals
         WHERE id = (
@@ -579,10 +582,20 @@ async def view_strategy(strategy_id: int, request: Request):
         )
     """, strategy_id)
 
+    # Получаем список открытых позиций по стратегии
+    open_positions = await conn.fetch("""
+        SELECT id, symbol, direction, created_at, close_reason, pnl
+        FROM positions
+        WHERE strategy_id = $1 AND status = 'open'
+        ORDER BY created_at DESC
+    """, strategy_id)
+
     await conn.close()
 
+    # Отображаем шаблон с деталями стратегии и открытыми позициями
     return templates.TemplateResponse("strategy_detail.html", {
         "request": request,
         "strategy": strategy,
-        "signal_name": signal or "n/a"
-    })          
+        "signal_name": signal or "n/a",
+        "open_positions": open_positions
+    })
