@@ -598,23 +598,21 @@ async def view_strategy(strategy_id: int, request: Request, period: str = "today
     params = [strategy_id]
 
     if period == "today":
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
         date_filter_sql = "AND closed_at >= $2"
         params.append(start)
 
     elif period == "yesterday":
-        start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
         end = start + timedelta(days=1)
         date_filter_sql = "AND closed_at >= $2 AND closed_at < $3"
         params.extend([start, end])
 
     elif period == "week":
-        week_ago = now - timedelta(days=7)
+        week_ago = (now - timedelta(days=7)).replace(tzinfo=timezone.utc)
         date_filter_sql = "AND closed_at >= $2"
         params.append(week_ago)
-
-    # Если period == all — фильтра нет
-
+        
     result = await conn.fetchrow(f"""
         SELECT
             COUNT(*) AS total,
