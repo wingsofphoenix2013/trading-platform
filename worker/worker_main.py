@@ -95,7 +95,7 @@ async def check_positions():
                             SET status = 'closed',
                                 exit_price = $1,
                                 closed_at = NOW(),
-                                pnl = $2,
+                                pnl = pnl + $2,
                                 close_reason = $3,
                                 quantity_left = 0
                             WHERE id = $4
