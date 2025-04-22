@@ -593,23 +593,23 @@ async def view_strategy(strategy_id: int, request: Request, period: str = "today
     """, strategy_id)
 
     # --- Метрика: закрытые сделки за период ---
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow().replace(tzinfo=timezone.utc)
     date_filter_sql = ""
     params = [strategy_id]
 
     if period == "today":
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         date_filter_sql = "AND closed_at >= $2"
         params.append(start)
 
     elif period == "yesterday":
-        start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
-        end = start + timedelta(days=1)
+        start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start.replace(hour=0, minute=0, second=0, microsecond=0)
         date_filter_sql = "AND closed_at >= $2 AND closed_at < $3"
         params.extend([start, end])
 
     elif period == "week":
-        week_ago = (now - timedelta(days=7)).replace(tzinfo=timezone.utc)
+        week_ago = (now - timedelta(days=7))
         date_filter_sql = "AND closed_at >= $2"
         params.append(week_ago)
         
