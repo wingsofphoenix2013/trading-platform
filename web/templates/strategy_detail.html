@@ -4,6 +4,7 @@
     <title>Детали стратегии</title>
     <style>
         body { font-family: sans-serif; margin: 2rem; background: #f8f9fa; }
+        .font-bold { font-weight: bold; }
         .card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 900px; margin: auto; }
         table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
         th, td { padding: 0.75rem; border-bottom: 1px solid #ddd; text-align: center; }
@@ -52,7 +53,33 @@
         {% else %}
         <p>Открытых сделок нет.</p>
         {% endif %}
+<h2 class="title">История торговли</h2>
 
+<div class="submit-row">
+    <a href="?period=today" class="{{ 'font-bold' if period == 'today' else '' }}">Сегодня</a> |
+    <a href="?period=yesterday" class="{{ 'font-bold' if period == 'yesterday' else '' }}">Вчера</a> |
+    <a href="?period=week" class="{{ 'font-bold' if period == 'week' else '' }}">7 дней</a> |
+    <a href="?period=all" class="{{ 'font-bold' if period == 'all' else '' }}">Всего</a>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Кол-во сделок</th>
+            <th>Winrate</th>
+            <th>PnL</th>
+            <th>ROI</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>{{ metrics.total }}</td>
+            <td>{{ metrics.winrate }}</td>
+            <td>{{ metrics.pnl }}</td>
+            <td>{{ metrics.roi }}</td>
+        </tr>
+    </tbody>
+</table>
         <p class="submit-row"><a href="/strategies">← Назад к списку стратегий</a></p>
     </div>
 </body>
