@@ -88,7 +88,7 @@ async def handle_signal(signal_log_id: int):
             await vilarso_m5_fulltp.process_signal(signal_log_id) 
             
         elif strategy_name == "vl_m5_fulltp":
-            await vilarso_m5_fulltp.process_signal(signal_log_id)        
+            await vl_m5_fulltp.process_signal(signal_log_id)        
             
         else:
             print(f"[strategies_main] Стратегия '{strategy_name}' пока не поддерживается", flush=True)
