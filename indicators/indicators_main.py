@@ -77,7 +77,7 @@ async def main():
 
             # Вызовы всех индикаторов для данного тикера и таймфрейма
             # ---------------------------
-            await asyncio.sleep(2)  # Ждём, чтобы свеча точно успела записаться в базу
+            await asyncio.sleep(10)  # Ждём, чтобы свеча точно успела записаться в базу
             try:
                 await process_ema(pg_pool, redis, symbol, tf, precision)
             except Exception as e:
