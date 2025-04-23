@@ -275,6 +275,7 @@ async def list_strategies(request: Request):
         FROM strategies s
         LEFT JOIN strategy_signals ss ON ss.strategy_id = s.id AND ss.role = 'action'
         LEFT JOIN signals sig ON sig.id = ss.signal_id
+        WHERE s.archived = false
         ORDER BY s.created_at DESC
     """)
 
