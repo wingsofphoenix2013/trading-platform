@@ -53,7 +53,7 @@ async def main():
 
     async with pg_pool.acquire() as conn:
         # Получаем активные тикеры
-        rows = await conn.fetch("SELECT symbol, precision_price FROM tickers WHERE enabled = true")
+        rows = await conn.fetch("SELECT symbol, precision_price FROM tickers WHERE status = 'enabled'")
         tickers = [dict(r) for r in rows]
 
     print(f"[INFO] Найдено активных тикеров: {len(tickers)}", flush=True)
