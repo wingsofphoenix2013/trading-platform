@@ -714,5 +714,16 @@ async def toggle_enabled(strategy_id: int):
         WHERE id = $1
     """, strategy_id)
 
+    # Публикуем обновление в Redis
+    import redis.asyncio as redis_lib
+    import os
+    r = redis_lib.Redis(
+        host=os.getenv("REDIS_HOST"),
+        port=int(os.getenv("REDIS_PORT", 6379)),
+        password=os.getenv("REDIS_PASSWORD"),
+        ssl=True
+    )
+    await r.publish("strategy_activation", str(strategy_id))
+
     await conn.close()
-    return JSONResponse(content={"ok": True})    
+    return JSONResponse(content={"ok": True})
