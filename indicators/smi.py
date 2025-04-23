@@ -44,7 +44,7 @@ async def process_smi(pg_pool, redis, symbol, tf, precision):
 
     df = pd.DataFrame(rows, columns=['open_time', 'high', 'low', 'close'])
     df = df[::-1]
-df.reset_index(drop=True, inplace=True)  # Переводим в хронологический порядок
+    df.reset_index(drop=True, inplace=True)  # Переводим в хронологический порядок
     df[['high', 'low', 'close']] = df[['high', 'low', 'close']].astype(float)
     df['open_time'] = pd.to_datetime(df['open_time'])
 
