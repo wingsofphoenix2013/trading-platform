@@ -4,6 +4,7 @@ import asyncio
 import aiohttp
 import json
 from datetime import datetime, timedelta
+import time
 
 # Проверка на пропуски M1-свечей по тикеру
 def detect_gaps(rows):
@@ -143,3 +144,4 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+    time.sleep(5)
