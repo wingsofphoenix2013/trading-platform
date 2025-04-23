@@ -34,6 +34,7 @@ REDIS_CHANNEL_INDICATORS = os.getenv('REDIS_CHANNEL_INDICATORS', None)
 # 1. Главная точка входа
 async def main():
     print("[INIT] Старт координатора индикаторов", flush=True)
+    await asyncio.sleep(10)  # Ждём, чтобы все свечи успели попасть в базу перед началом расчётов
 
     # Подключение к PostgreSQL
     pg_pool = await asyncpg.create_pool(DATABASE_URL)
@@ -77,7 +78,6 @@ async def main():
 
             # Вызовы всех индикаторов для данного тикера и таймфрейма
             # ---------------------------
-            await asyncio.sleep(10)  # Ждём, чтобы свеча точно успела записаться в базу
             try:
                 await process_ema(pg_pool, redis, symbol, tf, precision)
             except Exception as e:
