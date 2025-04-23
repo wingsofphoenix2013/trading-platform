@@ -18,6 +18,7 @@ import json
 # Импорты индикаторов (расширяются по мере добавления)
 # ---------------------------
 from ema import process_ema  # EMA 50/100/200
+from smi import process_smi
 # from atr import process_atr
 # from lr import process_lr
 # ---------------------------
@@ -80,6 +81,7 @@ async def main():
             # ---------------------------
             try:
                 await process_ema(pg_pool, redis, symbol, tf, precision)
+                await process_smi(pg_pool, redis, symbol, tf, precision)
             except Exception as e:
                 print(f"[ERROR] Ошибка в EMA для {symbol}/{tf}: {e}", flush=True)
             # ---------------------------
