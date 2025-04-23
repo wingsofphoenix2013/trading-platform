@@ -763,7 +763,7 @@ async def emergency_stop(strategy_id: int):
         SELECT positions.id, positions.symbol, direction, entry_price, quantity, precision_price
         FROM positions
         JOIN tickers ON positions.symbol = tickers.symbol
-        WHERE strategy_id = $1 AND status = 'open'
+        WHERE positions.strategy_id = $1 AND positions.status = 'open'
     """, strategy_id)
 
     if not open_positions:
