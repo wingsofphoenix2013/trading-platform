@@ -294,7 +294,7 @@ async def process_signal(log_id: int):
         """, position_id, tp_price, quantity)
 
         await conn.execute("""
-        """, position_id, tp_price, tp_quantity)
+        """, position_id, tp_price, quantity)
 
         await update_signal_log(log_id, "position_opened", f"entry={entry_price}, qty={quantity}")
         print(f"[STRATEGY] Позиция открыта: entry={entry_price}, qty={quantity}", flush=True)
