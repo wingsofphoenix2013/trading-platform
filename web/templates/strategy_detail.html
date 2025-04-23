@@ -161,7 +161,7 @@
     </div>
 <script>
 async function toggleStrategy(id) {
-    const hasOpen = {{ open_positions|length > 0 | lower }};
+    const hasOpen = {{ (open_positions|length > 0)|string|lower }};
     if (hasOpen) {
         alert("У стратегии есть открытые позиции. Для отключения используйте 'Пауза' или 'Аварийную остановку'.");
         return;
