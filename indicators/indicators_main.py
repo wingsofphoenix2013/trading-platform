@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 import math
 import os
+import json
 
 # Импорты индикаторов (расширяются по мере добавления)
 # ---------------------------
@@ -29,10 +30,6 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 REDIS_INDICATOR_PREFIX = os.getenv('REDIS_INDICATOR_PREFIX', 'indicators')
 REDIS_CHANNEL_INDICATORS = os.getenv('REDIS_CHANNEL_INDICATORS', None)
-
-# Таймфреймы, по которым будут считаться индикаторы
-TIMEFRAMES = ['M1', 'M5', 'M15']
-
 
 # 1. Главная точка входа
 async def main():
@@ -51,38 +48,36 @@ async def main():
     )
     print("[Redis] Подключение к Redis установлено", flush=True)
 
+    # Подписка на канал публикации свечей M5
+    pubsub = redis.pubsub()
+    await pubsub.subscribe("ohlcv_m5_complete")
+    print("[Sub] Подписка на канал ohlcv_m5_complete активна", flush=True)
+
+    # Получаем активные тикеры и сохраняем precision в словарь
     async with pg_pool.acquire() as conn:
-        # Получаем активные тикеры
         rows = await conn.fetch("SELECT symbol, precision_price FROM tickers WHERE status = 'enabled'")
-        tickers = [dict(r) for r in rows]
+        precision_map = {r['symbol']: r['precision_price'] for r in rows}
 
-    print(f"[INFO] Найдено активных тикеров: {len(tickers)}", flush=True)
+    # Цикл обработки сообщений
+    async for message in pubsub.listen():
+        if message['type'] != 'message':
+            continue
 
-    await process_all(pg_pool, redis, tickers)
+        try:
+            data = json.loads(message['data'].decode())
+            symbol = data['symbol']
+            tf = 'M5'
 
-    print("[DONE] Завершено", flush=True)
+            precision = precision_map.get(symbol)
+            if precision is None:
+                print(f"[WARN] Неизвестный символ {symbol} — пропущен", flush=True)
+                continue
 
+            print(f"[TRIGGER] Получено событие окончания M5 для {symbol}", flush=True)
+            await process_ema(pg_pool, redis, symbol, tf, precision)
 
-# 2. Обработка всех тикеров по всем таймфреймам
-async def process_all(pg_pool, redis, tickers):
-    for tf in TIMEFRAMES:
-        for ticker in tickers:
-            await process_ticker(tf, ticker, pg_pool, redis)
-
-
-# 3. Обработка одного тикера по одному таймфрейму
-async def process_ticker(tf, ticker, pg_pool, redis):
-    symbol = ticker['symbol']
-    precision = ticker['precision_price']
-    print(f"[LOOP] Расчёт для {symbol} / {tf}", flush=True)
-
-    # Вызовы всех индикаторов для данного тикера и таймфрейма
-    # ---------------------------
-    try:
-        await process_ema(pg_pool, redis, symbol, tf, precision)
-    except Exception as e:
-        print(f"[ERROR] Ошибка в EMA для {symbol}/{tf}: {e}", flush=True)
-    # ---------------------------
+        except Exception as e:
+            print(f"[ERROR] Ошибка при обработке события: {e}", flush=True)
 
 
 if __name__ == '__main__':
