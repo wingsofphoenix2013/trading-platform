@@ -20,7 +20,7 @@ async def process_ema(pg_pool, redis, symbol, tf, precision):
             SELECT open_time, close FROM {table_name}
             WHERE symbol = $1
             ORDER BY open_time ASC
-            LIMIT 300
+            LIMIT 1000
             """,
             symbol
         )
@@ -33,20 +33,23 @@ async def process_ema(pg_pool, redis, symbol, tf, precision):
     df['close'] = df['close'].astype(float)
     df['open_time'] = pd.to_datetime(df['open_time'])
 
+    print(f"[EMA] Последние 10 значений close для {symbol} / {tf}:", df['close'].tail(10).tolist(), flush=True)
+
     # Вычисление EMA
     results = []
     for length in [50, 100, 200]:
         df[f'ema_{length}'] = df['close'].ewm(span=length, adjust=False).mean()
 
         for index, row in df.iterrows():
-            value = safe_round(row[f'ema_{length}'], precision)
+            raw_val = row[f'ema_{length}']
+            value = safe_round(raw_val, precision)
             results.append((row['open_time'], f"ema{length}", value))
 
             # Публикация в Redis — только последнее значение
             if index == df.index[-1]:
                 redis_key = f"{symbol}:{tf}:EMA:{length}"
                 await redis.set(redis_key, value)
-                print(f"[Redis] {redis_key} → {value}", flush=True)
+                print(f"[Redis] {redis_key} → {value} (raw={raw_val})", flush=True)
 
     # Запись в БД
     async with pg_pool.acquire() as conn:
