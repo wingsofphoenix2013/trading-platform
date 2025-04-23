@@ -9,10 +9,7 @@ from datetime import datetime
 
 # --- Блок импорта стратегий вставлять тут ---
 import vilarso_m5_flex
-import vilarso_m5_fulltp
 import lx_m5_strict
-import vl_m5_strict
-import vl_m5_fulltp
 # --- Блок импорта стратегий вставлять тут ---
 
 # --- Конфигурация окружения ---
@@ -79,16 +76,7 @@ async def handle_signal(signal_log_id: int):
             await vilarso_m5_flex.process_signal(signal_log_id)
 
         elif strategy_name == "lx_m5_strict":
-            await lx_m5_strict.process_signal(signal_log_id)
-            
-        elif strategy_name == "vl_m5_strict":
-            await vl_m5_strict.process_signal(signal_log_id)
-            
-        elif strategy_name == "vilarso_m5_fulltp":
-            await vilarso_m5_fulltp.process_signal(signal_log_id) 
-            
-        elif strategy_name == "vl_m5_fulltp":
-            await vl_m5_fulltp.process_signal(signal_log_id)        
+            await lx_m5_strict.process_signal(signal_log_id)  
             
         else:
             print(f"[strategies_main] Стратегия '{strategy_name}' пока не поддерживается", flush=True)
