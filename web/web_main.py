@@ -727,3 +727,28 @@ async def toggle_enabled(strategy_id: int):
 
     await conn.close()
     return JSONResponse(content={"ok": True})
+    
+# 25. Переключение архивации стратегии (если стратегия отключена)
+@app.post("/strategies/{strategy_id}/toggle-archive")
+async def toggle_archive(strategy_id: int):
+    conn = await get_db()
+
+    enabled = await conn.fetchval("""
+        SELECT enabled FROM strategies WHERE id = $1
+    """, strategy_id)
+
+    if enabled:
+        await conn.close()
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Сначала отключите стратегию перед архивированием."}
+        )
+
+    await conn.execute("""
+        UPDATE strategies
+        SET archived = NOT archived
+        WHERE id = $1
+    """, strategy_id)
+
+    await conn.close()
+    return JSONResponse(content={"ok": True})    
