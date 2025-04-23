@@ -689,3 +689,30 @@ async def view_strategy(strategy_id: int, request: Request, period: str = "today
             "roi": f"{roi:.4f}%" if roi is not None else "n/a",
         }
     })
+# 24. Переключение enabled для стратегии (если нет открытых позиций)
+@app.post("/strategies/{strategy_id}/toggle-enabled")
+async def toggle_enabled(strategy_id: int):
+    conn = await get_db()
+
+    # Проверка: есть ли открытые позиции
+    open_count = await conn.fetchval("""
+        SELECT COUNT(*) FROM positions
+        WHERE strategy_id = $1 AND status = 'open'
+    """, strategy_id)
+
+    if open_count > 0:
+        await conn.close()
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Невозможно выключить стратегию с открытыми позициями."}
+        )
+
+    # Переключаем enabled
+    await conn.execute("""
+        UPDATE strategies
+        SET enabled = NOT enabled
+        WHERE id = $1
+    """, strategy_id)
+
+    await conn.close()
+    return JSONResponse(content={"ok": True})    
