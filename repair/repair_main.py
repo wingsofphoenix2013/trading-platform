@@ -1,7 +1,9 @@
 import os
 import asyncpg
 import asyncio
-from datetime import datetime
+import aiohttp
+import json
+from datetime import datetime, timedelta
 
 # Проверка на пропуски M1-свечей по тикеру
 def detect_gaps(rows):
@@ -14,6 +16,39 @@ def detect_gaps(rows):
             gaps.append((prev, curr, int(delta)))
     return gaps
 
+# Запрос недостающих свечей у Binance
+async def fetch_klines(symbol, start_time, end_time):
+    url = "https://fapi.binance.com/fapi/v1/klines"
+    params = {
+        "symbol": symbol,
+        "interval": "1m",
+        "startTime": int(start_time.timestamp() * 1000),
+        "endTime": int(end_time.timestamp() * 1000),
+        "limit": 1000
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, params=params) as resp:
+            if resp.status != 200:
+                print(f"[ERROR] Binance API для {symbol}: {resp.status}", flush=True)
+                return []
+            data = await resp.json()
+            return data
+
+# Вставка свечей в базу
+async def insert_klines(conn, symbol, klines):
+    inserted = 0
+    for k in klines:
+        open_time = datetime.fromtimestamp(k[0] / 1000)
+        try:
+            await conn.execute("""
+                INSERT INTO ohlcv_m1 (symbol, open_time, open, high, low, close, volume)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (symbol, open_time) DO NOTHING
+            """, symbol, open_time, k[1], k[2], k[3], k[4], k[5])
+            inserted += 1
+        except Exception as e:
+            print(f"[ERROR] Вставка свечи {symbol} @ {open_time}: {e}", flush=True)
+    print(f"[DB] {symbol}: вставлено {inserted} свечей", flush=True)
 
 async def check_symbol(conn, symbol):
     print(f"[CHECK] {symbol}: проверка на пропуски...", flush=True)
@@ -34,9 +69,13 @@ async def check_symbol(conn, symbol):
         print(f"[GAPS] {symbol}: найдено {len(gaps)} разрывов", flush=True)
         for prev, curr, delta in gaps:
             print(f"  ⛔ {symbol} | {prev} → {curr} = {delta} сек", flush=True)
+
+            # Запрос и вставка недостающих свечей
+            print(f"[API] Запрос свечей {symbol} @ {prev + timedelta(minutes=1)} → {curr}", flush=True)
+            klines = await fetch_klines(symbol, prev + timedelta(minutes=1), curr)
+            await insert_klines(conn, symbol, klines)
     else:
         print(f"[OK] {symbol}: без пропусков", flush=True)
-
 
 async def main():
     db_url = os.getenv("DATABASE_URL")
