@@ -26,7 +26,7 @@ async def process_ema(pg_pool, redis, symbol, tf, precision):
             f"""
             SELECT open_time, close FROM {table_name}
             WHERE symbol = $1
-            ORDER BY open_time ASC
+            ORDER BY open_time DESC
             LIMIT 1000
             """,
             symbol
@@ -37,6 +37,7 @@ async def process_ema(pg_pool, redis, symbol, tf, precision):
         return
 
     df = pd.DataFrame(rows, columns=['open_time', 'close'])
+    df = df[::-1]  # Переводим в хронологический порядок
     df['close'] = df['close'].astype(float)
     df['open_time'] = pd.to_datetime(df['open_time'])
 
