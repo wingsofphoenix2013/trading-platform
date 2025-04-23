@@ -23,7 +23,40 @@
         <p><strong>Управляющий сигнал:</strong> {{ signal_name }}</p>
         <p><strong>Включена:</strong> {{ "Да" if strategy.enabled else "Нет" }}</p>
         <p><strong>Режим тикеров:</strong> {{ "Все" if strategy.use_all_tickers else "Выборочно" }}</p>
+<div class="submit-row" style="display: flex; gap: 1rem; margin: 1.5rem 0;">
+    <!-- Включить / Выключить -->
+    <button
+        onclick="toggleStrategy('{{ strategy.id }}')"
+        style="background-color: {{ 'red' if strategy.enabled else 'green' }}; color: white; padding: 0.5rem 1rem; border-radius: 6px; border: none;">
+        {{ 'Выключить' if strategy.enabled else 'Включить' }}
+    </button>
 
+    <!-- Пауза -->
+    <button
+        onclick="togglePause('{{ strategy.id }}')"
+        style="background-color: {{ 'red' if not strategy.allow_open else 'green' }}; color: white; padding: 0.5rem 1rem; border-radius: 6px; border: none;">
+        {{ 'На паузе' if not strategy.allow_open else 'Включить паузу' }}
+    </button>
+
+    <!-- Архив -->
+    <button
+        onclick="toggleArchive('{{ strategy.id }}')"
+        style="background-color: {{ 'red' if strategy.archived else '#cccccc' }}; color: white; padding: 0.5rem 1rem; border-radius: 6px; border: none;"
+        {% if strategy.enabled %} disabled {% endif %}>
+        {{ 'Архив вкл.' if strategy.archived else 'Архив выкл.' }}
+    </button>
+
+    <!-- Аварийная остановка -->
+    <button
+        onclick="emergencyStop('{{ strategy.id }}')"
+        style="background-color: red; color: white; padding: 0.5rem 1rem; border-radius: 6px; border: none;">
+        Аварийная остановка
+    </button>
+
+    <!-- Редактировать -->
+    <a href="/strategies/{{ strategy.id }}/edit"
+   style="background-color: #007bff; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; border: none;">Редактировать</a>
+</div>
         <h2 class="title">Открытые сделки</h2>
         {% if open_positions %}
         <table>
@@ -126,5 +159,34 @@
 {% endif %}
         <p class="submit-row"><a href="/strategies">← Назад к списку стратегий</a></p>
     </div>
+<script>
+async function toggleStrategy(id) {
+    const hasOpen = {{ open_positions|length > 0 | lower }};
+    if (hasOpen) {
+        alert("У стратегии есть открытые позиции. Для отключения используйте 'Пауза' или 'Аварийную остановку'.");
+        return;
+    }
+    await fetch(`/strategies/${id}/toggle-enabled`, { method: 'POST' });
+    location.reload();
+}
+
+async function togglePause(id) {
+    await fetch(`/strategies/${id}/toggle-pause`, { method: 'POST' });
+    location.reload();
+}
+
+async function toggleArchive(id) {
+    await fetch(`/strategies/${id}/toggle-archive`, { method: 'POST' });
+    location.reload();
+}
+
+async function emergencyStop(id) {
+    const confirmed = confirm("Вы уверены, что хотите немедленно закрыть все открытые позиции?");
+    if (confirmed) {
+        await fetch(`/strategies/${id}/emergency-stop`, { method: 'POST' });
+        location.reload();
+    }
+}
+</script>    
 </body>
 </html>
