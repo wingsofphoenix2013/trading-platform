@@ -55,7 +55,7 @@ async def main():
 
     # Получаем активные тикеры и сохраняем precision в словарь
     async with pg_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT symbol, precision_price FROM tickers WHERE status = 'enabled'")
+        rows = await conn.fetch("SELECT symbol, precision_price FROM tickers WHERE status = 'enabled' ORDER BY symbol")
         precision_map = {r['symbol']: r['precision_price'] for r in rows}
 
     # Цикл обработки сообщений
@@ -74,7 +74,15 @@ async def main():
                 continue
 
             print(f"[TRIGGER] Получено событие окончания M5 для {symbol}", flush=True)
-            await process_ema(pg_pool, redis, symbol, tf, precision)
+
+            # Вызовы всех индикаторов для данного тикера и таймфрейма
+            # ---------------------------
+            await asyncio.sleep(2)  # Ждём, чтобы свеча точно успела записаться в базу
+            try:
+                await process_ema(pg_pool, redis, symbol, tf, precision)
+            except Exception as e:
+                print(f"[ERROR] Ошибка в EMA для {symbol}/{tf}: {e}", flush=True)
+            # ---------------------------
 
         except Exception as e:
             print(f"[ERROR] Ошибка при обработке события: {e}", flush=True)
