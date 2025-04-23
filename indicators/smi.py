@@ -44,7 +44,7 @@ async def process_smi(pg_pool, redis, symbol, tf, precision):
 
     df = pd.DataFrame(rows, columns=['open_time', 'high', 'low', 'close'])
     df = df[::-1]
-    df.reset_index(drop=True, inplace=True)  # Переводим в хронологический порядок
+    df.reset_index(drop=True, inplace=True)
     df[['high', 'low', 'close']] = df[['high', 'low', 'close']].astype(float)
     df['open_time'] = pd.to_datetime(df['open_time'])
 
@@ -58,18 +58,22 @@ async def process_smi(pg_pool, redis, symbol, tf, precision):
     smi_raw = 200 * (double_ema(rel, d) / double_ema(range_, d))
     smi_signal = smi_raw.ewm(span=s, adjust=False).mean()
 
+    # Отладка: показать последние свечи, участвующие в расчёте финального значения
+    used_window = k + 2 * d
+    print(f"[SMI DEBUG] Последние {used_window} свечей, использованных в расчёте:", flush=True)
+    print(df.iloc[-used_window:][['open_time', 'high', 'low', 'close']], flush=True)
+
     results = []
     for i in range(len(df)):
         if pd.isna(smi_raw[i]) or pd.isna(smi_signal[i]):
             continue
         ts = df.iloc[i]['open_time']
-        print(f"[SMI DEBUG] {symbol}/{tf} {ts}: smi={smi_raw[i]:.6f} signal={smi_signal[i]:.6f}", flush=True)
         results.append((symbol, tf, ts, 'SMI', 'smi', safe_round(smi_raw[i], precision)))
         results.append((symbol, tf, ts, 'SMI', 'smi_signal', safe_round(smi_signal[i], precision)))
 
     # Публикация последних значений в Redis
     if results:
-        last = results[-2:]  # последние smi и smi_signal
+        last = results[-2:]
         for r in last:
             redis_key = f"{symbol}:{tf}:{r[3]}:{r[4]}"
             await redis.set(redis_key, r[5])
