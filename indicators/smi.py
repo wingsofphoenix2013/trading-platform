@@ -34,7 +34,7 @@ async def process_smi(pg_pool, redis, symbol, tf, precision):
             FROM {table_name}
             WHERE symbol = $1
             ORDER BY open_time DESC
-            LIMIT 1000
+            LIMIT 250
             """,
             symbol
         )

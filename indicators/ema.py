@@ -18,7 +18,6 @@ def manual_ema(prices, length):
 
 # 3. Основная функция расчёта EMA
 async def process_ema(pg_pool, redis, symbol, tf, precision):
-    print(f"[EMA] Расчёт завершён для {symbol} / {tf}", flush=True)
     table_name = f"ohlcv_{tf.lower()}"
     async with pg_pool.acquire() as conn:
         rows = await conn.fetch(
@@ -26,7 +25,7 @@ async def process_ema(pg_pool, redis, symbol, tf, precision):
             SELECT open_time, close FROM {table_name}
             WHERE symbol = $1
             ORDER BY open_time DESC
-            LIMIT 1000
+            LIMIT 250
             """,
             symbol
         )
@@ -66,3 +65,5 @@ async def process_ema(pg_pool, redis, symbol, tf, precision):
             """,
             [(symbol, tf, ts, param, val) for ts, param, val in results]
         )
+
+    print(f"[EMA] Расчёт завершён для {symbol} / {tf}", flush=True)
