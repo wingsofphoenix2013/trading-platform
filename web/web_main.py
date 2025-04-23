@@ -492,23 +492,34 @@ async def indicators_ema_view(request: Request, tf: str = 'M1'):
     data = []
     for row in tickers:
         symbol = row["symbol"]
-        values = await conn.fetch("""
-            SELECT param_name, value, MAX(updated_at) AS updated
+        raw = await conn.fetch(
+            """
+            SELECT param_name, value, updated_at
             FROM indicator_values
             WHERE symbol = $1 AND timeframe = $2 AND indicator = 'EMA'
-            GROUP BY param_name
-        """, symbol, tf)
+            ORDER BY param_name, updated_at DESC
+            """,
+            symbol, tf
+        )
 
-        vals = {v["param_name"]: v["value"] for v in values}
-        updated_at = max([v["updated"] for v in values]) if values else None
+        seen = set()
+        latest = {}
+        updated = None
+        for r in raw:
+            name = r["param_name"]
+            if name not in seen:
+                latest[name] = r["value"]
+                seen.add(name)
+                if updated is None or r["updated_at"] > updated:
+                    updated = r["updated_at"]
 
         data.append({
             "symbol": symbol,
             "tf": tf,
-            "ema50": vals.get("ema50"),
-            "ema100": vals.get("ema100"),
-            "ema200": vals.get("ema200"),
-            "updated_at": updated_at,
+            "ema50": latest.get("ema50"),
+            "ema100": latest.get("ema100"),
+            "ema200": latest.get("ema200"),
+            "updated_at": updated if latest else None,
         })
 
     await conn.close()
@@ -518,6 +529,7 @@ async def indicators_ema_view(request: Request, tf: str = 'M1'):
         "data": data,
         "tf": tf
     })
+
 # 23. Просмотр стратегии по ID (GET)
 # Загружает стратегию, управляющий сигнал, открытые и закрытые позиции, метрики и историю сделок
 
