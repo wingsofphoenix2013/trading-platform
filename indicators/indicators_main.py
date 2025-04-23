@@ -12,6 +12,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from decimal import Decimal
 import math
+import os
 
 # Импорты индикаторов (расширяются по мере добавления)
 # ---------------------------
@@ -20,9 +21,11 @@ from ema import process_ema  # EMA 50/100/200
 # from lr import process_lr
 # ---------------------------
 
-# Подключение к PostgreSQL и Redis
-DATABASE_URL = 'postgresql://user:password@localhost:5432/dbname'
-REDIS_URL = 'redis://localhost'
+# Подключение к PostgreSQL и Redis (через переменные окружения)
+DATABASE_URL = os.getenv('DATABASE_URL')
+REDIS_URL = os.getenv('REDIS_URL')
+REDIS_INDICATOR_PREFIX = os.getenv('REDIS_INDICATOR_PREFIX', 'indicators')
+REDIS_CHANNEL_INDICATORS = os.getenv('REDIS_CHANNEL_INDICATORS', None)
 
 # Таймфреймы, по которым будут считаться индикаторы
 TIMEFRAMES = ['M1', 'M5', 'M15']
