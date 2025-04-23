@@ -172,6 +172,14 @@ async def process_signal(log_id: int):
         if not strategy_params:
             await update_signal_log(log_id, "error", "strategy not found")
             return
+            
+        # Проверка: запрещено открытие новых позиций (но позволено закрывать старые)
+        if not strategy_params.get("allow_open", True):
+            existing_position = await get_open_position(strategy_id, symbol)
+            if not existing_position:
+                print(f"[STRATEGY] Открытие запрещено (allow_open = false) — сигнал игнорируется", flush=True)
+                await update_signal_log(log_id, "ignored_by_check", "allow_open = false")
+                return
 
         conn = await get_pg_connection()
         total_open = float(await conn.fetchval("""
