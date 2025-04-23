@@ -483,6 +483,7 @@ async def update_strategy(
 
     await conn.close()
     return RedirectResponse(url="/strategies", status_code=303)
+    
 # 19. Страница индикаторов EMA с выбором таймфрейма
 @app.get("/indicators", response_class=HTMLResponse)
 async def indicators_ema_view(request: Request, tf: str = 'M1'):
@@ -494,10 +495,10 @@ async def indicators_ema_view(request: Request, tf: str = 'M1'):
         symbol = row["symbol"]
         raw = await conn.fetch(
             """
-            SELECT param_name, value, updated_at
+            SELECT param_name, value, open_time
             FROM indicator_values
             WHERE symbol = $1 AND timeframe = $2 AND indicator = 'EMA'
-            ORDER BY param_name, updated_at DESC
+            ORDER BY param_name, open_time DESC
             """,
             symbol, tf
         )
@@ -510,8 +511,8 @@ async def indicators_ema_view(request: Request, tf: str = 'M1'):
             if name not in seen:
                 latest[name] = r["value"]
                 seen.add(name)
-                if updated is None or r["updated_at"] > updated:
-                    updated = r["updated_at"]
+                if updated is None or r["open_time"] > updated:
+                    updated = r["open_time"]
 
         data.append({
             "symbol": symbol,
