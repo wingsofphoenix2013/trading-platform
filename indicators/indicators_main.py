@@ -23,7 +23,10 @@ from ema import process_ema  # EMA 50/100/200
 
 # Подключение к PostgreSQL и Redis (через переменные окружения)
 DATABASE_URL = os.getenv('DATABASE_URL')
-REDIS_URL = os.getenv('REDIS_URL')
+
+REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 REDIS_INDICATOR_PREFIX = os.getenv('REDIS_INDICATOR_PREFIX', 'indicators')
 REDIS_CHANNEL_INDICATORS = os.getenv('REDIS_CHANNEL_INDICATORS', None)
 
@@ -40,7 +43,12 @@ async def main():
     print("[DB] Подключение к PostgreSQL установлено", flush=True)
 
     # Подключение к Redis
-    redis = aioredis.from_url(REDIS_URL)
+    redis = aioredis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        password=REDIS_PASSWORD,
+        ssl=True
+    )
     print("[Redis] Подключение к Redis установлено", flush=True)
 
     async with pg_pool.acquire() as conn:
