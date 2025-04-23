@@ -483,52 +483,82 @@ async def update_strategy(
 
     await conn.close()
     return RedirectResponse(url="/strategies", status_code=303)
-    
-# 19. Страница индикаторов EMA с выбором таймфрейма
+# 19. Страница индикаторов с выбором типа и таймфрейма
 @app.get("/indicators", response_class=HTMLResponse)
-async def indicators_ema_view(request: Request, tf: str = 'M1'):
+async def indicators_view(request: Request, tf: str = 'M1', type: str = 'ema'):
     conn = await get_db()
     tickers = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled' ORDER BY symbol")
 
     data = []
     for row in tickers:
         symbol = row["symbol"]
-        raw = await conn.fetch(
-            """
-            SELECT param_name, value, open_time
-            FROM indicator_values
-            WHERE symbol = $1 AND timeframe = $2 AND indicator = 'EMA'
-            ORDER BY param_name, open_time DESC
-            """,
-            symbol, tf
-        )
 
-        seen = set()
-        latest = {}
-        updated = None
-        for r in raw:
-            name = r["param_name"]
-            if name not in seen:
-                latest[name] = r["value"]
-                seen.add(name)
-                if updated is None or r["open_time"] > updated:
-                    updated = r["open_time"]
+        if type == 'ema':
+            raw = await conn.fetch(
+                """
+                SELECT param_name, value, open_time
+                FROM indicator_values
+                WHERE symbol = $1 AND timeframe = $2 AND indicator = 'EMA'
+                ORDER BY param_name, open_time DESC
+                """,
+                symbol, tf
+            )
+            seen = set()
+            latest = {}
+            updated = None
+            for r in raw:
+                name = r["param_name"]
+                if name not in seen:
+                    latest[name] = r["value"]
+                    seen.add(name)
+                    if updated is None or r["open_time"] > updated:
+                        updated = r["open_time"]
 
-        data.append({
-            "symbol": symbol,
-            "tf": tf,
-            "ema50": latest.get("ema50"),
-            "ema100": latest.get("ema100"),
-            "ema200": latest.get("ema200"),
-            "updated_at": updated if latest else None,
-        })
+            data.append({
+                "symbol": symbol,
+                "tf": tf,
+                "ema50": latest.get("ema50"),
+                "ema100": latest.get("ema100"),
+                "ema200": latest.get("ema200"),
+                "updated_at": updated if latest else None,
+            })
+
+        elif type == 'smi':
+            raw = await conn.fetch(
+                """
+                SELECT param_name, value, open_time
+                FROM indicator_values
+                WHERE symbol = $1 AND timeframe = $2 AND indicator = 'SMI'
+                ORDER BY param_name, open_time DESC
+                """,
+                symbol, tf
+            )
+            seen = set()
+            latest = {}
+            updated = None
+            for r in raw:
+                name = r["param_name"]
+                if name not in seen:
+                    latest[name] = r["value"]
+                    seen.add(name)
+                    if updated is None or r["open_time"] > updated:
+                        updated = r["open_time"]
+
+            data.append({
+                "symbol": symbol,
+                "tf": tf,
+                "smi": latest.get("smi"),
+                "smi_signal": latest.get("smi_signal"),
+                "updated_at": updated if latest else None,
+            })
 
     await conn.close()
 
     return templates.TemplateResponse("ticker_indicators.html", {
         "request": request,
         "data": data,
-        "tf": tf
+        "tf": tf,
+        "type": type
     })
 
 # 23. Просмотр стратегии по ID (GET)

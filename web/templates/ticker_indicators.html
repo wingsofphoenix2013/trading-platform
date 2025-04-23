@@ -9,6 +9,7 @@
         .button-row { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
         .btn { padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; }
         .btn.active { background-color: red; color: white; }
+        .btn.available { background-color: green; color: white; }
         .btn.inactive { background-color: #ccc; color: white; }
         select { padding: 0.5rem; border-radius: 6px; margin-left: 1rem; }
         table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
@@ -22,8 +23,8 @@
 
         <!-- Ряд кнопок индикаторов -->
         <div class="button-row">
-            <a href="/indicators?type=ema" class="btn active">EMA</a>
-            <a href="#" class="btn inactive">SMI</a>
+            <a href="/indicators?type=ema&tf={{ tf }}" class="btn {% if type == 'ema' %}active{% else %}available{% endif %}">EMA</a>
+            <a href="/indicators?type=smi&tf={{ tf }}" class="btn {% if type == 'smi' %}active{% else %}available{% endif %}">SMI</a>
             <a href="#" class="btn inactive">RSI</a>
             <a href="#" class="btn inactive">MACD</a>
             <a href="#" class="btn inactive">LR</a>
@@ -31,7 +32,7 @@
 
             <!-- Выпадающий выбор TF -->
             <form method="get" action="/indicators" style="margin-left:auto;">
-                <input type="hidden" name="type" value="ema">
+                <input type="hidden" name="type" value="{{ type }}">
                 <select name="tf" onchange="this.form.submit()">
                     <option value="M1" {% if tf == 'M1' %}selected{% endif %}>M1</option>
                     <option value="M5" {% if tf == 'M5' %}selected{% endif %}>M5</option>
@@ -40,6 +41,7 @@
             </form>
         </div>
 
+        {% if type == 'ema' %}
         <!-- Таблица значений EMA -->
         <table>
             <thead>
@@ -67,6 +69,33 @@
                 {% endfor %}
             </tbody>
         </table>
+        {% elif type == 'smi' %}
+        <!-- Таблица значений SMI -->
+        <table>
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>Тикер</th>
+                    <th>TF</th>
+                    <th>SMI</th>
+                    <th>SMI Signal</th>
+                    <th>Дата обновления</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ row.symbol }}</td>
+                    <td>{{ row.tf }}</td>
+                    <td>{{ row.smi or 'n/a' }}</td>
+                    <td>{{ row.smi_signal or 'n/a' }}</td>
+                    <td>{{ row.updated_at or 'n/a' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
     </div>
 </body>
 </html>
