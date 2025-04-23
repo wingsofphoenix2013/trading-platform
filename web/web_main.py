@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import JSONResponse
+from decimal import Decimal
 import asyncpg
 import redis.asyncio as redis
 import os
