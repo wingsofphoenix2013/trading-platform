@@ -62,6 +62,7 @@ async def process_smi(pg_pool, redis, symbol, tf, precision):
         if pd.isna(smi_raw[i]) or pd.isna(smi_signal[i]):
             continue
         ts = df.iloc[i]['open_time']
+        print(f"[SMI DEBUG] {symbol}/{tf} {ts}: smi={smi_raw[i]:.6f} signal={smi_signal[i]:.6f}", flush=True)
         results.append((symbol, tf, ts, 'SMI', 'smi', safe_round(smi_raw[i], precision)))
         results.append((symbol, tf, ts, 'SMI', 'smi_signal', safe_round(smi_signal[i], precision)))
 
