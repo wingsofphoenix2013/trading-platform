@@ -752,4 +752,89 @@ async def toggle_archive(strategy_id: int):
     """, strategy_id)
 
     await conn.close()
-    return JSONResponse(content={"ok": True})    
+    return JSONResponse(content={"ok": True})
+# 26. Аварийная остановка: закрывает все открытые позиции и отключает стратегию
+@app.post("/strategies/{strategy_id}/emergency-stop")
+async def emergency_stop(strategy_id: int):
+    conn = await get_db()
+
+    # Получаем все открытые позиции по стратегии
+    open_positions = await conn.fetch("""
+        SELECT id, symbol, direction, entry_price, quantity, precision_price
+        FROM positions
+        JOIN tickers ON positions.symbol = tickers.symbol
+        WHERE strategy_id = $1 AND status = 'open'
+    """, strategy_id)
+
+    if not open_positions:
+        await conn.execute("""
+            UPDATE strategies
+            SET enabled = false
+            WHERE id = $1
+        """, strategy_id)
+        await conn.close()
+        return JSONResponse(content={"ok": True, "note": "No open positions found, strategy disabled."})
+
+    # Подключаемся к Redis
+    import redis.asyncio as redis_lib
+    import os
+    r = redis_lib.Redis(
+        host=os.getenv("REDIS_HOST"),
+        port=int(os.getenv("REDIS_PORT", 6379)),
+        password=os.getenv("REDIS_PASSWORD"),
+        ssl=True
+    )
+
+    for pos in open_positions:
+        position_id = pos["id"]
+        symbol = pos["symbol"]
+        direction = pos["direction"]
+        entry_price = Decimal(pos["entry_price"])
+        quantity = Decimal(pos["quantity"])
+        precision_price = int(pos["precision_price"])
+
+        # Получаем цену из Redis
+        price_raw = await r.get(f"price:{symbol}")
+        if not price_raw:
+            continue  # пропускаем, если нет цены
+
+        current_price = Decimal(price_raw.decode()).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+
+        # Расчёт PnL
+        notional_value = (entry_price * quantity).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+        commission = (notional_value * Decimal("0.04") / 100).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+
+        if direction == "long":
+            pnl = ((current_price - entry_price) * quantity - commission).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+        else:
+            pnl = ((entry_price - current_price) * quantity - commission).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+
+        # Закрываем позицию
+        await conn.execute("""
+            UPDATE positions
+            SET
+                status = 'closed',
+                exit_price = $1,
+                closed_at = NOW(),
+                close_reason = 'emergency',
+                pnl = $2,
+                quantity_left = 0
+            WHERE id = $3
+        """, current_price, pnl, position_id)
+
+        # Отменяем все цели
+        await conn.execute("""
+            UPDATE position_targets
+            SET hit = false, hit_at = NULL, canceled = true
+            WHERE position_id = $1 AND hit = false AND canceled = false
+        """, position_id)
+
+    # Отключаем стратегию
+    await conn.execute("""
+        UPDATE strategies
+        SET enabled = false
+        WHERE id = $1
+    """, strategy_id)
+
+    await conn.close()
+    return JSONResponse(content={"ok": True, "note": "Emergency stop executed. All open positions closed."})        
