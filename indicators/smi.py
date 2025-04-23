@@ -58,11 +58,6 @@ async def process_smi(pg_pool, redis, symbol, tf, precision):
     smi_raw = 200 * (double_ema(rel, d) / double_ema(range_, d))
     smi_signal = smi_raw.ewm(span=s, adjust=False).mean()
 
-    # Отладка: показать последние свечи, участвующие в расчёте финального значения
-    used_window = k + 2 * d
-    print(f"[SMI DEBUG] Последние {used_window} свечей, использованных в расчёте:", flush=True)
-    print(df.iloc[-used_window:][['open_time', 'high', 'low', 'close']], flush=True)
-
     results = []
     for i in range(len(df)):
         if pd.isna(smi_raw[i]) or pd.isna(smi_signal[i]):
