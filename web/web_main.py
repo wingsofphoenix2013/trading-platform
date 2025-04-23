@@ -483,118 +483,40 @@ async def update_strategy(
 
     await conn.close()
     return RedirectResponse(url="/strategies", status_code=303)
-# 19. Страница параметров индикаторов по тикеру
+# 19. Страница индикаторов EMA с выбором таймфрейма
 @app.get("/indicators", response_class=HTMLResponse)
-async def indicators_main_page(request: Request, symbol: str = None):
+async def indicators_ema_view(request: Request, tf: str = 'M1'):
     conn = await get_db()
-    rows = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled' ORDER BY symbol ASC")
-    await conn.close()
-    symbols = [row["symbol"] for row in rows]
+    tickers = await conn.fetch("SELECT symbol FROM tickers WHERE status = 'enabled' ORDER BY symbol")
 
-    selected_symbol = symbol or (symbols[0] if symbols else None)
-    indicator_data = {}
+    data = []
+    for row in tickers:
+        symbol = row["symbol"]
+        values = await conn.fetch("""
+            SELECT param_name, value, MAX(updated_at) AS updated
+            FROM indicator_values
+            WHERE symbol = $1 AND timeframe = $2 AND indicator = 'EMA'
+            GROUP BY param_name
+        """, symbol, tf)
 
-    if selected_symbol:
-        key = f"indicators:{selected_symbol}"
-        raw = await r.get(key)
-        if raw:
-            try:
-                indicator_data = json.loads(raw)
-            except Exception as e:
-                print(f"[ERROR] Failed to parse Redis JSON for {selected_symbol}: {e}", flush=True)
+        vals = {v["param_name"]: v["value"] for v in values}
+        updated_at = max([v["updated"] for v in values]) if values else None
 
-    return templates.TemplateResponse("ticker_param.html", {
-        "request": request,
-        "tickers": symbols,
-        "selected_symbol": selected_symbol,
-        "indicators": indicator_data
-    })
-# 20. Страница настройки параметров индикаторов
-@app.get("/indicators/settings", response_class=HTMLResponse)
-async def indicators_param_page(request: Request):
-    db_url = os.getenv("DATABASE_URL")
-    try:
-        conn = await asyncpg.connect(dsn=db_url)
-        rows = await conn.fetch("SELECT indicator, param, value FROM indicator_settings")
-        await conn.close()
-    except Exception as e:
-        print(f"[ERROR] Failed to load indicator settings: {e}", flush=True)
-        rows = []
+        data.append({
+            "symbol": symbol,
+            "tf": tf,
+            "ema50": vals.get("ema50"),
+            "ema100": vals.get("ema100"),
+            "ema200": vals.get("ema200"),
+            "updated_at": updated_at,
+        })
 
-    settings = {}
-    for row in rows:
-        ind = row["indicator"]
-        param = row["param"]
-        value = row["value"]
-        if ind not in settings:
-            settings[ind] = {}
-        try:
-            value = float(value)
-            if value.is_integer():
-                value = int(value)
-        except:
-            pass
-        settings[ind][param] = value
-
-    return templates.TemplateResponse("indicators_param.html", {
-        "request": request,
-        "settings": settings
-    }) 
-# 21. Обновление параметров индикаторов
-@app.post("/indicators/settings", response_class=HTMLResponse)
-async def update_indicator_settings(
-    request: Request,
-    rsi_period: int = Form(...),
-    smi_k: int = Form(...),
-    smi_d: int = Form(...),
-    smi_s: int = Form(...),
-    atr_period: int = Form(...),
-    lr_length: int = Form(...),
-    lr_angle_up: float = Form(...),
-    lr_angle_down: float = Form(...)
-):
-    values = {
-        "rsi": {"period": rsi_period},
-        "smi": {"k": smi_k, "d": smi_d, "s": smi_s},
-        "atr": {"period": atr_period},
-        "lr": {
-            "length": lr_length,
-            "angle_up": lr_angle_up,
-            "angle_down": lr_angle_down
-        }
-    }
-
-    conn = await get_db()
-    for indicator, params in values.items():
-        for param, value in params.items():
-            await conn.execute("""
-                INSERT INTO indicator_settings (indicator, param, value)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (indicator, param)
-                DO UPDATE SET value = EXCLUDED.value
-            """, indicator, param, str(value))
-    await conn.close()
-
-    return RedirectResponse("/indicators/settings", status_code=303)
-# 22. Страница всех индикаторов по тикерам
-@app.get("/indicators/all", response_class=HTMLResponse)
-async def all_indicators_page(request: Request):
-    conn = await get_db()
-    rows = await conn.fetch("""
-        SELECT symbol, rsi, smi, smi_signal, atr,
-               lr_angle, lr_trend, lr_mid, lr_upper, lr_lower
-        FROM ohlcv_m5
-        WHERE complete = true
-        AND open_time = (
-            SELECT MAX(open_time) FROM ohlcv_m5 o2 WHERE o2.symbol = ohlcv_m5.symbol
-        )
-        ORDER BY symbol
-    """)
     await conn.close()
 
     return templates.TemplateResponse("ticker_indicators.html", {
         "request": request,
-        "indicators": rows
+        "data": data,
+        "tf": tf
     })
 # 23. Просмотр стратегии по ID (GET)
 # Загружает стратегию, управляющий сигнал, открытые и закрытые позиции, метрики и историю сделок
