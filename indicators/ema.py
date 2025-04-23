@@ -8,8 +8,15 @@ from decimal import Decimal, ROUND_HALF_UP
 def safe_round(value, digits):
     return float(Decimal(value).quantize(Decimal('1.' + '0' * digits), rounding=ROUND_HALF_UP))
 
+# 2. Расчёт EMA вручную через SMA-старт
+def manual_ema(prices, length):
+    alpha = 2 / (length + 1)
+    ema = [sum(prices[:length]) / length]  # стартовое значение = SMA
+    for price in prices[length:]:
+        ema.append(alpha * price + (1 - alpha) * ema[-1])
+    return [None] * (length - 1) + ema  # добавим None в начало, чтобы длина совпадала
 
-# 2. Основная функция расчёта EMA
+# 3. Основная функция расчёта EMA
 async def process_ema(pg_pool, redis, symbol, tf, precision):
     print(f"[EMA] Начинаем расчёт EMA для {symbol} / {tf}", flush=True)
 
@@ -34,24 +41,27 @@ async def process_ema(pg_pool, redis, symbol, tf, precision):
     df['open_time'] = pd.to_datetime(df['open_time'])
 
     print(f"[EMA] Последние 10 значений close для {symbol} / {tf}:", df['close'].tail(10).tolist(), flush=True)
+    print(f"[EMA] Последний bar для {symbol}/{tf}: {df.iloc[-1]['open_time']}", flush=True)
 
-    # Вычисление EMA
     results = []
+    prices = df['close'].tolist()
+
     for length in [50, 100, 200]:
-        df[f'ema_{length}'] = df['close'].ewm(span=length, adjust=False).mean()
+        ema_series = manual_ema(prices, length)
+        df[f'ema_{length}'] = ema_series
 
         for index, row in df.iterrows():
             raw_val = row[f'ema_{length}']
+            if raw_val is None:
+                continue
             value = safe_round(raw_val, precision)
             results.append((row['open_time'], f"ema{length}", value))
 
-            # Публикация в Redis — только последнее значение
             if index == df.index[-1]:
                 redis_key = f"{symbol}:{tf}:EMA:{length}"
                 await redis.set(redis_key, value)
                 print(f"[Redis] {redis_key} → {value} (raw={raw_val})", flush=True)
 
-    # Запись в БД
     async with pg_pool.acquire() as conn:
         await conn.executemany(
             """
