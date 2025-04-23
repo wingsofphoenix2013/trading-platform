@@ -50,6 +50,16 @@ async def process_ema(pg_pool, redis, symbol, tf, precision):
         ema_series = manual_ema(prices, length)
         df[f'ema_{length}'] = ema_series
 
+        # Вывод последних значений EMA для сравнения
+        if length == 50:
+            print("[EMA] Последние 30 значений EMA50:")
+            for i in range(-30, 0):
+                if i + len(df) < 0: continue
+                ts = df.iloc[i]['open_time']
+                cl = df.iloc[i]['close']
+                ev = df.iloc[i]['ema_50']
+                print(f"  {ts} | close={cl:.4f} | ema50={ev:.4f}", flush=True)
+
         for index, row in df.iterrows():
             raw_val = row[f'ema_{length}']
             if raw_val is None:
