@@ -33,9 +33,12 @@ async def root(request: Request):
     await conn.close()
     return templates.TemplateResponse("base.html", {"request": request, "ticker_count": count})
 
+# 3. Список всех тикеров со статусами
 @app.get("/tickers", response_class=HTMLResponse)
 async def list_tickers(request: Request, symbol: str = None, tf: str = "M5"):
     if symbol:
+        tf = tf or "M5"  # если tf не передан — подставить по умолчанию
+
         # Страница конкретного тикера
         redis_key = f"indicators_live:{symbol}:{tf}"
         smi = smi_signal = "n/a"
