@@ -25,14 +25,14 @@ async def start_aggregator(redis, pg_pool):
             until_str = data["until"]
             until_dt = datetime.fromisoformat(until_str)
 
-            await aggregate_candles(pg_pool, symbol, interval, until_dt)
+            await aggregate_candles(pg_pool, redis, symbol, interval, until_dt)
 
         except Exception as e:
             print(f"[ERROR] Ошибка в start_aggregator: {e}", flush=True)
 
 
 # 2. Агрегация свечей M1 в OHLCV для указанного интервала
-async def aggregate_candles(pg_pool, symbol, interval, until_time):
+async def aggregate_candles(pg_pool, redis, symbol, interval, until_time):
     interval_map = {
         "m5": 5,
         "m15": 15,
@@ -89,3 +89,17 @@ async def aggregate_candles(pg_pool, symbol, interval, until_time):
         )
 
         print(f"[AGGREGATOR] Агрегация {interval} готова для {symbol} @ {until_time}", flush=True)
+
+        # Публикация готовности интервала
+        channel = f"ohlcv_{interval}_ready"
+        message = {
+            "action": "aggregate_ready",
+            "symbol": symbol,
+            "interval": interval,
+            "open_time": start_time.isoformat()
+        }
+        try:
+            await redis.publish(channel, json.dumps(message))
+            print(f"[REDIS] Published to {channel}: {message}", flush=True)
+        except Exception as e:
+            print(f"[ERROR] Ошибка публикации в Redis: {e}", flush=True)
