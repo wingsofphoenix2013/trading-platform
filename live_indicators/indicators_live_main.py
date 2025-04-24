@@ -57,7 +57,7 @@ async def load_last_n_bars(pg_pool, symbol: str, tf: str, limit: int = 100) -> p
 
 # 5. Синхронизация тикеров и инициализация кэша
 async def sync_active_symbols(pg_pool):
-    query = "SELECT symbol FROM tickers WHERE enabled = true"
+    query = "SELECT symbol FROM tickers WHERE status = 'enabled'"
     try:
         rows = await pg_pool.fetch(query)
         symbols = [r["symbol"] for r in rows]
