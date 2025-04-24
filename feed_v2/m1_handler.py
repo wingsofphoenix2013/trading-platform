@@ -5,7 +5,7 @@
 import asyncio
 import websockets
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Глобальный словарь активных потоков по тикерам
 active_tickers = {}
@@ -53,7 +53,6 @@ async def save_m1_candle(pg_pool, redis, symbol, kline):
             "stream"
         )
 
-    # Публикация события
     await safe_publish(redis, "ohlcv_m1_ready", {
         "action": "m1_ready",
         "symbol": symbol,
@@ -100,6 +99,7 @@ async def start_all_m1_streams(redis, pg_pool):
 
     asyncio.create_task(redis_listener(redis, pg_pool))
     asyncio.create_task(watch_new_tickers(pg_pool, redis))
+    asyncio.create_task(check_missing_m1(pg_pool))
 
 
 # 6. Устойчивый Redis listener: восстанавливает соединение при обрыве
@@ -140,3 +140,32 @@ async def watch_new_tickers(pg_pool, redis):
             print(f"[ERROR] Ошибка при проверке тикеров из БД: {e}", flush=True)
 
         await asyncio.sleep(300)  # каждые 5 минут
+
+
+# 8. Контроль пропущенных свечей и запись в missing_m1_log
+async def check_missing_m1(pg_pool):
+    while True:
+        try:
+            target_time = datetime.utcnow().replace(second=0, microsecond=0) - timedelta(minutes=1)
+            async with pg_pool.acquire() as conn:
+                for symbol in active_tickers:
+                    row = await conn.fetchrow(
+                        "SELECT 1 FROM ohlcv2_m1 WHERE symbol = $1 AND open_time = $2",
+                        symbol,
+                        target_time
+                    )
+                    if row is None:
+                        await conn.execute(
+                            """
+                            INSERT INTO missing_m1_log (symbol, open_time)
+                            VALUES ($1, $2)
+                            ON CONFLICT DO NOTHING
+                            """,
+                            symbol,
+                            target_time
+                        )
+                        print(f"[MISSING] Не найдена свеча M1: {symbol} @ {target_time}", flush=True)
+        except Exception as e:
+            print(f"[ERROR] Ошибка в check_missing_m1: {e}", flush=True)
+
+        await asyncio.sleep(60)  # раз в минуту
