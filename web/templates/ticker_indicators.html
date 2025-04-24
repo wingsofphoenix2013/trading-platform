@@ -26,7 +26,7 @@
             <a href="/indicators?type=ema&tf={{ tf }}" class="btn {% if type == 'ema' %}active{% else %}available{% endif %}">EMA</a>
             <a href="/indicators?type=smi&tf={{ tf }}" class="btn {% if type == 'smi' %}active{% else %}available{% endif %}">SMI</a>
             <a href="/indicators?type=rsi&tf={{ tf }}" class="btn {% if type == 'rsi' %}active{% else %}available{% endif %}">RSI</a>
-            <a href="#" class="btn inactive">MACD</a>
+            <a href="/indicators?type=macd&tf={{ tf }}" class="btn {% if type == 'macd' %}active{% else %}available{% endif %}">MACD</a>
             <a href="#" class="btn inactive">LR</a>
             <a href="/indicators?type=atr&tf={{ tf }}" class="btn {% if type == 'atr' %}active{% else %}available{% endif %}">ATR</a>
 
@@ -138,6 +138,32 @@
                     <td>{{ row.symbol }}</td>
                     <td>{{ row.tf }}</td>
                     <td>{{ row.rsi or 'n/a' }}</td>
+                    <td>{{ row.updated_at or 'n/a' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% elif type == 'macd' %}
+        <!-- Таблица значений MACD -->
+        <table>
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>Тикер</th>
+                    <th>TF</th>
+                    <th>MACD</th>
+                    <th>Signal</th>
+                    <th>Дата обновления</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ row.symbol }}</td>
+                    <td>{{ row.tf }}</td>
+                    <td>{{ row.macd or 'n/a' }}</td>
+                    <td>{{ row.macd_signal or 'n/a' }}</td>
                     <td>{{ row.updated_at or 'n/a' }}</td>
                 </tr>
                 {% endfor %}
