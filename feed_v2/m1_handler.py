@@ -5,6 +5,7 @@
 import asyncio
 import websockets
 import json
+import aiohttp
 from datetime import datetime, timedelta
 
 # Глобальный словарь активных потоков по тикерам
@@ -50,7 +51,7 @@ async def save_m1_candle(pg_pool, redis, symbol, kline):
             kline["l"],
             kline["c"],
             kline["v"],
-            "stream"
+            "api" if kline.get("source") == "api" else "stream"
         )
 
     await safe_publish(redis, "ohlcv_m1_ready", {
@@ -100,6 +101,7 @@ async def start_all_m1_streams(redis, pg_pool):
     asyncio.create_task(redis_listener(redis, pg_pool))
     asyncio.create_task(watch_new_tickers(pg_pool, redis))
     asyncio.create_task(check_missing_m1(pg_pool))
+    asyncio.create_task(repair_missing_m1(pg_pool, redis))
 
 
 # 6. Устойчивый Redis listener: восстанавливает соединение при обрыве
@@ -139,7 +141,7 @@ async def watch_new_tickers(pg_pool, redis):
         except Exception as e:
             print(f"[ERROR] Ошибка при проверке тикеров из БД: {e}", flush=True)
 
-        await asyncio.sleep(300)  # каждые 5 минут
+        await asyncio.sleep(300)
 
 
 # 8. Контроль пропущенных свечей и запись в missing_m1_log
@@ -168,4 +170,53 @@ async def check_missing_m1(pg_pool):
         except Exception as e:
             print(f"[ERROR] Ошибка в check_missing_m1: {e}", flush=True)
 
-        await asyncio.sleep(60)  # раз в минуту
+        await asyncio.sleep(60)
+
+
+# 9. Автоматическое восстановление пропущенных свечей через Binance API
+async def repair_missing_m1(pg_pool, redis):
+    while True:
+        try:
+            async with pg_pool.acquire() as conn:
+                rows = await conn.fetch("SELECT symbol, open_time FROM missing_m1_log WHERE fixed = false ORDER BY open_time ASC LIMIT 10")
+                for row in rows:
+                    symbol = row["symbol"]
+                    open_time = row["open_time"]
+                    start_ts = int(open_time.timestamp() * 1000)
+                    end_ts = start_ts + 60_000 - 1
+
+                    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval=1m&startTime={start_ts}&endTime={end_ts}"
+
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(url) as resp:
+                            if resp.status != 200:
+                                print(f"[REPAIR] Ошибка ответа от Binance для {symbol}: {resp.status}", flush=True)
+                                continue
+                            data = await resp.json()
+                            if not data:
+                                print(f"[REPAIR] Binance вернул пусто для {symbol} @ {open_time}", flush=True)
+                                continue
+
+                            k = data[0]  # одна свеча
+                            kline = {
+                                "t": k[0],
+                                "o": k[1],
+                                "h": k[2],
+                                "l": k[3],
+                                "c": k[4],
+                                "v": k[5],
+                                "x": True,
+                                "source": "api"
+                            }
+
+                            await save_m1_candle(pg_pool, redis, symbol, kline)
+                            await conn.execute(
+                                "UPDATE missing_m1_log SET fixed = true, fixed_at = now() WHERE symbol = $1 AND open_time = $2",
+                                symbol,
+                                open_time
+                            )
+                            print(f"[REPAIR] Свеча восстановлена: {symbol} @ {open_time}", flush=True)
+        except Exception as e:
+            print(f"[ERROR] Ошибка в repair_missing_m1: {e}", flush=True)
+
+        await asyncio.sleep(30)
