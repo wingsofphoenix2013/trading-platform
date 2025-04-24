@@ -634,7 +634,8 @@ async def indicators_view(request: Request, tf: str = 'M1', type: str = 'ema'):
                 "macd_signal": latest.get("macd_signal"),
                 "updated_at": updated if latest else None,
             })
-                elif type == 'lr':
+        
+        elif type == 'lr':
             raw = await conn.fetch(
                 """
                 SELECT param_name, value, open_time
