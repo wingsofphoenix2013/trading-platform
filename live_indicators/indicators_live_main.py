@@ -22,18 +22,18 @@ ohlcv_cache = {}  # структура: {symbol: {tf: DataFrame}}
 smi_params = {}   # структура: {(symbol, tf): (k, d, s)}
 
 # 3. Загрузка параметров SMI из indicator_settings
-async def load_smi_params(pg_pool, symbol: str, tf: str) -> tuple[int, int, int]:
+async def load_smi_params(pg_pool, symbol: str) -> tuple[int, int, int]:
     query = """
         SELECT param, value
         FROM indicator_settings
-        WHERE indicator = 'smi' AND symbol = $1 AND timeframe = $2
+        WHERE indicator = 'smi' AND symbol = $1
     """
     try:
-        rows = await pg_pool.fetch(query, symbol, tf)
-        params = {row["param"]: int(row["value"]) for row in rows}
+        rows = await pg_pool.fetch(query, symbol)
+        params = {row['param']: int(row['value']) for row in rows}
         return params["k"], params["d"], params["s"]
     except Exception as e:
-        print(f"[ERROR] Не удалось загрузить параметры SMI для {symbol}/{tf}: {e}", flush=True)
+        print(f"[ERROR] Не удалось загрузить параметры SMI для {symbol}: {e}", flush=True)
         return 13, 5, 3
 
 # 4. Загрузка последних N баров из базы
@@ -68,7 +68,7 @@ async def sync_active_symbols(pg_pool):
             for tf in tfs:
                 if tf in ohlcv_cache[symbol]:
                     continue
-                k, d, s = await load_smi_params(pg_pool, symbol, tf)
+                k, d, s = await load_smi_params(pg_pool, symbol)
                 bars_needed = k + d + s + 10
                 df = await load_last_n_bars(pg_pool, symbol, tf, bars_needed)
                 if not df.empty:
