@@ -7,6 +7,7 @@ import asyncpg
 import redis.asyncio as aioredis
 import os
 from m1_handler import start_all_m1_streams
+from aggregator import start_aggregator
 
 # 1. Инициализация переменных окружения
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -40,8 +41,11 @@ async def main():
 
         # 2.3 Запуск подписки на тикеры и WebSocket-потоков
         await start_all_m1_streams(redis, pg_pool)
+        
+        # 2.4 Запуск агрегатора
+        asyncio.create_task(start_aggregator(redis, pg_pool))
 
-        # 2.4 Ожидание завершения (держим основной процесс живым)
+        # 2.5 Ожидание завершения (держим основной процесс живым)
         await asyncio.Event().wait()
 
     finally:
