@@ -164,7 +164,13 @@
                     <td>{{ row.lr_lower or 'n/a' }}</td>
                     <td>{{ row.lr_mid or 'n/a' }}</td>
                     <td>{{ row.lr_angle or 'n/a' }}</td>
-                    <td>{{ row.lr_trend or 'n/a' }}</td>
+                    <td>{% if row.lr_trend is not none %}
+    				{% if row.lr_trend == 1 %}up
+    				{% elif row.lr_trend == -1 %}down
+    				{% else %}flat
+    				{% endif %}
+  					{% else %}n/a{% endif %}
+					</td>
                     <td>{{ row.updated_at or 'n/a' }}</td>
                 </tr>
                 {% endfor %}
