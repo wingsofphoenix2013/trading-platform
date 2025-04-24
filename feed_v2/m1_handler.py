@@ -58,23 +58,29 @@ async def start_all_m1_streams(redis, pg_pool):
     asyncio.create_task(watch_new_tickers(pg_pool))
 
 
-# 4. Слушает Redis-канал ticker_activation и активирует новые тикеры
+# 4. Устойчивый Redis listener: восстанавливает соединение при обрыве
 async def redis_listener(redis):
-    pubsub = redis.pubsub()
-    await pubsub.subscribe("ticker_activation")
-    print("[REDIS] Подписка на ticker_activation активна", flush=True)
-
-    async for message in pubsub.listen():
-        if message["type"] != "message":
-            continue
+    while True:
         try:
-            data = json.loads(message["data"])
-            if data.get("action") == "activate":
-                symbol = data.get("symbol", "").upper()
-                if symbol:
-                    await subscribe_m1_kline(symbol)
+            pubsub = redis.pubsub()
+            await pubsub.subscribe("ticker_activation")
+            print("[REDIS] Подписка на ticker_activation активна", flush=True)
+
+            async for message in pubsub.listen():
+                if message["type"] != "message":
+                    continue
+                try:
+                    data = json.loads(message["data"])
+                    if data.get("action") == "activate":
+                        symbol = data.get("symbol", "").upper()
+                        if symbol:
+                            await subscribe_m1_kline(symbol)
+                except Exception as e:
+                    print(f"[ERROR] Ошибка разбора сообщения Redis: {e}", flush=True)
+
         except Exception as e:
-            print(f"[ERROR] Ошибка разбора сообщения Redis: {e}", flush=True)
+            print(f"[ERROR] Redis listener упал, переподключение через 5 сек: {e}", flush=True)
+            await asyncio.sleep(5)
 
 
 # 5. Периодическая проверка на новые тикеры из БД (на случай пропуска Redis-сообщения)
