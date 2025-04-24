@@ -132,8 +132,8 @@
                     <td>{{ loop.index }}</td>
                     <td>{{ row.symbol }}</td>
                     <td>{{ row.tf }}</td>
-                    <td>{{ row.macd or 'n/a' }}</td>
-                    <td>{{ row.macd_signal or 'n/a' }}</td>
+                    <td>{{ "%.6f"|format(row.macd) if row.macd is not none else 'n/a' }}</td>
+                    <td>{{ "%.6f"|format(row.macd_signal) if row.macd_signal is not none else 'n/a' }}</td>
                     <td>{{ row.updated_at or 'n/a' }}</td>
                 </tr>
                 {% endfor %}
