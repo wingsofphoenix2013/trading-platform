@@ -17,18 +17,17 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 # 2. Основная точка входа
 async def main():
     print("[INIT] feed_v2_main стартует", flush=True)
-    await asyncio.sleep(2)  # небольшой стартовый лаг
+    await asyncio.sleep(2)
 
-    # 2.1 Подключение к PostgreSQL
+    pg_pool = None
+    redis = None
+
     try:
+        # 2.1 Подключение к PostgreSQL
         pg_pool = await asyncpg.create_pool(DATABASE_URL)
         print("[PG] Подключение к PostgreSQL установлено", flush=True)
-    except Exception as e:
-        print(f"[ERROR] Ошибка подключения к PostgreSQL: {e}", flush=True)
-        return
 
-    # 2.2 Подключение к Redis
-    try:
+        # 2.2 Подключение к Redis
         redis = aioredis.Redis(
             host=REDIS_HOST,
             port=REDIS_PORT,
@@ -37,11 +36,15 @@ async def main():
         )
         await redis.ping()
         print("[Redis] Подключение к Redis установлено", flush=True)
-    except Exception as e:
-        print(f"[ERROR] Ошибка подключения к Redis: {e}", flush=True)
-        return
 
-    # (на этом этапе никаких компонентов ещё не запускается)
+        # (на этом этапе никаких компонентов ещё не запускается)
+
+    finally:
+        if redis:
+            await redis.close()
+        if pg_pool:
+            await pg_pool.close()
+        print("[CLOSE] Соединения закрыты", flush=True)
 
 
 # 3. Точка входа в асинхронный цикл
