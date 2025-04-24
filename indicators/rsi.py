@@ -55,7 +55,7 @@ async def process_rsi(pg_pool, redis, symbol, tf, precision):
         if pd.isna(rsi_series[i]):
             continue
         ts = df.iloc[i]['open_time']
-        results.append((symbol, tf, ts, 'RSI', 'rsi', safe_round(rsi_series[i], precision)))
+        results.append((symbol, tf, ts, 'RSI', 'rsi', safe_round(rsi_series[i], 2)))
 
     if results:
         last = results[-1]
