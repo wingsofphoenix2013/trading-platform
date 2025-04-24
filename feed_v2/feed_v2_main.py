@@ -41,7 +41,7 @@ async def main():
 
     finally:
         if redis:
-            await redis.close()
+            await redis.aclose()
         if pg_pool:
             await pg_pool.close()
         print("[CLOSE] Соединения закрыты", flush=True)
