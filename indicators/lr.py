@@ -80,7 +80,7 @@ async def process_lr(pg_pool, redis, symbol, tf, precision):
         (symbol, tf, latest_ts, 'LR', 'lr_lower', lower_val),
         (symbol, tf, latest_ts, 'LR', 'lr_mid', mid_val),
         (symbol, tf, latest_ts, 'LR', 'lr_angle', angle_val),
-        (symbol, tf, latest_ts, 'LR', 'lr_trend', trend)
+        (symbol, tf, latest_ts, 'LR', 'lr_trend', 1 if trend == 'up' else -1 if trend == 'down' else 0),
     ]
 
     for r in results:
