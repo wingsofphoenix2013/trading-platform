@@ -37,12 +37,48 @@ async def root(request: Request):
 @app.get("/tickers", response_class=HTMLResponse)
 async def list_tickers(request: Request):
     conn = await get_db()
-    rows = await conn.fetch("SELECT * FROM tickers ORDER BY created_at DESC")
-    count = await conn.fetchval("SELECT COUNT(*) FROM tickers")
+    rows = await conn.fetch("SELECT symbol, status, tradepermission FROM tickers ORDER BY created_at DESC")
     await conn.close()
-    return templates.TemplateResponse("tickers.html", {"request": request, "tickers": rows, "ticker_count": count})
+    return templates.TemplateResponse("tickers.html", {
+        "request": request,
+        "tickers": rows
+    })
 
-# 4. Отображение формы создания тикера (popup)
+# 4. Активация тикера (уже реализовано)
+@app.post("/tickers/{symbol}/activate")
+async def activate_ticker(symbol: str):
+    await r.publish("ticker_activation", f'{{"symbol": "{symbol.upper()}", "action": "activate"}}')
+    conn = await get_db()
+    await conn.execute("UPDATE tickers SET status = 'enabled' WHERE symbol = $1", symbol.upper())
+    await conn.close()
+    return RedirectResponse(url="/tickers", status_code=303)
+
+# 5. Деактивация тикера
+@app.post("/tickers/{symbol}/deactivate")
+async def deactivate_ticker(symbol: str):
+    await r.publish("ticker_activation", f'{{"symbol": "{symbol.upper()}", "action": "deactivate"}}')
+    conn = await get_db()
+    await conn.execute("UPDATE tickers SET status = 'disabled' WHERE symbol = $1", symbol.upper())
+    await conn.close()
+    return RedirectResponse(url="/tickers", status_code=303)
+
+# 6. Включение торговли
+@app.post("/tickers/{symbol}/enable-trade")
+async def enable_trade(symbol: str):
+    conn = await get_db()
+    await conn.execute("UPDATE tickers SET tradepermission = 'enabled' WHERE symbol = $1", symbol.upper())
+    await conn.close()
+    return RedirectResponse(url="/tickers", status_code=303)
+
+# 7. Выключение торговли
+@app.post("/tickers/{symbol}/disable-trade")
+async def disable_trade(symbol: str):
+    conn = await get_db()
+    await conn.execute("UPDATE tickers SET tradepermission = 'disabled' WHERE symbol = $1", symbol.upper())
+    await conn.close()
+    return RedirectResponse(url="/tickers", status_code=303)
+    
+# СТАРОЕ. Отображение формы создания тикера (popup)
 @app.get("/tickers/new", response_class=HTMLResponse)
 async def new_ticker_form(request: Request):
     conn = await get_db()
@@ -50,7 +86,7 @@ async def new_ticker_form(request: Request):
     await conn.close()
     return templates.TemplateResponse("ticker_form.html", {"request": request, "ticker_count": count})
 
-# 5. Детали тикера
+# СТАРОЕ. Детали тикера
 @app.get("/tickers/{symbol}", response_class=HTMLResponse)
 async def ticker_detail(symbol: str, request: Request):
     conn = await get_db()
@@ -61,7 +97,7 @@ async def ticker_detail(symbol: str, request: Request):
         return templates.TemplateResponse("ticker_detail.html", {"request": request, "ticker": row, "strategies": [], "ticker_count": count})
     return HTMLResponse("Тикер не найден", status_code=404)
 
-# 6. Создание нового тикера
+# СТАРОЕ. Создание нового тикера
 @app.post("/tickers")
 async def create_ticker(
     request: Request,
@@ -78,15 +114,6 @@ async def create_ticker(
     """, symbol.upper(), precision_price, precision_qty, min_qty)
     await conn.close()
     return templates.TemplateResponse("ticker_success.html", {"request": request})
-
-# 7. Активация тикера (через Redis)
-@app.post("/tickers/{symbol}/activate")
-async def activate_ticker(symbol: str):
-    await r.publish("ticker_activation", f'{{"symbol": "{symbol.upper()}", "action": "activate"}}')
-    conn = await get_db()
-    await conn.execute("UPDATE tickers SET status = 'enabled' WHERE symbol = $1", symbol.upper())
-    await conn.close()
-    return RedirectResponse(url="/tickers", status_code=303)
     
 # 8. Список всех сигналов
 @app.get("/signals", response_class=HTMLResponse)

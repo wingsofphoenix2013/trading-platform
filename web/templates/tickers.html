@@ -1,73 +1,70 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="container">
-  <!-- Первый ряд с кнопками -->
-  <div class="row" style="align-items: center;">
-    <div class="w-50"><a href="/" class="button">← Назад</a></div>
-    <div class="w-50" style="text-align: right;">
-      <button class="button" onclick="openTickerPopup()">Добавить тикер</button>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тикеры</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; background: #f8f9fa; }
+        .card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 900px; margin: auto; }
+        .title { font-size: 1.5rem; font-weight: bold; margin-bottom: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; }
+        .btn.red { background-color: red; color: white; }
+        .btn.green { background-color: green; color: white; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #ddd; text-align: center; }
+        th { background: #f1f1f1; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1 class="title">Тикеры</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>Тикер</th>
+                    <th>Статус</th>
+                    <th></th>
+                    <th>Торговля</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in tickers %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><a href="/tickers?symbol={{ row.symbol }}">{{ row.symbol }}</a></td>
+                    <td>
+                        {% if row.status == 'enabled' %}
+                            <span style="color: green; font-weight: bold">Вкл.</span>
+                        {% else %}
+                            <span style="color: red; font-weight: bold">Выкл.</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" action="/tickers/{{ row.symbol }}/{{ 'deactivate' if row.status == 'enabled' else 'activate' }}">
+                            <button class="btn {{ 'red' if row.status == 'enabled' else 'green' }}">
+                                {{ 'Выключить' if row.status == 'enabled' else 'Включить' }}
+                            </button>
+                        </form>
+                    </td>
+                    <td>
+                        {% if row.tradepermission == 'enabled' %}
+                            <span style="color: green; font-weight: bold">Вкл.</span>
+                        {% else %}
+                            <span style="color: red; font-weight: bold">Выкл.</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" action="/tickers/{{ row.symbol }}/{{ 'disable-trade' if row.tradepermission == 'enabled' else 'enable-trade' }}">
+                            <button class="btn {{ 'red' if row.tradepermission == 'enabled' else 'green' }}">
+                                {{ 'Выключить' if row.tradepermission == 'enabled' else 'Включить' }}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
-  </div>
-
-  <!-- Второй ряд с таблицей -->
-  <div class="row">
-    <div class="widget w-100">
-      <h2><i class="fas fa-table icon"></i> Информация по тикерам</h2>
-      <table class="data-table" style="width: 100%; border-collapse: collapse;">
-        <thead>
-          <tr>
-            <th>Название</th>
-            <th>Курс</th>
-            <th style="background-color: #eef1f4;">Winrate 24h</th>
-            <th style="background-color: #eef1f4;">ROI 24h</th>
-            <th style="background-color: #dce1e6;">Winrate 7d</th>
-            <th style="background-color: #dce1e6;">ROI 7d</th>
-            <th>Статус</th>
-            <th>Управление</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for t in tickers %}
-          <tr>
-            <td><a href="/tickers/{{ t.symbol }}">{{ t.symbol }}</a></td>
-            <td>{{ t.price if t.price else 'n/a' }} <span style="color: green;">▲</span></td>
-            <td style="background-color: #eef1f4;">{{ t.winrate_24h if t.winrate_24h else 'n/a' }}</td>
-            <td style="background-color: #eef1f4;">{{ t.roi_24h if t.roi_24h else 'n/a' }}</td>
-            <td style="background-color: #dce1e6;">{{ t.winrate_7d if t.winrate_7d else 'n/a' }}</td>
-            <td style="background-color: #dce1e6;">{{ t.roi_7d if t.roi_7d else 'n/a' }}</td>
-            <td><span style="color: orange;">●</span></td>
-            <td>
-              <button class="button" onclick="toggleStatus(this)" data-symbol="{{ t.symbol }}">Включить</button>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-<script>
-function toggleStatus(btn) {
-  const symbol = btn.dataset.symbol;
-  const isActive = btn.textContent.trim() === 'Выключить';
-  const newText = isActive ? 'Включить' : 'Выключить';
-
-  fetch(`/tickers/${symbol}/activate`, {
-    method: 'POST'
-  }).then(res => {
-    if (res.ok) {
-      btn.textContent = newText;
-      btn.style.backgroundColor = isActive ? '#e0e0e0' : '#cce5ff';
-    } else {
-      alert("Ошибка при активации тикера");
-    }
-  }).catch(() => {
-    alert("Ошибка соединения с сервером");
-  });
-}
-
-function openTickerPopup() {
-  window.open("/tickers/new", "new_ticker", "width=600,height=520,scrollbars=no,resizable=no,toolbar=no,menubar=no,status=no");
-}
-</script>
-{% endblock %}
+</body>
+</html>
