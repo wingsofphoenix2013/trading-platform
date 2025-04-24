@@ -579,6 +579,33 @@ async def indicators_view(request: Request, tf: str = 'M1', type: str = 'ema'):
                     "updated_at": None
                 })
 
+        elif type == 'rsi':
+            raw = await conn.fetch(
+                """
+                SELECT value, open_time
+                FROM indicator_values
+                WHERE symbol = $1 AND timeframe = $2 AND indicator = 'RSI' AND param_name = 'rsi'
+                ORDER BY open_time DESC
+                LIMIT 1
+                """,
+                symbol, tf
+            )
+            if raw:
+                r = raw[0]
+                data.append({
+                    "symbol": symbol,
+                    "tf": tf,
+                    "rsi": r["value"],
+                    "updated_at": r["open_time"]
+                })
+            else:
+                data.append({
+                    "symbol": symbol,
+                    "tf": tf,
+                    "rsi": None,
+                    "updated_at": None
+                })
+
     await conn.close()
 
     return templates.TemplateResponse("ticker_indicators.html", {

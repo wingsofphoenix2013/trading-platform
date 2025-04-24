@@ -18,6 +18,7 @@ import json
 from ema import process_ema
 from smi import process_smi
 from atr import process_atr
+from rsi import process_rsi
 
 # Подключение к PostgreSQL и Redis (через переменные окружения)
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -56,6 +57,7 @@ async def process_ticker(tf, ticker, pg_pool, redis):
         await process_ema(pg_pool, redis, symbol, tf, precision)
         await process_smi(pg_pool, redis, symbol, tf, precision)
         await process_atr(pg_pool, redis, symbol, tf, precision)
+        await process_rsi(pg_pool, redis, symbol, tf, precision)
     except Exception as e:
         print(f"[ERROR] Ошибка в расчёте индикаторов для {symbol}/{tf}: {e}", flush=True)
 
