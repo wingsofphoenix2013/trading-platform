@@ -37,7 +37,7 @@ async def root(request: Request):
 @app.get("/tickers", response_class=HTMLResponse)
 async def list_tickers(request: Request):
     conn = await get_db()
-    rows = await conn.fetch("SELECT symbol, status, tradepermission FROM tickers ORDER BY created_at DESC")
+    rows = await conn.fetch("SELECT symbol, status, tradepermission FROM tickers ORDER BY symbol ASC")
     await conn.close()
     return templates.TemplateResponse("tickers.html", {
         "request": request,
