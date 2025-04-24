@@ -41,6 +41,9 @@ async def main():
         # 2.3 Запуск подписки на тикеры и WebSocket-потоков
         await start_all_m1_streams(redis, pg_pool)
 
+        # 2.4 Ожидание завершения (держим основной процесс живым)
+        await asyncio.Event().wait()
+
     finally:
         if redis:
             await redis.aclose()
