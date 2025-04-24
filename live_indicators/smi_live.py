@@ -1,39 +1,33 @@
 # smi_live.py
-# Расчёт индикатора SMI в live-режиме на основе DataFrame с виртуальной свечой
+# Расчёт индикатора SMI по формуле TradingView (Pine Script совместимость)
 
 import pandas as pd
 import numpy as np
 
-# 1. Расчёт SMI
+# 1. Расчёт SMI (TV-совместимый)
 # Вход: df (DataFrame с колонками high, low, close), параметры k/d/s
 # Выход: словарь со значениями smi и smi_signal
 async def calculate_smi(df: pd.DataFrame, k: int, d: int, s: int) -> dict:
     try:
-        # Приведение только числовых колонок к float
         df[["high", "low", "close"]] = df[["high", "low", "close"]].astype(float)
 
         high = df['high']
         low = df['low']
         close = df['close']
 
-        # Расчёт midpoints
-        min_low = low.rolling(k).min()
-        max_high = high.rolling(k).max()
-        mid = (min_low + max_high) / 2
-        rel_close = close - mid
-        range_ = max_high - min_low
+        # Формула по аналогии с Pine Script
+        hl = high - low
+        hl_avg = hl.rolling(window=k).mean()
+        mid = (high + low).rolling(window=k).mean() / 2
+        close_diff = close - mid
 
-        # EMA через сглаженное RMA (Wilder's EMA)
-        def rma(series, period):
-            return series.ewm(alpha=1/period, adjust=False).mean()
-
-        rel_ema = rma(rel_close, d)
-        range_ema = rma(range_, d)
+        # EMA-сглаживания (как в TV)
+        rel_ema = close_diff.ewm(span=d, adjust=False).mean()
+        range_ema = hl_avg.ewm(span=d, adjust=False).mean()
 
         smi = 100 * (rel_ema / (range_ema / 2))
-        smi_signal = rma(smi, s)
+        smi_signal = smi.ewm(span=s, adjust=False).mean()
 
-        # Последние значения
         return {
             "smi": round(smi.iloc[-1], 2),
             "smi_signal": round(smi_signal.iloc[-1], 2)
