@@ -634,7 +634,38 @@ async def indicators_view(request: Request, tf: str = 'M1', type: str = 'ema'):
                 "macd_signal": latest.get("macd_signal"),
                 "updated_at": updated if latest else None,
             })
-            
+                elif type == 'lr':
+            raw = await conn.fetch(
+                """
+                SELECT param_name, value, open_time
+                FROM indicator_values
+                WHERE symbol = $1 AND timeframe = $2 AND indicator = 'LR'
+                ORDER BY param_name, open_time DESC
+                """,
+                symbol, tf
+            )
+            seen = set()
+            latest = {}
+            updated = None
+            for r in raw:
+                name = r["param_name"]
+                if name not in seen:
+                    latest[name] = r["value"]
+                    seen.add(name)
+                    if updated is None or r["open_time"] > updated:
+                        updated = r["open_time"]
+
+            data.append({
+                "symbol": symbol,
+                "tf": tf,
+                "lr_upper": latest.get("lr_upper"),
+                "lr_lower": latest.get("lr_lower"),
+                "lr_mid": latest.get("lr_mid"),
+                "lr_angle": latest.get("lr_angle"),
+                "lr_trend": latest.get("lr_trend"),
+                "updated_at": updated if latest else None,
+            })
+                
     await conn.close()
 
     return templates.TemplateResponse("ticker_indicators.html", {

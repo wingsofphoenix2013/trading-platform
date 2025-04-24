@@ -21,16 +21,14 @@
     <div class="card">
         <h1 class="title">Технические индикаторы</h1>
 
-        <!-- Ряд кнопок индикаторов -->
         <div class="button-row">
             <a href="/indicators?type=ema&tf={{ tf }}" class="btn {% if type == 'ema' %}active{% else %}available{% endif %}">EMA</a>
             <a href="/indicators?type=smi&tf={{ tf }}" class="btn {% if type == 'smi' %}active{% else %}available{% endif %}">SMI</a>
             <a href="/indicators?type=rsi&tf={{ tf }}" class="btn {% if type == 'rsi' %}active{% else %}available{% endif %}">RSI</a>
             <a href="/indicators?type=macd&tf={{ tf }}" class="btn {% if type == 'macd' %}active{% else %}available{% endif %}">MACD</a>
-            <a href="#" class="btn inactive">LR</a>
+            <a href="/indicators?type=lr&tf={{ tf }}" class="btn {% if type == 'lr' %}active{% else %}available{% endif %}">LR</a>
             <a href="/indicators?type=atr&tf={{ tf }}" class="btn {% if type == 'atr' %}active{% else %}available{% endif %}">ATR</a>
 
-            <!-- Выпадающий выбор TF -->
             <form method="get" action="/indicators" style="margin-left:auto;">
                 <input type="hidden" name="type" value="{{ type }}">
                 <select name="tf" onchange="this.form.submit()">
@@ -42,7 +40,6 @@
         </div>
 
         {% if type == 'ema' %}
-        <!-- Таблица значений EMA -->
         <table>
             <thead>
                 <tr>
@@ -70,7 +67,6 @@
             </tbody>
         </table>
         {% elif type == 'smi' %}
-        <!-- Таблица значений SMI -->
         <table>
             <thead>
                 <tr>
@@ -95,32 +91,7 @@
                 {% endfor %}
             </tbody>
         </table>
-        {% elif type == 'atr' %}
-        <!-- Таблица значений ATR -->
-        <table>
-            <thead>
-                <tr>
-                    <th>№</th>
-                    <th>Тикер</th>
-                    <th>TF</th>
-                    <th>ATR</th>
-                    <th>Дата обновления</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in data %}
-                <tr>
-                    <td>{{ loop.index }}</td>
-                    <td>{{ row.symbol }}</td>
-                    <td>{{ row.tf }}</td>
-                    <td>{{ row.atr or 'n/a' }}</td>
-                    <td>{{ row.updated_at or 'n/a' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
         {% elif type == 'rsi' %}
-        <!-- Таблица значений RSI -->
         <table>
             <thead>
                 <tr>
@@ -144,7 +115,6 @@
             </tbody>
         </table>
         {% elif type == 'macd' %}
-        <!-- Таблица значений MACD -->
         <table>
             <thead>
                 <tr>
@@ -164,6 +134,60 @@
                     <td>{{ row.tf }}</td>
                     <td>{{ row.macd or 'n/a' }}</td>
                     <td>{{ row.macd_signal or 'n/a' }}</td>
+                    <td>{{ row.updated_at or 'n/a' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% elif type == 'lr' %}
+        <table>
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>Тикер</th>
+                    <th>TF</th>
+                    <th>Upper</th>
+                    <th>Lower</th>
+                    <th>Mid</th>
+                    <th>Angle</th>
+                    <th>Trend</th>
+                    <th>Дата обновления</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ row.symbol }}</td>
+                    <td>{{ row.tf }}</td>
+                    <td>{{ row.lr_upper or 'n/a' }}</td>
+                    <td>{{ row.lr_lower or 'n/a' }}</td>
+                    <td>{{ row.lr_mid or 'n/a' }}</td>
+                    <td>{{ row.lr_angle or 'n/a' }}</td>
+                    <td>{{ row.lr_trend or 'n/a' }}</td>
+                    <td>{{ row.updated_at or 'n/a' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% elif type == 'atr' %}
+        <table>
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>Тикер</th>
+                    <th>TF</th>
+                    <th>ATR</th>
+                    <th>Дата обновления</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ row.symbol }}</td>
+                    <td>{{ row.tf }}</td>
+                    <td>{{ row.atr or 'n/a' }}</td>
                     <td>{{ row.updated_at or 'n/a' }}</td>
                 </tr>
                 {% endfor %}
