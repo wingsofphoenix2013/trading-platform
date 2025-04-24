@@ -6,6 +6,7 @@ import asyncio
 import asyncpg
 import redis.asyncio as aioredis
 import os
+from m1_handler import start_all_m1_streams
 
 # 1. Инициализация переменных окружения
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -37,7 +38,8 @@ async def main():
         await redis.ping()
         print("[Redis] Подключение к Redis установлено", flush=True)
 
-        # (на этом этапе никаких компонентов ещё не запускается)
+        # 2.3 Запуск подписки на тикеры и WebSocket-потоков
+        await start_all_m1_streams(redis, pg_pool)
 
     finally:
         if redis:
