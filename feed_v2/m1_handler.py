@@ -18,8 +18,17 @@ async def get_enabled_tickers(pg_pool):
         return [row["symbol"] for row in rows]
 
 
-# 2. Сохранение M1-свечи в базу данных
-async def save_m1_candle(pg_pool, symbol, kline):
+# 2. Публикация в Redis с защитой от падения
+async def safe_publish(redis, channel, message):
+    try:
+        await redis.publish(channel, json.dumps(message))
+        print(f"[REDIS] Published to {channel}: {message}", flush=True)
+    except Exception as e:
+        print(f"[ERROR] Redis publish failed: {e}", flush=True)
+
+
+# 3. Сохранение M1-свечи в базу данных
+async def save_m1_candle(pg_pool, redis, symbol, kline):
     open_time = datetime.utcfromtimestamp(kline["t"] / 1000)
     async with pg_pool.acquire() as conn:
         await conn.execute(
@@ -44,9 +53,16 @@ async def save_m1_candle(pg_pool, symbol, kline):
             "stream"
         )
 
+    # Публикация события
+    await safe_publish(redis, "ohlcv_m1_ready", {
+        "action": "m1_ready",
+        "symbol": symbol,
+        "open_time": open_time.isoformat()
+    })
 
-# 3. Подключение к WebSocket Binance и логирование закрытых свечей
-async def subscribe_m1_kline(symbol, pg_pool):
+
+# 4. Подключение к WebSocket Binance и логирование закрытых свечей
+async def subscribe_m1_kline(symbol, pg_pool, redis):
     if symbol in active_tickers:
         print(f"[M1] Уже подписан: {symbol}", flush=True)
         return
@@ -63,7 +79,7 @@ async def subscribe_m1_kline(symbol, pg_pool):
                     if kline.get("x"):  # закрытая свеча
                         ts = datetime.utcfromtimestamp(kline["t"] / 1000)
                         print(f"[M1 CANDLE] {symbol} {ts} O:{kline['o']} H:{kline['h']} L:{kline['l']} C:{kline['c']}", flush=True)
-                        await save_m1_candle(pg_pool, symbol, kline)
+                        await save_m1_candle(pg_pool, redis, symbol, kline)
             except websockets.ConnectionClosed:
                 print(f"[M1] Переподключение: {symbol}", flush=True)
                 continue
@@ -75,18 +91,18 @@ async def subscribe_m1_kline(symbol, pg_pool):
     active_tickers[symbol] = task
 
 
-# 4. Запуск всех текущих тикеров + Redis-слушатель + фоновая проверка
+# 5. Запуск всех текущих тикеров + Redis-слушатель + фоновая проверка
 async def start_all_m1_streams(redis, pg_pool):
     symbols = await get_enabled_tickers(pg_pool)
     print(f"[M1] Тикеры из БД: {symbols}", flush=True)
     for symbol in symbols:
-        await subscribe_m1_kline(symbol, pg_pool)
+        await subscribe_m1_kline(symbol, pg_pool, redis)
 
     asyncio.create_task(redis_listener(redis, pg_pool))
-    asyncio.create_task(watch_new_tickers(pg_pool))
+    asyncio.create_task(watch_new_tickers(pg_pool, redis))
 
 
-# 5. Устойчивый Redis listener: восстанавливает соединение при обрыве
+# 6. Устойчивый Redis listener: восстанавливает соединение при обрыве
 async def redis_listener(redis, pg_pool):
     while True:
         try:
@@ -102,7 +118,7 @@ async def redis_listener(redis, pg_pool):
                     if data.get("action") == "activate":
                         symbol = data.get("symbol", "").upper()
                         if symbol:
-                            await subscribe_m1_kline(symbol, pg_pool)
+                            await subscribe_m1_kline(symbol, pg_pool, redis)
                 except Exception as e:
                     print(f"[ERROR] Ошибка разбора сообщения Redis: {e}", flush=True)
 
@@ -111,15 +127,15 @@ async def redis_listener(redis, pg_pool):
             await asyncio.sleep(5)
 
 
-# 6. Периодическая проверка на новые тикеры из БД (на случай пропуска Redis-сообщения)
-async def watch_new_tickers(pg_pool):
+# 7. Периодическая проверка на новые тикеры из БД (на случай пропуска Redis-сообщения)
+async def watch_new_tickers(pg_pool, redis):
     while True:
         try:
             symbols = await get_enabled_tickers(pg_pool)
             for symbol in symbols:
                 if symbol not in active_tickers:
                     print(f"[M1] Новый тикер из БД: {symbol}", flush=True)
-                    await subscribe_m1_kline(symbol, pg_pool)
+                    await subscribe_m1_kline(symbol, pg_pool, redis)
         except Exception as e:
             print(f"[ERROR] Ошибка при проверке тикеров из БД: {e}", flush=True)
 
