@@ -1,74 +1,61 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="container">
-  <!-- Первый ряд: кнопки управления -->
-  <div class="row" style="align-items: center;">
-    <div class="w-50"><a href="/tickers" class="button">← Назад</a></div>
-    <div class="w-50" style="text-align: right;">
-      <button class="button" onclick="toggleTickerStatus(this)" data-symbol="{{ ticker.symbol }}">
-        {{ 'Выключить' if ticker.status == 'enabled' else 'Включить' }}
-      </button>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ symbol }}</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; background: #f8f9fa; }
+        .card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 900px; margin: auto; }
+        .title { font-size: 2rem; font-weight: bold; margin-bottom: 2rem; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #ddd; text-align: center; }
+        th { background: #f1f1f1; font-weight: 600; }
+        .blue { color: #007bff; font-weight: bold; }
+        .orange { color: #fd7e14; font-weight: bold; }
+        select { padding: 0.5rem; border-radius: 6px; margin-left: 0.5rem; }
+        .back-link { margin-top: 2rem; display: inline-block; color: #007bff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="title">{{ symbol }}</div>
+        <h2>Технические индикаторы</h2>
+
+        <form method="get" action="/tickers" style="margin-bottom: 1rem; text-align: right;">
+            <input type="hidden" name="symbol" value="{{ symbol }}">
+            <label for="tf">ТФ:</label>
+            <select name="tf" onchange="this.form.submit()">
+                <option value="M1" {% if tf == 'M1' %}selected{% endif %}>M1</option>
+                <option value="M5" {% if tf == 'M5' %}selected{% endif %}>M5</option>
+                <option value="M15" {% if tf == 'M15' %}selected{% endif %}>M15</option>
+            </select>
+        </form>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>EMA</th>
+                    <th>SMI</th>
+                    <th>RSI</th>
+                    <th>MACD</th>
+                    <th>LR</th>
+                    <th>Trend</th>
+                    <th>ATR</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>12345</td>
+                    <td><span class="blue">{{ smi }}</span> / <span class="orange">{{ smi_signal }}</span></td>
+                    <td>12345</td>
+                    <td>12345</td>
+                    <td>12345 / 12345 / 12345</td>
+                    <td>up</td>
+                    <td>12345</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <a href="/tickers" class="back-link">&larr; Назад к списку тикеров</a>
     </div>
-  </div>
-
-  <!-- Второй ряд: стратегии по тикеру -->
-  <div class="row">
-    <div class="widget w-100">
-      <h2><i class="fas fa-project-diagram icon"></i> Информация по тикеру {{ ticker.symbol }}</h2>
-      <table style="width: 100%; border-collapse: collapse; table-layout: fixed; text-align: center;">
-        <thead>
-          <tr>
-            <th style="padding: 0.6rem; border: 1px solid #d0d7de;">Стратегия</th>
-            <th style="padding: 0.6rem; border: 1px solid #d0d7de;">Unrealized PnL</th>
-            <th style="background-color: #eef1f4; padding: 0.6rem; border: 1px solid #d0d7de;">Winrate 24h</th>
-            <th style="background-color: #eef1f4; padding: 0.6rem; border: 1px solid #d0d7de;">ROI 24h</th>
-            <th style="background-color: #dce1e6; padding: 0.6rem; border: 1px solid #d0d7de;">Winrate 7d</th>
-            <th style="background-color: #dce1e6; padding: 0.6rem; border: 1px solid #d0d7de;">ROI 7d</th>
-            <th style="padding: 0.6rem; border: 1px solid #d0d7de;">Статус</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in strategies %}
-          <tr>
-            <td style="padding: 0.6rem; border: 1px solid #d0d7de;"><a href="/strategies/{{ s.id }}">{{ s.name }}</a></td>
-            <td style="padding: 0.6rem; border: 1px solid #d0d7de;">
-              {% if s.pnl >= 0 %}
-                <span style="color: green;">+${{ s.pnl }}</span>
-              {% else %}
-                <span style="color: red;">-${{ (-s.pnl) }}</span>
-              {% endif %}
-            </td>
-            <td style="background-color: #eef1f4; padding: 0.6rem; border: 1px solid #d0d7de;">{{ s.winrate_24h if s.winrate_24h else 'n/a' }}</td>
-            <td style="background-color: #eef1f4; padding: 0.6rem; border: 1px solid #d0d7de;">{{ s.roi_24h if s.roi_24h else 'n/a' }}</td>
-            <td style="background-color: #dce1e6; padding: 0.6rem; border: 1px solid #d0d7de;">{{ s.winrate_7d if s.winrate_7d else 'n/a' }}</td>
-            <td style="background-color: #dce1e6; padding: 0.6rem; border: 1px solid #d0d7de;">{{ s.roi_7d if s.roi_7d else 'n/a' }}</td>
-            <td style="padding: 0.6rem; border: 1px solid #d0d7de;"><span style="color: orange;">●</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<script>
-function toggleTickerStatus(btn) {
-  const symbol = btn.dataset.symbol;
-  const isActive = btn.textContent.trim() === 'Выключить';
-  const newText = isActive ? 'Включить' : 'Выключить';
-
-  fetch(`/tickers/${symbol}/activate`, {
-    method: 'POST'
-  }).then(res => {
-    if (res.ok) {
-      btn.textContent = newText;
-      btn.style.backgroundColor = isActive ? '#e0e0e0' : '#cce5ff';
-    } else {
-      alert("Ошибка при активации тикера");
-    }
-  }).catch(() => {
-    alert("Ошибка соединения с сервером");
-  });
-}
-</script>
-{% endblock %}
+</body>
+</html>

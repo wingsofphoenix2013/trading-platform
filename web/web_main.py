@@ -35,7 +35,25 @@ async def root(request: Request):
 
 # 3. Список тикеров
 @app.get("/tickers", response_class=HTMLResponse)
-async def list_tickers(request: Request):
+async def list_tickers(request: Request, symbol: str = None, tf: str = "M5"):
+    if symbol:
+        # Страница конкретного тикера
+        redis_key = f"indicators_live:{symbol}:{tf}"
+        smi = smi_signal = "n/a"
+        try:
+            smi_data = await r.hgetall(redis_key)
+            smi = smi_data.get("smi", "n/a")
+            smi_signal = smi_data.get("smi_signal", "n/a")
+        except Exception as e:
+            print(f"[ERROR] Redis fetch for {redis_key}: {e}", flush=True)
+        return templates.TemplateResponse("ticker_detail.html", {
+            "request": request,
+            "symbol": symbol,
+            "tf": tf,
+            "smi": smi,
+            "smi_signal": smi_signal
+        })
+    # Если symbol не задан — обычный список тикеров
     conn = await get_db()
     rows = await conn.fetch("SELECT symbol, status, tradepermission FROM tickers ORDER BY symbol ASC")
     await conn.close()
@@ -44,7 +62,7 @@ async def list_tickers(request: Request):
         "tickers": rows
     })
 
-# 4. Активация тикера (уже реализовано)
+# 4. Активация тикера
 @app.post("/tickers/{symbol}/activate")
 async def activate_ticker(symbol: str):
     await r.publish("ticker_activation", f'{{"symbol": "{symbol.upper()}", "action": "activate"}}')
