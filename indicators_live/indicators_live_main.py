@@ -93,7 +93,7 @@ async def main():
         print(f"[CACHE] Загружено {len(df)} баров для {symbol} / {tf}", flush=True)
 
         # 5.5 Запуск главного цикла
-        await run_live_loop(pg_pool, redis)
+        await run_live_loop(pg_pool, redis, symbol, tf, k, d, s)
 
     except Exception as e:
         print(f"[ERROR] Инициализация завершилась с ошибкой: {e}", flush=True)
@@ -105,12 +105,44 @@ async def main():
             await redis.close()
 
 
-# 6. Главный рабочий цикл (заглушка)
-async def run_live_loop(pg_pool, redis):
+# 6. Главный рабочий цикл с расчётом SMI
+async def run_live_loop(pg_pool, redis, symbol, tf, k, d, s):
     print("[LOOP] Запуск основного цикла обработки индикаторов", flush=True)
     while True:
-        await asyncio.sleep(2)
-        print("[LOOP] Псевдо-расчёт завершён", flush=True)
+        try:
+            await asyncio.sleep(2)
+
+            # 6.1 Получение mark price
+            price_key = f"price:{symbol}"
+            mark_price_raw = await redis.get(price_key)
+            if not mark_price_raw:
+                print(f"[WARN] Нет данных mark_price для {symbol}", flush=True)
+                continue
+
+            mark_price = float(mark_price_raw)
+
+            # 6.2 Виртуальный бар
+            df_base = ohlcv_cache[symbol][tf].copy()
+            virtual_row = {"high": mark_price, "low": mark_price, "close": mark_price}
+            df_virtual = pd.concat([df_base, pd.DataFrame([virtual_row])], ignore_index=True)
+
+            # 6.3 Расчёт SMI
+            result = await calculate_smi(df_virtual, k, d, s)
+            smi = result.get("smi")
+            smi_signal = result.get("smi_signal")
+
+            if smi is not None and smi_signal is not None:
+                redis_key = f"indicators_live:{symbol}:{tf}"
+                await redis.hset(redis_key, mapping={
+                    "smi": smi,
+                    "smi_signal": smi_signal
+                })
+                print(f"[REDIS] Обновлён {redis_key} → smi={smi}, signal={smi_signal}", flush=True)
+            else:
+                print(f"[ERROR] Не удалось рассчитать SMI для {symbol}/{tf}", flush=True)
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка в run_live_loop: {e}", flush=True)
 
 
 # 7. Запуск
