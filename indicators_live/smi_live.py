@@ -9,6 +9,9 @@ import numpy as np
 # Выход: словарь со значениями smi и smi_signal
 async def calculate_smi(df: pd.DataFrame, k: int, d: int, s: int) -> dict:
     try:
+        # Приведение всех чисел к float (важно для Decimal из PostgreSQL)
+        df = df.astype(float)
+
         high = df['high']
         low = df['low']
         close = df['close']
