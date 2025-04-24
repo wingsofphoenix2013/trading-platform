@@ -97,8 +97,6 @@ async def subscribe_m1_kline(symbol, pg_pool, redis):
                     data = json.loads(message)
                     kline = data.get("k", {})
                     if kline.get("x"):  # закрытая свеча
-                        ts = datetime.utcfromtimestamp(kline["t"] / 1000)
-                        print(f"[M1 CANDLE] {symbol} {ts} O:{kline['o']} H:{kline['h']} L:{kline['l']} C:{kline['c']}", flush=True)
                         await save_m1_candle(pg_pool, redis, symbol, kline)
             except websockets.ConnectionClosed:
                 print(f"[M1] Переподключение: {symbol}", flush=True)
@@ -109,7 +107,6 @@ async def subscribe_m1_kline(symbol, pg_pool, redis):
 
     task = asyncio.create_task(stream())
     active_tickers[symbol] = task
-
 
 # 5. Запуск всех текущих тикеров + Redis-слушатель + фоновая проверка
 async def start_all_m1_streams(redis, pg_pool):
