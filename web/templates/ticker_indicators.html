@@ -28,7 +28,7 @@
             <a href="#" class="btn inactive">RSI</a>
             <a href="#" class="btn inactive">MACD</a>
             <a href="#" class="btn inactive">LR</a>
-            <a href="#" class="btn inactive">ATR</a>
+            <a href="/indicators?type=atr&tf={{ tf }}" class="btn {% if type == 'atr' %}active{% else %}available{% endif %}">ATR</a>
 
             <!-- Выпадающий выбор TF -->
             <form method="get" action="/indicators" style="margin-left:auto;">
@@ -90,6 +90,30 @@
                     <td>{{ row.tf }}</td>
                     <td>{{ row.smi or 'n/a' }}</td>
                     <td>{{ row.smi_signal or 'n/a' }}</td>
+                    <td>{{ row.updated_at or 'n/a' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% elif type == 'atr' %}
+        <!-- Таблица значений ATR -->
+        <table>
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>Тикер</th>
+                    <th>TF</th>
+                    <th>ATR</th>
+                    <th>Дата обновления</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ row.symbol }}</td>
+                    <td>{{ row.tf }}</td>
+                    <td>{{ row.atr or 'n/a' }}</td>
                     <td>{{ row.updated_at or 'n/a' }}</td>
                 </tr>
                 {% endfor %}
