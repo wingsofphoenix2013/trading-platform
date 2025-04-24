@@ -21,19 +21,19 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 ohlcv_cache = {}  # структура: {symbol: {tf: DataFrame}}
 smi_params = {}   # структура: {(symbol, tf): (k, d, s)}
 
-# 3. Загрузка параметров SMI из indicator_settings
-async def load_smi_params(pg_pool, symbol: str) -> tuple[int, int, int]:
+# 3. Загрузка глобальных параметров SMI из indicator_settings
+async def load_smi_params(pg_pool) -> tuple[int, int, int]:
     query = """
         SELECT param, value
         FROM indicator_settings
-        WHERE indicator = 'smi' AND symbol = $1
+        WHERE indicator = 'smi'
     """
     try:
-        rows = await pg_pool.fetch(query, symbol)
-        params = {row['param']: int(row['value']) for row in rows}
+        rows = await pg_pool.fetch(query)
+        params = {row['param']: int(float(row['value'])) for row in rows}
         return params["k"], params["d"], params["s"]
     except Exception as e:
-        print(f"[ERROR] Не удалось загрузить параметры SMI для {symbol}: {e}", flush=True)
+        print(f"[ERROR] Не удалось загрузить глобальные параметры SMI: {e}", flush=True)
         return 13, 5, 3
 
 # 4. Загрузка последних N баров из базы
@@ -62,13 +62,13 @@ async def sync_active_symbols(pg_pool):
         rows = await pg_pool.fetch(query)
         symbols = [r["symbol"] for r in rows]
         tfs = ["M1", "M5", "M15"]
+        k, d, s = await load_smi_params(pg_pool)
         for symbol in symbols:
             if symbol not in ohlcv_cache:
                 ohlcv_cache[symbol] = {}
             for tf in tfs:
                 if tf in ohlcv_cache[symbol]:
                     continue
-                k, d, s = await load_smi_params(pg_pool, symbol)
                 bars_needed = k + d + s + 10
                 df = await load_last_n_bars(pg_pool, symbol, tf, bars_needed)
                 if not df.empty:
