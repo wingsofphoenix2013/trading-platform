@@ -73,7 +73,7 @@ async def process_lr(pg_pool, redis, symbol, tf, precision):
     upper_val = safe_round(base_price * (1 + upper[-1]), precision)
     lower_val = safe_round(base_price * (1 + lower[-1]), precision)
     mid_val = safe_round(base_price * (1 + mid), precision)
-    angle_val = safe_round(angle, 2)
+    angle_val = safe_round(angle, 5)
 
     results = [
         (symbol, tf, latest_ts, 'LR', 'lr_upper', upper_val),
