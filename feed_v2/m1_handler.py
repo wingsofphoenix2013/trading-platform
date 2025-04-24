@@ -26,11 +26,11 @@ async def safe_publish(redis, channel, message):
         print(f"[REDIS] Published to {channel}: {message}", flush=True)
     except Exception as e:
         print(f"[ERROR] Redis publish failed: {e}", flush=True)
-
-
+        
 # 3. Сохранение M1-свечи в базу данных
 async def save_m1_candle(pg_pool, redis, symbol, kline):
     open_time = datetime.utcfromtimestamp(kline["t"] / 1000)
+    
     async with pg_pool.acquire() as conn:
         await conn.execute(
             """
@@ -60,6 +60,26 @@ async def save_m1_candle(pg_pool, redis, symbol, kline):
         "open_time": open_time.isoformat()
     })
 
+    # Проверка на завершение пятиминутки и публикация сигнала агрегации
+    if open_time.minute % 5 == 4:
+        async with pg_pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT open_time FROM ohlcv2_m1
+                WHERE symbol = $1 AND open_time <= $2
+                ORDER BY open_time DESC
+                LIMIT 5
+                """,
+                symbol,
+                open_time
+            )
+            if len(rows) == 5:
+                await safe_publish(redis, "ohlcv_aggregate", {
+                    "action": "aggregate",
+                    "symbol": symbol,
+                    "interval": "m5",
+                    "until": open_time.isoformat()
+                })
 
 # 4. Подключение к WebSocket Binance и логирование закрытых свечей
 async def subscribe_m1_kline(symbol, pg_pool, redis):
