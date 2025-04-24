@@ -45,7 +45,7 @@
             <tbody>
                 <tr>
                     <td>12345</td>
-                    <td><span class="blue">{{ smi }}</span> / <span class="orange">{{ smi_signal }}</span></td>
+                    <td><span class="blue" id="smi">{{ smi }}</span> / <span class="orange" id="smi_signal">{{ smi_signal }}</span></td>
                     <td>12345</td>
                     <td>12345</td>
                     <td>12345 / 12345 / 12345</td>
@@ -57,5 +57,21 @@
 
         <a href="/tickers" class="back-link">&larr; Назад к списку тикеров</a>
     </div>
+
+    <script>
+        setInterval(async () => {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const symbol = params.get("symbol");
+                const tf = params.get("tf") || "M5";
+                const res = await fetch(`/api/indicators_live?symbol=${symbol}&tf=${tf}`);
+                const data = await res.json();
+                if (data.smi) document.getElementById("smi").innerText = data.smi;
+                if (data.smi_signal) document.getElementById("smi_signal").innerText = data.smi_signal;
+            } catch (e) {
+                console.error("SMI fetch error:", e);
+            }
+        }, 2000);
+    </script>
 </body>
 </html>

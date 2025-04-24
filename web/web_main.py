@@ -967,4 +967,19 @@ async def emergency_stop(strategy_id: int):
     """, strategy_id)
 
     await conn.close()
-    return JSONResponse(content={"ok": True, "note": "Emergency stop executed. All open positions closed."})        
+    return JSONResponse(content={"ok": True, "note": "Emergency stop executed. All open positions closed."})    
+
+# 27. API: live-данные индикаторов
+@app.get("/api/indicators_live")
+async def get_indicators_live(symbol: str, tf: str = "M5"):
+    key = f"indicators_live:{symbol}:{tf}"
+    try:
+        raw = await r.hgetall(key)
+        data = {k.decode(): v.decode() for k, v in raw.items()}
+        return {
+            "smi": data.get("smi", "n/a"),
+            "smi_signal": data.get("smi_signal", "n/a")
+        }
+    except Exception as e:
+        print(f"[ERROR] Redis API /api/indicators_live: {e}", flush=True)
+        return {"smi": "n/a", "smi_signal": "n/a"}    
