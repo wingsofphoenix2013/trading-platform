@@ -11,6 +11,7 @@ from datetime import datetime
 import vilarso_m5_flex
 import lx_m5_strict
 # --- Блок импорта стратегий вставлять тут ---
+from strategies.vl_m1_flex import VlM1FlexStrategy
 
 # --- Конфигурация окружения ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -77,7 +78,11 @@ async def handle_signal(signal_log_id: int):
 
         elif strategy_name == "lx_m5_strict":
             await lx_m5_strict.process_signal(signal_log_id)  
-            
+        
+        elif strategy_name == "VL_M1_FLEX":
+            strategy = VlM1FlexStrategy(strategy_id=1)
+            await strategy.on_signal(signal_log_id)
+        
         else:
             print(f"[strategies_main] Стратегия '{strategy_name}' пока не поддерживается", flush=True)
 
