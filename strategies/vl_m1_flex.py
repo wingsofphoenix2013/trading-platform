@@ -76,7 +76,7 @@ class VlM1FlexStrategy:
                 print(f"[VL_M1_FLEX] ❌ {symbol} запрещён для стратегии", flush=True)
                 await conn.close()
                 return
-                
+
         # --- Проверка: есть ли уже открытая сделка по тикеру ---
         active_pos = await conn.fetchval("""
             SELECT COUNT(*)
@@ -87,7 +87,7 @@ class VlM1FlexStrategy:
         if active_pos > 0:
             print(f"[VL_M1_FLEX] ❌ Уже есть открытая позиция по {symbol}, сигнал игнорируется", flush=True)
             await conn.close()
-            return                
+            return
 
         # --- Проверка: превышен ли депозит ---
         total_notional = await conn.fetchval("""
@@ -123,11 +123,13 @@ class VlM1FlexStrategy:
             return
 
         if not ok:
-            print(f"[VL_M1_FLEX] ❌ {direction.upper()} запрещён: цена={price}, EMA={ema}, ATR={atr}, порог={required_price}", flush=True)
+            print(f"[VL_M1_FLEX] ❌ {direction.upper()} запрещён: цена={price}, EMA={ema}, ATR={atr},
+порог={required_price}", flush=True)
             await conn.close()
             return
 
-        print(f"[VL_M1_FLEX] ✅ {direction.upper()} разрешён: цена={price}, EMA={ema}, ATR={atr}, порог={required_price}", flush=True)
+        print(f"[VL_M1_FLEX] ✅ {direction.upper()} разрешён: цена={price}, EMA={ema}, ATR={atr},
+порог={required_price}", flush=True)
 
         # --- Расчёт объёма позиции ---
         notional_target = limit
@@ -234,7 +236,8 @@ class VlM1FlexStrategy:
                 if not triggered:
                     continue
 
-                print(f"[VL_M1_FLEX] 🎯 Цель сработала: {t_type.upper()} L{level or '-'} @ {t_price} qty={t_qty}", flush=True)
+                print(f"[VL_M1_FLEX] 🎯 Цель сработала: {t_type.upper()} L{level or '-'} @ {t_price} qty={t_qty}",
+flush=True)
 
                 commission = (mark * t_qty * COMMISSION_RATE).quantize(Decimal(f"1e-{pp}"), rounding=ROUND_DOWN)
                 delta = (mark - entry if direction == "long" else entry - mark) * t_qty
@@ -257,14 +260,14 @@ class VlM1FlexStrategy:
                     INSERT INTO signal_log_entries (strategy_id, log_id, status, position_id, note, logged_at)
                     VALUES ($1, NULL, $2, $3, $4, now())
                 """, self.strategy_id, f"{t_type}_hit", pid, f"{t_type} level {level or '-'} hit")
-                
+
                 if t_type == "tp" and level in (1, 2):
                     await conn.execute("""
                         UPDATE positions
                         SET close_reason = $1
                         WHERE id = $2
                     """, f"tp{level}-hit", pid)
-                    
+
                 # --- SL закрывает полностью ---
                 if t_type == "sl":
                     reason = 'sl'
@@ -301,7 +304,8 @@ class VlM1FlexStrategy:
                     atr_val = await REDIS.get(f"{symbol}:M1:ATR:atr")
                     if atr_val:
                         atr = Decimal(atr_val.decode())
-                        new_sl = (entry + atr if direction == "long" else entry - atr).quantize(Decimal(f"1e-{pp}"), rounding=ROUND_DOWN)
+                        new_sl = (entry + atr if direction == "long" else entry - atr).quantize(Decimal(f"1e-{pp}"),
+rounding=ROUND_DOWN)
                         await conn.execute("""
                             UPDATE position_targets
                             SET canceled = true
@@ -313,7 +317,7 @@ class VlM1FlexStrategy:
                         """, pid, new_sl, qty_left - t_qty)
                         self.last_sl_shift = "tp2"  # записываем метку перестановки SL
                         print(f"[VL_M1_FLEX] 🔄 SL перемещён после TP2: {new_sl}", flush=True)
-                        
+
         # --- Финальное закрытие если всё закрыто ---
         final_qty = await conn.fetchval("""
             SELECT quantity_left FROM positions WHERE id = $1
@@ -328,7 +332,17 @@ class VlM1FlexStrategy:
 
         await conn.close()
 
+    async def main_loop(self):
+        print("[VL_M1_FLEX] 🚀 Старт основного цикла стратегии", flush=True)
+        while True:
+            try:
+                await self.tick()
+                await asyncio.sleep(1)
+            except Exception as e:
+                print(f"[VL_M1_FLEX] ❌ Ошибка в основном цикле: {e}", flush=True)
+                await asyncio.sleep(5)
+
 # --- Локальный запуск ---
 if __name__ == '__main__':
-    strategy = VlM1FlexStrategy(strategy_id=999)
-    asyncio.run(strategy.tick())
+    strategy = VlM1FlexStrategy(strategy_id=1)
+    asyncio.run(strategy.main_loop())
