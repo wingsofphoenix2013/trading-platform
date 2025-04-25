@@ -83,9 +83,10 @@ async def handle_signal(signal_log_id: int):
         conn = await get_db()
         row = await conn.fetchrow("""
             SELECT s.name
-            FROM signal_logs sl
-            JOIN strategies s ON s.id = sl.strategy_id
-            WHERE sl.id = $1
+            FROM signal_log_entries sle
+            JOIN strategies s ON s.id = sle.strategy_id
+            WHERE sle.log_id = $1
+            LIMIT 1
         """, signal_log_id)
         await conn.close()
 
@@ -103,7 +104,7 @@ async def handle_signal(signal_log_id: int):
 
     except Exception as e:
         print(f"[strategies_main] ❌ Ошибка обработки сигнала: {e}", flush=True)
-
+        
 # --- Основная точка входа ---
 async def main():
     print("[strategies_main] 📋 Запуск системы стратегий", flush=True)
