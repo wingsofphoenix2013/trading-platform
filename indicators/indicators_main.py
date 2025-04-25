@@ -93,9 +93,6 @@ async def main():
 
         try:
             data = json.loads(message['data'].decode())
-            if data.get('action') != 'aggregate_ready':
-                continue
-
             symbol = data['symbol']
             interval = data['interval'].upper()  # 'm15' -> 'M15'
 
