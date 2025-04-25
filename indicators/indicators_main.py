@@ -93,8 +93,9 @@ async def main():
 
         try:
             data = json.loads(message['data'].decode())
+            channel = message['channel']
+            interval = channel.replace("ohlcv_", "").replace("_ready", "").upper()
             symbol = data['symbol']
-            interval = data['interval'].upper()  # 'm15' -> 'M15'
 
             if interval not in TIMEFRAMES:
                 print(f"[SKIP] Неизвестный интервал: {interval}", flush=True)
