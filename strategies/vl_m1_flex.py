@@ -23,15 +23,15 @@ class VlM1FlexStrategy:
 
     async def get_price(self, symbol: str) -> Decimal:
         val = await REDIS.get(f"price:{symbol}")
-        return Decimal(val) if val else None
+        return Decimal(val.decode()) if val else None
 
     async def get_ema(self, symbol: str, tf: str = "M1") -> Decimal:
         val = await REDIS.get(f"{symbol}:{tf}:EMA:50")
-        return Decimal(val) if val else None
+        return Decimal(val.decode()) if val else None
 
     async def get_atr(self, symbol: str, tf: str = "M1") -> Decimal:
         val = await REDIS.get(f"{symbol}:{tf}:ATR:atr")
-        return Decimal(val) if val else None
+        return Decimal(val.decode()) if val else None
 
     async def get_db(self):
         return await asyncpg.connect(DATABASE_URL)
