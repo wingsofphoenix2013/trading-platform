@@ -2,36 +2,55 @@
 <html>
 <head>
     <title>Список сигналов</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; background: #f8f9fa; }
+        .card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 1100px; margin: auto; }
+        .title { font-size: 2rem; font-weight: bold; margin-bottom: 2rem; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #ddd; text-align: center; vertical-align: top; }
+        th { background: #f1f1f1; font-weight: 600; }
+        a.button { display: inline-block; padding: 0.5rem 1rem; background: #007bff; color: white; border-radius: 6px; text-decoration: none; font-size: 0.9rem; }
+        a.button:hover { background: #0056b3; }
+        .top-right { text-align: right; margin-bottom: 1rem; }
+    </style>
 </head>
 <body>
-    <h1>Сигналы</h1>
-    <a href="/signals/new">Добавить сигнал</a>
-    <table border="1" cellpadding="5" cellspacing="0">
-        <tr>
-            <th>ID</th>
-            <th>Название</th>
-            <th>Тип</th>
-            <th>Фразы</th>
-            <th>Источник</th>
-            <th>Активен</th>
-            <th></th>
-        </tr>
-        {% for s in signals %}
-        <tr>
-            <td>{{ s.id }}</td>
-            <td>{{ s.name }}</td>
-            <td>{{ s.signal_type }}</td>
-            <td>
-                LONG: {{ s.long_phrase or "–" }}<br>
-                SHORT: {{ s.short_phrase or "–" }}<br>
-                Exit LONG: {{ s.long_exit_phrase or "–" }}<br>
-                Exit SHORT: {{ s.short_exit_phrase or "–" }}
-            </td>
-            <td>{{ s.source or "–" }}</td>
-            <td>{{ "Да" if s.enabled else "Нет" }}</td>
-            <td><a href="/signals/{{ s.id }}/edit">Редактировать</a></td>
-        </tr>
-        {% endfor %}
-    </table>
+    <div class="card">
+        <div class="title">Сигналы</div>
+        <div class="top-right">
+            <a href="/signals/new" class="button">Добавить сигнал</a>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Название</th>
+                    <th>Тип</th>
+                    <th>Фразы</th>
+                    <th>Источник</th>
+                    <th>Активен</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in signals %}
+                <tr>
+                    <td>{{ s.id }}</td>
+                    <td>{{ s.name }}</td>
+                    <td>{{ s.signal_type }}</td>
+                    <td style="text-align: left;">
+                        LONG: {{ s.long_phrase or "–" }}<br>
+                        SHORT: {{ s.short_phrase or "–" }}<br>
+                        Exit LONG: {{ s.long_exit_phrase or "–" }}<br>
+                        Exit SHORT: {{ s.short_exit_phrase or "–" }}
+                    </td>
+                    <td>{{ s.source or "–" }}</td>
+                    <td>{{ "Да" if s.enabled else "Нет" }}</td>
+                    <td><a href="/signals/{{ s.id }}/edit" class="button">Редактировать</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </body>
 </html>
