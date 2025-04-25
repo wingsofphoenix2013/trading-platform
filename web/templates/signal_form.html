@@ -2,50 +2,78 @@
 <html>
 <head>
     <title>{{ "Редактировать" if mode == "edit" else "Создать" }} сигнал</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; background: #f8f9fa; }
+        .card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 800px; margin: auto; }
+        .title { font-size: 2rem; font-weight: bold; margin-bottom: 2rem; text-align: center; }
+        label { font-weight: 600; display: block; margin-top: 1rem; }
+        input[type="text"], select, textarea {
+            width: 100%; padding: 0.5rem; margin-top: 0.25rem;
+            border: 1px solid #ccc; border-radius: 6px; font-size: 1rem;
+        }
+        textarea { resize: vertical; }
+        button[type="submit"] {
+            margin-top: 2rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button[type="submit"]:hover {
+            background: #0056b3;
+        }
+    </style>
 </head>
 <body>
-    <h1>{{ "Редактировать" if mode == "edit" else "Создать" }} сигнал</h1>
+    <div class="card">
+        <div class="title">{{ "Редактировать" if mode == "edit" else "Создать" }} сигнал</div>
 
-    <form method="post" action="{% if mode == 'edit' %}/signals/{{ signal.id }}{% else %}/signals{% endif %}">
-        <label>Название:</label><br>
-        {% if mode == 'edit' %}
-            <input type="text" name="name" value="{{ signal.name or '' }}" readonly><br><br>
-        {% else %}
-            <input type="text" name="name"><br><br>
-        {% endif %}
+        <form method="post" action="{% if mode == 'edit' %}/signals/{{ signal.id }}{% else %}/signals{% endif %}">
+            <label>Название:</label>
+            {% if mode == 'edit' %}
+                <input type="text" name="name" value="{{ signal.name or '' }}" readonly>
+            {% else %}
+                <input type="text" name="name">
+            {% endif %}
 
-        <label>Тип сигнала:</label><br>
-        {% if mode == 'edit' %}
-            <input type="text" name="signal_type" value="{{ signal.signal_type or '' }}" readonly><br><br>
-        {% else %}
-            <select name="signal_type">
-                <option value="action">action</option>
-                <option value="control">control</option>
-            </select><br><br>
-        {% endif %}
+            <label>Тип сигнала:</label>
+            {% if mode == 'edit' %}
+                <input type="text" name="signal_type" value="{{ signal.signal_type or '' }}" readonly>
+            {% else %}
+                <select name="signal_type">
+                    <option value="action">action</option>
+                    <option value="control">control</option>
+                </select>
+            {% endif %}
 
-        <label>Фраза для LONG:</label><br>
-        <input type="text" name="long_phrase" value="{{ signal.long_phrase or '' }}"><br><br>
+            <label>Фраза для LONG:</label>
+            <input type="text" name="long_phrase" value="{{ signal.long_phrase or '' }}">
 
-        <label>Фраза для SHORT:</label><br>
-        <input type="text" name="short_phrase" value="{{ signal.short_phrase or '' }}"><br><br>
+            <label>Фраза для SHORT:</label>
+            <input type="text" name="short_phrase" value="{{ signal.short_phrase or '' }}">
 
-        <label>Фраза выхода из LONG:</label><br>
-        <input type="text" name="long_exit_phrase" value="{{ signal.long_exit_phrase or '' }}"><br><br>
+            <label>Фраза выхода из LONG:</label>
+            <input type="text" name="long_exit_phrase" value="{{ signal.long_exit_phrase or '' }}">
 
-        <label>Фраза выхода из SHORT:</label><br>
-        <input type="text" name="short_exit_phrase" value="{{ signal.short_exit_phrase or '' }}"><br><br>
+            <label>Фраза выхода из SHORT:</label>
+            <input type="text" name="short_exit_phrase" value="{{ signal.short_exit_phrase or '' }}">
 
-        <label>Источник:</label><br>
-        <input type="text" name="source" value="{{ signal.source or '' }}"><br><br>
+            <label>Источник:</label>
+            <input type="text" name="source" value="{{ signal.source or '' }}">
 
-        <label>Описание:</label><br>
-        <textarea name="description" rows="4" cols="40">{{ signal.description or '' }}</textarea><br><br>
+            <label>Описание:</label>
+            <textarea name="description" rows="4">{{ signal.description or '' }}</textarea>
 
-        <label>Активен:</label>
-        <input type="checkbox" name="enabled" value="true" {% if signal.enabled %}checked{% endif %}><br><br>
+            <label>
+                <input type="checkbox" name="enabled" value="true" {% if signal.enabled %}checked{% endif %}>
+                Активен
+            </label>
 
-        <button type="submit">Сохранить</button>
-    </form>
+            <button type="submit">Сохранить</button>
+        </form>
+    </div>
 </body>
 </html>
