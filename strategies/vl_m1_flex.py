@@ -16,6 +16,7 @@ REDIS = redis.Redis(
 )
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+COMMISSION_RATE = Decimal("0.0004")  # 0.04% комиссия биржи
 
 class VlM1FlexStrategy:
     def __init__(self, strategy_id: int):
@@ -125,8 +126,46 @@ class VlM1FlexStrategy:
             return
 
         notional_final = (qty * price).quantize(Decimal(f"1e-{pp}"), rounding=ROUND_DOWN)
-
         print(f"[VL_M1_FLEX] 💰 Объём позиции: qty={qty}, notional={notional_final}", flush=True)
+
+        # --- Создание позиции ---
+        commission = (notional_final * COMMISSION_RATE).quantize(Decimal(f"1e-{pp}"), rounding=ROUND_DOWN)
+        pnl = -commission
+
+        position_id = await conn.fetchval("""
+            INSERT INTO positions (strategy_id, log_id, symbol, direction, entry_price, quantity,
+                quantity_left, notional_value, status, created_at, pnl)
+            VALUES ($1, $2, $3, $4, $5, $6, $6, $7, 'open', now(), $8)
+            RETURNING id
+        """, self.strategy_id, log_id, symbol, direction, price, qty, notional_final, pnl)
+
+        print(f"[VL_M1_FLEX] ✅ Позиция открыта id={position_id}, комиссия={commission}", flush=True)
+
+        # --- Создание целей ---
+        targets = [
+            ("tp", 1, price + (Decimal("1.5") * atr), qty * Decimal("0.5")),
+            ("tp", 2, price + (Decimal("2.5") * atr), qty * Decimal("0.3")),
+            ("tp", 3, price + (Decimal("3.5") * atr), qty * Decimal("0.2")),
+            ("sl", None, price - (Decimal("1.5") * atr), qty)
+        ] if direction == "long" else [
+            ("tp", 1, price - (Decimal("1.5") * atr), qty * Decimal("0.5")),
+            ("tp", 2, price - (Decimal("2.5") * atr), qty * Decimal("0.3")),
+            ("tp", 3, price - (Decimal("3.5") * atr), qty * Decimal("0.2")),
+            ("sl", None, price + (Decimal("1.5") * atr), qty)
+        ]
+
+        for t_type, level, t_price, t_qty in targets:
+            t_price = t_price.quantize(Decimal(f"1e-{pp}"), rounding=ROUND_DOWN)
+            t_qty = t_qty.quantize(Decimal(f"1e-{pq}"), rounding=ROUND_DOWN)
+            await conn.execute("""
+                INSERT INTO position_targets (position_id, type, level, price, quantity)
+                VALUES ($1, $2, $3, $4, $5)
+            """, position_id, t_type, level, t_price, t_qty)
+
+        await conn.execute("""
+            INSERT INTO signal_log_entries (strategy_id, log_id, status, position_id, note, logged_at)
+            VALUES ($1, $2, 'position_opened', $3, 'position created', now())
+        """, self.strategy_id, log_id, position_id)
 
         await conn.close()
 
