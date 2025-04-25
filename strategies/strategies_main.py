@@ -11,7 +11,7 @@ from datetime import datetime
 import vilarso_m5_flex
 import lx_m5_strict
 # --- Блок импорта стратегий вставлять тут ---
-from strategies.vl_m1_flex import VlM1FlexStrategy
+from vl_m1_flex import VlM1FlexStrategy
 
 # --- Конфигурация окружения ---
 DATABASE_URL = os.getenv("DATABASE_URL")
