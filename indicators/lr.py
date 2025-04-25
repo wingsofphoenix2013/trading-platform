@@ -22,7 +22,7 @@ async def process_lr(pg_pool, redis, symbol, tf, precision):
         angle_up = settings.get('angle_up', 2.0)
         angle_down = settings.get('angle_down', -2.0)
 
-    table_name = f"ohlcv_{tf.lower()}"
+    table_name = f"ohlcv2_{tf.lower()}"
     async with pg_pool.acquire() as conn:
         rows = await conn.fetch(
             f"""

@@ -16,10 +16,10 @@ import os
 import json
 
 from ema import process_ema
-from smi import process_smi
+# from smi import process_smi  # DISABLED
 from atr import process_atr
-from rsi import process_rsi
-from macd import process_macd
+# from rsi import process_rsi  # DISABLED
+# from macd import process_macd  # DISABLED
 from lr import process_lr
 
 # Подключение к PostgreSQL и Redis (через переменные окружения)
@@ -57,10 +57,10 @@ async def process_ticker(tf, ticker, pg_pool, redis):
     print(f"[LOOP] Расчёт для {symbol} / {tf}", flush=True)
     try:
         await process_ema(pg_pool, redis, symbol, tf, precision)
-        await process_smi(pg_pool, redis, symbol, tf, precision)
+        # await process_smi(pg_pool, redis, symbol, tf, precision)  # DISABLED
         await process_atr(pg_pool, redis, symbol, tf, precision)
-        await process_rsi(pg_pool, redis, symbol, tf, precision)
-        await process_macd(pg_pool, redis, symbol, tf, precision)
+        # await process_rsi(pg_pool, redis, symbol, tf, precision)  # DISABLED
+        # await process_macd(pg_pool, redis, symbol, tf, precision)  # DISABLED
         await process_lr(pg_pool, redis, symbol, tf, precision)
     except Exception as e:
         print(f"[ERROR] Ошибка в расчёте индикаторов для {symbol}/{tf}: {e}", flush=True)
@@ -69,7 +69,6 @@ async def process_ticker(tf, ticker, pg_pool, redis):
 # 3. Главная точка входа
 async def main():
     print("[INIT] Старт координатора индикаторов", flush=True)
-    await asyncio.sleep(10)
 
     pg_pool = await asyncpg.create_pool(DATABASE_URL)
     redis = aioredis.Redis(
@@ -84,8 +83,9 @@ async def main():
     asyncio.create_task(refresh_precision_map(pg_pool))
 
     pubsub = redis.pubsub()
-    await pubsub.subscribe("ohlcv_m5_complete")
-    print("[Sub] Подписка на канал ohlcv_m5_complete активна", flush=True)
+    channels = [f"ohlcv_{tf.lower()}_ready" for tf in TIMEFRAMES]
+    await pubsub.subscribe(*channels)
+    print(f"[Sub] Подписка на каналы: {channels}", flush=True)
 
     async for message in pubsub.listen():
         if message['type'] != 'message':
@@ -93,8 +93,15 @@ async def main():
 
         try:
             data = json.loads(message['data'].decode())
+            if data.get('action') != 'aggregate_ready':
+                continue
+
             symbol = data['symbol']
-            tf = 'M5'
+            interval = data['interval'].upper()  # 'm15' -> 'M15'
+
+            if interval not in TIMEFRAMES:
+                print(f"[SKIP] Неизвестный интервал: {interval}", flush=True)
+                continue
 
             precision = precision_map.get(symbol)
             if precision is None:
@@ -102,7 +109,7 @@ async def main():
                 continue
 
             ticker = {'symbol': symbol, 'precision_price': precision}
-            await process_ticker(tf, ticker, pg_pool, redis)
+            await process_ticker(interval, ticker, pg_pool, redis)
 
         except Exception as e:
             print(f"[ERROR] Ошибка при обработке события: {e}", flush=True)

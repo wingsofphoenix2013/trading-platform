@@ -18,7 +18,7 @@ def manual_ema(prices, length):
 
 # 3. Основная функция расчёта EMA
 async def process_ema(pg_pool, redis, symbol, tf, precision):
-    table_name = f"ohlcv_{tf.lower()}"
+    table_name = f"ohlcv2_{tf.lower()}"
     async with pg_pool.acquire() as conn:
         rows = await conn.fetch(
             f"""

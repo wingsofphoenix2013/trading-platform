@@ -18,7 +18,7 @@ async def process_atr(pg_pool, redis, symbol, tf, precision):
         """)
         length = int(row['value']) if row else 14
 
-    table_name = f"ohlcv_{tf.lower()}"
+    table_name = f"ohlcv2_{tf.lower()}"
     async with pg_pool.acquire() as conn:
         rows = await conn.fetch(
             f"""
