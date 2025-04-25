@@ -42,9 +42,11 @@ class VlM1FlexStrategy:
 
         # --- Получение базовой информации ---
         row = await conn.fetchrow("""
-            SELECT sl.ticker_symbol, sl.direction, s.deposit, s.position_limit, s.use_all_tickers
+            SELECT sl.ticker_symbol, sl.direction, s.deposit, s.position_limit, s.use_all_tickers,
+                   t.precision_price, t.precision_qty, t.min_qty
             FROM signal_logs sl
             JOIN strategies s ON s.id = $1
+            JOIN tickers t ON t.symbol = sl.ticker_symbol
             WHERE sl.id = $2
         """, self.strategy_id, log_id)
 
@@ -57,6 +59,9 @@ class VlM1FlexStrategy:
         deposit = row["deposit"]
         limit = row["position_limit"]
         use_all = row["use_all_tickers"]
+        pp = row["precision_price"]
+        pq = row["precision_qty"]
+        min_qty = row["min_qty"]
 
         # --- Проверка: разрешён ли тикер ---
         if not use_all:
@@ -103,10 +108,25 @@ class VlM1FlexStrategy:
             await conn.close()
             return
 
-        if ok:
-            print(f"[VL_M1_FLEX] ✅ {direction.upper()} разрешён: цена={price}, EMA={ema}, ATR={atr}, порог={required_price}", flush=True)
-        else:
+        if not ok:
             print(f"[VL_M1_FLEX] ❌ {direction.upper()} запрещён: цена={price}, EMA={ema}, ATR={atr}, порог={required_price}", flush=True)
+            await conn.close()
+            return
+
+        print(f"[VL_M1_FLEX] ✅ {direction.upper()} разрешён: цена={price}, EMA={ema}, ATR={atr}, порог={required_price}", flush=True)
+
+        # --- Расчёт объёма позиции ---
+        notional_target = limit
+        qty = (notional_target / price).quantize(Decimal(f"1e-{pq}"), rounding=ROUND_DOWN)
+
+        if qty < min_qty:
+            print(f"[VL_M1_FLEX] ❌ qty={qty} меньше min_qty={min_qty}", flush=True)
+            await conn.close()
+            return
+
+        notional_final = (qty * price).quantize(Decimal(f"1e-{pp}"), rounding=ROUND_DOWN)
+
+        print(f"[VL_M1_FLEX] 💰 Объём позиции: qty={qty}, notional={notional_final}", flush=True)
 
         await conn.close()
 
