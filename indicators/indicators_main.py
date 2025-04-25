@@ -93,7 +93,7 @@ async def main():
 
         try:
             data = json.loads(message['data'].decode())
-            channel = message['channel']
+            channel = message['channel'].decode()
             interval = channel.replace("ohlcv_", "").replace("_ready", "").upper()
             symbol = data['symbol']
 
