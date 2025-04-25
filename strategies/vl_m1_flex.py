@@ -21,6 +21,7 @@ COMMISSION_RATE = Decimal("0.0004")  # 0.04% комиссия биржи
 class VlM1FlexStrategy:
     def __init__(self, strategy_id: int):
         self.strategy_id = strategy_id
+        self.last_sl_shift = None  # отслеживание последней перестановки SL
 
     async def get_price(self, symbol: str) -> Decimal:
         val = await REDIS.get(f"price:{symbol}")
@@ -256,15 +257,30 @@ class VlM1FlexStrategy:
                     INSERT INTO signal_log_entries (strategy_id, log_id, status, position_id, note, logged_at)
                     VALUES ($1, NULL, $2, $3, $4, now())
                 """, self.strategy_id, f"{t_type}_hit", pid, f"{t_type} level {level or '-'} hit")
-
-                # --- SL закрывает полностью ---
-                if t_type == "sl":
+                
+                if t_type == "tp" and level in (1, 2):
                     await conn.execute("""
                         UPDATE positions
-                        SET status = 'closed', closed_at = now(), exit_price = $1, close_reason = 'sl'
+                        SET close_reason = $1
                         WHERE id = $2
-                    """, mark, pid)
-                    print(f"[VL_M1_FLEX] ❌ Позиция закрыта по SL: цена={mark}", flush=True)
+                    """, f"tp{level}-hit", pid)
+                    
+                # --- SL закрывает полностью ---
+                if t_type == "sl":
+                    reason = 'sl'
+                    if self.last_sl_shift == "tp1":
+                        reason = 'sl-after-tp1'
+                    elif self.last_sl_shift == "tp2":
+                        reason = 'sl-after-tp2'
+
+                    await conn.execute("""
+                        UPDATE positions
+                        SET status = 'closed', closed_at = now(), exit_price = $1, close_reason = $2
+                        WHERE id = $3
+                    """, mark, reason, pid)
+                    print(f"[VL_M1_FLEX] ❌ Позиция закрыта по {reason.upper()}: цена={mark}", flush=True)
+
+                    self.last_sl_shift = None  # сбрасываем после закрытия
 
                 # --- TP1 → перестановка SL на entry_price ---
                 elif t_type == "tp" and level == 1:
@@ -277,6 +293,7 @@ class VlM1FlexStrategy:
                         INSERT INTO position_targets (position_id, type, level, price, quantity)
                         VALUES ($1, 'sl', NULL, $2, $3)
                     """, pid, entry, qty_left - t_qty)
+                    self.last_sl_shift = "tp1"  # записываем метку перестановки SL
                     print(f"[VL_M1_FLEX] 🔄 SL перемещён на безубыток: {entry}", flush=True)
 
                 # --- TP2 → перестановка SL на entry + 1 ATR ---
@@ -294,8 +311,9 @@ class VlM1FlexStrategy:
                             INSERT INTO position_targets (position_id, type, level, price, quantity)
                             VALUES ($1, 'sl', NULL, $2, $3)
                         """, pid, new_sl, qty_left - t_qty)
+                        self.last_sl_shift = "tp2"  # записываем метку перестановки SL
                         print(f"[VL_M1_FLEX] 🔄 SL перемещён после TP2: {new_sl}", flush=True)
-
+                        
         # --- Финальное закрытие если всё закрыто ---
         final_qty = await conn.fetchval("""
             SELECT quantity_left FROM positions WHERE id = $1
