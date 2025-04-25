@@ -7,10 +7,9 @@ import os
 import json
 from datetime import datetime
 
-# --- Блок импорта стратегий вставлять тут ---
+# --- Блок импорта стратегий ---
 import vilarso_m5_flex
 import lx_m5_strict
-# --- Блок импорта стратегий вставлять тут ---
 from vl_m1_flex import VlM1FlexStrategy
 
 # --- Конфигурация окружения ---
@@ -20,8 +19,8 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # --- Глобальные переменные ---
-active_strategies = []
-strategy_tickers_map = {}  # strategy_id → set of ticker_ids
+running_strategies = {}  # имя стратегии -> объект стратегии
+strategy_tickers_map = {}  # strategy_id -> set of ticker_ids
 
 # --- Подключение к БД ---
 async def get_db():
@@ -52,88 +51,86 @@ async def load_strategy_tickers():
         mapping.setdefault(r["strategy_id"], set()).add(r["ticker_id"])
     return mapping
 
-# --- Обработка сигнала: вызов нужной стратегии ---
+# --- Старт всех активных стратегий ---
+async def start_active_strategies():
+    global strategy_tickers_map
+
+    print("[strategies_main] 🚀 Загрузка стратегий...")
+    strategy_infos = await load_strategies()
+    strategy_tickers_map = await load_strategy_tickers()
+
+    for strategy_info in strategy_infos:
+        strategy_id = strategy_info["id"]
+        strategy_name = strategy_info["name"]
+
+        # Здесь создаём объекты стратегий
+        if strategy_name == "VL_M1_FLEX":
+            strategy = VlM1FlexStrategy(strategy_id=strategy_id)
+            asyncio.create_task(strategy.main_loop())
+            running_strategies[strategy_name] = strategy
+            print(f"[strategies_main] ✅ Стратегия {strategy_name} запущена")
+        
+        # сюда можно дописать другие стратегии в будущем
+        # elif strategy_name == "VILARSO_M5_FLEX":
+        #     strategy = VilarsoM5FlexStrategy(...)
+        #     asyncio.create_task(strategy.main_loop())
+        #     running_strategies[strategy_name] = strategy
+
+# --- Обработка входящего сигнала ---
 async def handle_signal(signal_log_id: int):
     try:
-        print(f"[strategies_main] Обработка signal_log_id={signal_log_id}", flush=True)
+        print(f"[strategies_main] 📡 Обработка signal_log_id={signal_log_id}", flush=True)
         conn = await get_db()
-
         row = await conn.fetchrow("""
             SELECT s.name
-            FROM signal_log_entries sl
+            FROM signal_logs sl
             JOIN strategies s ON s.id = sl.strategy_id
-            WHERE sl.log_id = $1
+            WHERE sl.id = $1
         """, signal_log_id)
-
         await conn.close()
 
         if not row:
-            print(f"[strategies_main] Стратегия для log_id={signal_log_id} не найдена", flush=True)
+            print(f"[strategies_main] ⚠️ Стратегия для signal_log_id={signal_log_id} не найдена", flush=True)
             return
 
         strategy_name = row["name"]
 
-        if strategy_name == "vilarso_m5_flex":
-            await vilarso_m5_flex.process_signal(signal_log_id)
-
-        elif strategy_name == "lx_m5_strict":
-            await lx_m5_strict.process_signal(signal_log_id)  
-        
-        elif strategy_name == "VL_M1_FLEX":
-            strategy = VlM1FlexStrategy(strategy_id=1)
+        if strategy_name in running_strategies:
+            strategy = running_strategies[strategy_name]
             await strategy.on_signal(signal_log_id)
-        
         else:
-            print(f"[strategies_main] Стратегия '{strategy_name}' пока не поддерживается", flush=True)
+            print(f"[strategies_main] ⚠️ Стратегия {strategy_name} не активна", flush=True)
 
     except Exception as e:
-        print(f"[strategies_main] Ошибка при обработке сигнала: {e}", flush=True)
+        print(f"[strategies_main] ❌ Ошибка обработки сигнала: {e}", flush=True)
 
-# --- Периодическая проверка на случай потери Redis-сообщений ---
-async def periodic_refresh():
-    global active_strategies, strategy_tickers_map
-    while True:
-        await asyncio.sleep(300)  # каждые 5 минут
-        print("[refresh] Контрольная перезагрузка стратегий и связей из БД", flush=True)
-        active_strategies = await load_strategies()
-        strategy_tickers_map = await load_strategy_tickers()
+# --- Основная точка входа ---
+async def main():
+    print("[strategies_main] 📋 Запуск системы стратегий", flush=True)
 
-# --- Подписка на Redis ---
-async def redis_listener():
-    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, ssl=True)
-    pubsub = r.pubsub()
-    await pubsub.subscribe("signal_logs_ready", "strategy_activation")
-    print("[redis] Подписка на каналы: signal_logs_ready, strategy_activation", flush=True)
+    await start_active_strategies()
+
+    print("[strategies_main] ✅ Все стратегии активированы", flush=True)
+
+    # Здесь будет цикл подписки на Redis и обработка сигналов
+    redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, ssl=True)
+    pubsub = redis_conn.pubsub()
+    await pubsub.subscribe("signal_logs_ready")  # Подписка на события новых сигналов
+
+    print("[strategies_main] 📡 Ожидание сигналов...", flush=True)
 
     async for message in pubsub.listen():
-        if message["type"] != "message":
+        if message['type'] != 'message':
             continue
+
+        data = message['data']
         try:
-            channel = message["channel"].decode()
-            data = json.loads(message["data"])
-
-            if channel == "signal_logs_ready":
-                signal_log_id = int(data)
+            payload = json.loads(data)
+            signal_log_id = payload.get("signal_log_id")
+            if signal_log_id:
                 await handle_signal(signal_log_id)
-
-            elif channel == "strategy_activation":
-                print(f"[redis] Перезагрузка стратегий по событию strategy_activation", flush=True)
-                active_strategies = await load_strategies()
-                strategy_tickers_map = await load_strategy_tickers()
-
         except Exception as e:
-            print(f"[redis] Ошибка обработки сообщения: {e}", flush=True)
-
-# --- Точка входа ---
-async def main():
-    global active_strategies, strategy_tickers_map
-    print("[strategies] Запуск координатора...", flush=True)
-    active_strategies = await load_strategies()
-    strategy_tickers_map = await load_strategy_tickers()
-    print(f"[init] Стратегий: {len(active_strategies)}", flush=True)
-    
-    asyncio.create_task(periodic_refresh())
-    await redis_listener()
+            print(f"[strategies_main] ❌ Ошибка разбора сигнала: {e}", flush=True)
 
 if __name__ == "__main__":
     asyncio.run(main())
