@@ -112,10 +112,16 @@ async def main():
 
     print("[strategies_main] ✅ Все стратегии активированы", flush=True)
 
-    # Здесь будет цикл подписки на Redis и обработка сигналов
-    redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, ssl=True)
+    # Подключение к Redis и подписка на канал
+    redis_conn = redis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        password=REDIS_PASSWORD,
+        ssl=True
+    )
+
     pubsub = redis_conn.pubsub()
-    await pubsub.subscribe("signal_logs_ready")  # Подписка на события новых сигналов
+    await pubsub.subscribe("signal_logs_ready")
 
     print("[strategies_main] 📡 Ожидание сигналов...", flush=True)
 
@@ -123,14 +129,29 @@ async def main():
         if message['type'] != 'message':
             continue
 
-        data = message['data']
+        raw_data = message['data']
+
+        # 💡 Декодируем байты в строку
+        if isinstance(raw_data, bytes):
+            raw_data = raw_data.decode('utf-8')
+
         try:
-            payload = json.loads(data)
-            signal_log_id = payload.get("signal_log_id")
+            payload = json.loads(raw_data)
+
+            # Универсальная обработка формата
+            if isinstance(payload, dict):
+                signal_log_id = payload.get("signal_log_id")
+            elif isinstance(payload, int):
+                signal_log_id = payload
+            else:
+                print(f"[strategies_main] ⚠️ Неподдерживаемый формат сигнала: {payload}")
+                continue
+
             if signal_log_id:
                 await handle_signal(signal_log_id)
+
         except Exception as e:
-            print(f"[strategies_main] ❌ Ошибка разбора сигнала: {e}", flush=True)
+            print(f"[strategies_main] ❌ Ошибка обработки сигнала: {e}", flush=True)
 
 if __name__ == "__main__":
     asyncio.run(main())

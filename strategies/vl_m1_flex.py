@@ -262,11 +262,12 @@ class VlM1FlexStrategy:
                         pnl = pnl + $2
                     WHERE id = $3
                 """, t_qty, pnl_step, pid)
-
+                
+                log_id = row["log_id"]  # 💡 вот это ключ
                 await conn.execute("""
-                    INSERT INTO signal_log_entries (strategy_id, log_id, status, position_id, note, logged_at)
-                    VALUES ($1, NULL, $2, $3, $4, now())
-                """, self.strategy_id, f"{t_type}_hit", pid, f"{t_type} level {level or '-'} hit")
+                INSERT INTO signal_log_entries (strategy_id, log_id, status, position_id, note, logged_at)
+                VALUES ($1, $2, $3, $4, $5, now())
+                """, self.strategy_id, log_id, f"{t_type}_hit", pid, f"{t_type} level {level or '-'} hit")
 
                 if t_type == "tp" and level in (1, 2):
                     await conn.execute("""
