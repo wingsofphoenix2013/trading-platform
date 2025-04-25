@@ -179,7 +179,7 @@ class VlM1FlexStrategy:
             VALUES ($1, $2, 'position_opened', $3, 'position created', now())
         """, self.strategy_id, log_id, position_id)
 
-    await conn.close()
+        await conn.close()
 
     async def tick(self):
         print("[VL_M1_FLEX] ⏱ Проверка активных позиций...", flush=True)
