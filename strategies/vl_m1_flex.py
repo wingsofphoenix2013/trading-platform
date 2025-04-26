@@ -187,7 +187,7 @@ class VlM1FlexStrategy:
         conn = await self.get_db()
 
         rows = await conn.fetch("""
-            SELECT p.id, p.symbol, p.direction, p.entry_price, p.quantity_left, p.quantity, p.pnl,
+            SELECT p.id, p.symbol, p.direction, p.entry_price, p.quantity_left, p.quantity, p.pnl, p.status,
                    t.precision_price, t.precision_qty
             FROM positions p
             JOIN tickers t ON t.symbol = p.symbol
@@ -201,19 +201,14 @@ class VlM1FlexStrategy:
             symbol = row["symbol"]
             direction = row["direction"]
             entry = Decimal(row["entry_price"])
-            qty_left = Decimal(row["quantity_left"])
-            qty_total = Decimal(row["quantity"])
-            pnl = Decimal(row["pnl"])
             pp = row["precision_price"]
             pq = row["precision_qty"]
 
             price_raw = await REDIS.get(f"price:{symbol}")
             if not price_raw:
-                print(f"[DEBUG] Цена не найдена в Redis для {symbol}", flush=True)
                 continue
 
             mark = Decimal(price_raw.decode()).quantize(Decimal(f"1e-{pp}"), rounding=ROUND_DOWN)
-            print(f"[DEBUG] Цена {symbol} сейчас: {mark}", flush=True)
 
             targets = await conn.fetch("""
                 SELECT id, type, level, price, quantity
@@ -221,8 +216,6 @@ class VlM1FlexStrategy:
                 WHERE position_id = $1 AND hit = false AND canceled = false
                 ORDER BY type, level NULLS LAST
             """, pid)
-
-            print(f"[DEBUG] Целей для позиции {pid}: {len(targets)}", flush=True)
 
             for target in targets:
                 target_id = target["id"]
@@ -236,15 +229,9 @@ class VlM1FlexStrategy:
                     triggered = mark >= t_price if direction == "long" else mark <= t_price
                 elif t_type == "sl":
                     triggered = mark <= t_price if direction == "long" else mark >= t_price
-                else:
-                    continue
-
-                print(f"[DEBUG] Проверка цели {t_type.upper()} для {symbol}: текущая цена={mark}, цель={t_price}, triggered={triggered}", flush=True)
 
                 if not triggered:
                     continue
-
-                print(f"[VL_M1_FLEX] 🎯 Цель сработала: {t_type.upper()} L{level or '-'} @ {t_price} qty={t_qty}", flush=True)
 
                 commission = (mark * t_qty * COMMISSION_RATE).quantize(Decimal(f"1e-{pp}"), rounding=ROUND_DOWN)
                 delta = (mark - entry if direction == "long" else entry - mark) * t_qty
@@ -262,12 +249,10 @@ class VlM1FlexStrategy:
                         pnl = pnl + $2
                     WHERE id = $3
                 """, t_qty, pnl_step, pid)
-                
-                log_id = row["log_id"]  # 💡 вот это ключ
-                await conn.execute("""
-                INSERT INTO signal_log_entries (strategy_id, log_id, status, position_id, note, logged_at)
-                VALUES ($1, $2, $3, $4, $5, now())
-                """, self.strategy_id, log_id, f"{t_type}_hit", pid, f"{t_type} level {level or '-'} hit")
+
+                quantity_left = await conn.fetchval("""
+                    SELECT quantity_left FROM positions WHERE id = $1
+                """, pid)
 
                 if t_type == "tp" and level in (1, 2):
                     await conn.execute("""
@@ -288,8 +273,6 @@ class VlM1FlexStrategy:
                         SET status = 'closed', closed_at = now(), exit_price = $1, close_reason = $2
                         WHERE id = $3
                     """, mark, reason, pid)
-
-                    print(f"[VL_M1_FLEX] ❌ Позиция закрыта по {reason.upper()}: цена={mark}", flush=True)
                     self.last_sl_shift = None
 
                 elif t_type == "tp" and level == 1:
@@ -301,9 +284,8 @@ class VlM1FlexStrategy:
                     await conn.execute("""
                         INSERT INTO position_targets (position_id, type, level, price, quantity)
                         VALUES ($1, 'sl', NULL, $2, $3)
-                    """, pid, entry, qty_left - t_qty)
+                    """, pid, entry, quantity_left)
                     self.last_sl_shift = "tp1"
-                    print(f"[VL_M1_FLEX] 🔄 SL перемещён на безубыток: {entry}", flush=True)
 
                 elif t_type == "tp" and level == 2:
                     atr_val = await REDIS.get(f"{symbol}:M1:ATR:atr")
@@ -318,9 +300,8 @@ class VlM1FlexStrategy:
                         await conn.execute("""
                             INSERT INTO position_targets (position_id, type, level, price, quantity)
                             VALUES ($1, 'sl', NULL, $2, $3)
-                        """, pid, new_sl, qty_left - t_qty)
+                        """, pid, new_sl, quantity_left)
                         self.last_sl_shift = "tp2"
-                        print(f"[VL_M1_FLEX] 🔄 SL перемещён после TP2: {new_sl}", flush=True)
 
             final_qty = await conn.fetchval("""
                 SELECT quantity_left FROM positions WHERE id = $1
@@ -332,7 +313,6 @@ class VlM1FlexStrategy:
                     SET status = 'closed', closed_at = now(), exit_price = $1, close_reason = 'tp3'
                     WHERE id = $2
                 """, mark, pid)
-                print(f"[VL_M1_FLEX] ✅ Позиция полностью закрыта: id={pid}, по цене={mark}", flush=True)
 
         await conn.close()
         
