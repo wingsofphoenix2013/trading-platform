@@ -17,14 +17,51 @@ REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
-# Временный список тикеров для мониторинга
+# Список тикеров для мониторинга (позже загружается из базы)
 SYMBOLS = ["BTCUSDT", "AVAXUSDT"]
 
+# Импорт и регистрация стратегий
+from strategy_1 import Strategy1
+
+strategies = {
+    "strategy_1": Strategy1()
+}
+
+# Асинхронный цикл мониторинга текущих цен
+def log_price(symbol, price):
+    logging.info(f"Текущая цена {symbol}: {price}")
+
+async def monitor_prices(redis_client):
+    while True:
+        for symbol in SYMBOLS:
+            try:
+                price = await redis_client.get(f'price:{symbol}')
+                log_price(symbol, price)
+            except Exception as e:
+                logging.error(f"Ошибка при получении цены {symbol} из Redis: {e}")
+
+        await asyncio.sleep(5)
+
+# Асинхронная подписка на сигналы и их передача стратегиям
+async def listen_signals(redis_client):
+    pubsub = redis_client.pubsub()
+    await pubsub.subscribe('incoming_signals')
+    logging.info("Подписка на канал incoming_signals выполнена.")
+
+    async for message in pubsub.listen():
+        if message['type'] == 'message':
+            signal_data = message['data']
+            logging.info(f"Получен сигнал: {signal_data}")
+
+            # Передача сигнала всем стратегиям
+            for strategy in strategies.values():
+                await strategy.on_signal(signal_data)
+
+# Основной цикл приложения
 async def main_loop():
     logging.info("strategies_v2_main.py успешно запустился.")
 
-    # Асинхронное подключение к Redis с SSL (требование Upstash)
-    r = redis.Redis(
+    redis_client = redis.Redis(
         host=REDIS_HOST,
         port=REDIS_PORT,
         password=REDIS_PASSWORD,
@@ -32,16 +69,11 @@ async def main_loop():
         ssl=True
     )
 
-    while True:
-        for symbol in SYMBOLS:
-            try:
-                # Получение текущей цены тикера из Redis
-                price = await r.get(f'price:{symbol}')
-                logging.info(f"Текущая цена {symbol}: {price}")
-            except Exception as e:
-                logging.error(f"Ошибка при получении цены {symbol} из Redis: {e}")
+    await asyncio.gather(
+        monitor_prices(redis_client),
+        listen_signals(redis_client)
+    )
 
-        await asyncio.sleep(5)
-
+# Запуск основного цикла
 if __name__ == "__main__":
     asyncio.run(main_loop())
