@@ -12,16 +12,30 @@ logging.basicConfig(
     ]
 )
 
-REDIS_URL = os.getenv("REDIS_URL")
+# --- Конфигурация окружения ---
+REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+
+# Временный список тикеров для мониторинга
 SYMBOLS = ["BTCUSDT", "AVAXUSDT"]
 
 async def main_loop():
     logging.info("strategies_v2_main.py успешно запустился.")
-    r = redis.from_url(REDIS_URL)
+
+    # Асинхронное подключение к Redis с SSL (требование Upstash)
+    r = redis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        password=REDIS_PASSWORD,
+        decode_responses=True,
+        ssl=True
+    )
 
     while True:
         for symbol in SYMBOLS:
             try:
+                # Получение текущей цены тикера из Redis
                 price = await r.get(f'price:{symbol}')
                 logging.info(f"Текущая цена {symbol}: {price}")
             except Exception as e:
