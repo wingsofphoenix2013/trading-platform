@@ -87,13 +87,20 @@ async def listen_signals(redis_client):
                 signal_row = await check_signal_in_db(phrase)
                 if signal_row:
                     logging.info(f"Сигнал '{phrase}' успешно найден и активен (id={signal_row['id']}).")
+
+                    # Проверка связанных стратегий
+                    linked_strategies = await get_linked_strategies(signal_row['id'])
+                    if linked_strategies:
+                        logging.info(f"Найдены активные стратегии для сигнала '{phrase}': {[s['name'] for s in linked_strategies]}")
+                    else:
+                        logging.warning(f"Нет активных стратегий для сигнала '{phrase}'.")
                 else:
                     logging.warning(f"Сигнал '{phrase}' не найден или неактивен. Игнорируется.")
 
             except Exception as e:
                 logging.error(f"Ошибка обработки сигнала: {e}")
 
-# Функция проверки сигнала в таблице signals (без учёта source)
+# Функция проверки сигнала в таблице signals
 async def check_signal_in_db(phrase):
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -110,7 +117,24 @@ async def check_signal_in_db(phrase):
         return None
     finally:
         await conn.close()
-        
+
+# Функция проверки связанных стратегий
+async def get_linked_strategies(signal_id):
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        query = """
+        SELECT s.id, s.name FROM strategy_signals ss
+        JOIN strategies s ON ss.strategy_id = s.id
+        WHERE ss.signal_id = $1 AND s.enabled = true
+        """
+        strategies = await conn.fetch(query, signal_id)
+        return strategies
+    except Exception as e:
+        logging.error(f"Ошибка при запросе связанных стратегий: {e}")
+        return []
+    finally:
+        await conn.close()
+                
 # Основной цикл приложения
 async def main_loop():
     logging.info("strategies_v2_main.py успешно запустился.")
