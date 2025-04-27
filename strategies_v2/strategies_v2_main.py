@@ -3,6 +3,7 @@ import logging
 import redis.asyncio as redis
 import os
 import sys
+import asyncpg
 
 # Настройка логирования с немедленным flush в stdout
 logging.basicConfig(
@@ -12,10 +13,25 @@ logging.basicConfig(
     ]
 )
 
-# --- Конфигурация окружения ---
+# --- Конфигурация Базы Данных ---
+DATABASE_URL = os.getenv("DATABASE_URL")
 REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+
+# Проверка подключения к PostgreSQL
+async def test_db_connection():
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        logging.info("Успешное подключение к базе данных.")
+
+        # Простой тестовый запрос
+        row = await conn.fetchrow('SELECT 1 AS test_field;')
+        logging.info(f"Тестовый запрос успешен, получено: {row['test_field']}")
+
+        await conn.close()
+    except Exception as e:
+        logging.error(f"Ошибка подключения к БД: {e}")
 
 # Список тикеров для мониторинга (позже загружается из базы)
 SYMBOLS = ["BTCUSDT", "AVAXUSDT"]
@@ -61,6 +77,9 @@ async def listen_signals(redis_client):
 async def main_loop():
     logging.info("strategies_v2_main.py успешно запустился.")
 
+    # Проверка базы данных при запуске
+    await test_db_connection()
+
     redis_client = redis.Redis(
         host=REDIS_HOST,
         port=REDIS_PORT,
@@ -69,10 +88,8 @@ async def main_loop():
         ssl=True
     )
 
-    await asyncio.gather(
-        monitor_prices(redis_client),
-        listen_signals(redis_client)
-    )
+    # Пока оставляем только мониторинг цен (сигналы обработаем отдельно позже)
+    await monitor_prices(redis_client)
 
 # Запуск основного цикла
 if __name__ == "__main__":
