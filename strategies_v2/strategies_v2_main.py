@@ -58,7 +58,9 @@ async def monitor_prices(redis_client):
 
         await asyncio.sleep(5)
 
-# Асинхронная функция подписки, логирования и парсинга сигналов из Redis
+import json
+
+# Асинхронная функция подписки, парсинга и проверки сигналов по БД
 async def listen_signals(redis_client):
     pubsub = redis_client.pubsub()
     await pubsub.subscribe('incoming_signals')
@@ -71,7 +73,6 @@ async def listen_signals(redis_client):
 
             # Парсинг сигнала
             try:
-                import json
                 signal_json = json.loads(signal_data)
                 signal_text = signal_json.get("message", "")
                 source = signal_json.get("source", "")
@@ -82,9 +83,34 @@ async def listen_signals(redis_client):
 
                 logging.info(f"Парсинг успешен — Фраза: '{phrase}', Тикер: '{symbol}', Источник: '{source}'")
 
-            except Exception as e:
-                logging.error(f"Ошибка парсинга сигнала: {e}")
+                # Проверка сигнала по базе
+                signal_row = await check_signal_in_db(phrase, source)
+                if signal_row:
+                    logging.info(f"Сигнал '{phrase}' успешно найден и активен (id={signal_row['id']}).")
+                else:
+                    logging.warning(f"Сигнал '{phrase}' не найден или неактивен. Игнорируется.")
 
+            except Exception as e:
+                logging.error(f"Ошибка обработки сигнала: {e}")
+
+# Функция проверки сигнала в таблице signals
+async def check_signal_in_db(phrase, source):
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        query = """
+        SELECT id, enabled FROM signals 
+        WHERE (long_phrase=$1 OR short_phrase=$1 OR long_exit_phrase=$1 OR short_exit_phrase=$1)
+        AND source=$2 AND enabled=true
+        LIMIT 1
+        """
+        signal_row = await conn.fetchrow(query, phrase, source)
+        return signal_row
+    except Exception as e:
+        logging.error(f"Ошибка при запросе к signals: {e}")
+        return None
+    finally:
+        await conn.close()
+        
 # Основной цикл приложения
 async def main_loop():
     logging.info("strategies_v2_main.py успешно запустился.")
