@@ -58,7 +58,7 @@ async def monitor_prices(redis_client):
 
         await asyncio.sleep(5)
 
-# Асинхронная функция подписки и логирования сигналов из Redis
+# Асинхронная функция подписки, логирования и парсинга сигналов из Redis
 async def listen_signals(redis_client):
     pubsub = redis_client.pubsub()
     await pubsub.subscribe('incoming_signals')
@@ -68,6 +68,22 @@ async def listen_signals(redis_client):
         if message['type'] == 'message':
             signal_data = message['data']
             logging.info(f"Получен сигнал: {signal_data}")
+
+            # Парсинг сигнала
+            try:
+                import json
+                signal_json = json.loads(signal_data)
+                signal_text = signal_json.get("message", "")
+                source = signal_json.get("source", "")
+
+                phrase, symbol = signal_text.strip().split(" ")
+                phrase = phrase.strip().upper()
+                symbol = symbol.strip().upper()
+
+                logging.info(f"Парсинг успешен — Фраза: '{phrase}', Тикер: '{symbol}', Источник: '{source}'")
+
+            except Exception as e:
+                logging.error(f"Ошибка парсинга сигнала: {e}")
 
 # Основной цикл приложения
 async def main_loop():
