@@ -40,7 +40,8 @@ SYMBOLS = ["BTCUSDT", "AVAXUSDT"]
 from strategy_1 import Strategy1
 
 strategies = {
-    "strategy_1": Strategy1()
+    "test-1": Strategy1(),
+    "another-test": Strategy1(),  # пока используем ту же заглушку
 }
 
 # Асинхронный цикл мониторинга текущих цен
@@ -92,6 +93,18 @@ async def listen_signals(redis_client):
                     linked_strategies = await get_linked_strategies(signal_row['id'])
                     if linked_strategies:
                         logging.info(f"Найдены активные стратегии для сигнала '{phrase}': {[s['name'] for s in linked_strategies]}")
+
+                        # Запускаем найденные стратегии
+                        for strategy in linked_strategies:
+                            strategy_name = strategy['name']
+                            if strategy_name in strategies:
+                                await strategies[strategy_name].on_signal({
+                                    'phrase': phrase,
+                                    'symbol': symbol
+                                })
+                                logging.info(f"Стратегия '{strategy_name}' запущена по сигналу '{phrase}' для тикера '{symbol}'.")
+                            else:
+                                logging.warning(f"Стратегия '{strategy_name}' найдена в БД, но не зарегистрирована в коде.")
                     else:
                         logging.warning(f"Нет активных стратегий для сигнала '{phrase}'.")
                 else:
