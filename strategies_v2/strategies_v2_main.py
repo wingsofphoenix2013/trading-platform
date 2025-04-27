@@ -58,7 +58,7 @@ async def monitor_prices(redis_client):
 
         await asyncio.sleep(5)
 
-# Асинхронная подписка на сигналы и их передача стратегиям
+# Асинхронная функция подписки и логирования сигналов из Redis
 async def listen_signals(redis_client):
     pubsub = redis_client.pubsub()
     await pubsub.subscribe('incoming_signals')
@@ -69,15 +69,10 @@ async def listen_signals(redis_client):
             signal_data = message['data']
             logging.info(f"Получен сигнал: {signal_data}")
 
-            # Передача сигнала всем стратегиям
-            for strategy in strategies.values():
-                await strategy.on_signal(signal_data)
-
 # Основной цикл приложения
 async def main_loop():
     logging.info("strategies_v2_main.py успешно запустился.")
 
-    # Проверка базы данных при запуске
     await test_db_connection()
 
     redis_client = redis.Redis(
@@ -88,8 +83,11 @@ async def main_loop():
         ssl=True
     )
 
-    # Пока оставляем только мониторинг цен (сигналы обработаем отдельно позже)
-    await monitor_prices(redis_client)
+    # Параллельный запуск мониторинга цен и подписки на сигналы
+    await asyncio.gather(
+        monitor_prices(redis_client),
+        listen_signals(redis_client)
+    )
 
 # Запуск основного цикла
 if __name__ == "__main__":
