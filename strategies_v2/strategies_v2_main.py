@@ -84,7 +84,7 @@ async def listen_signals(redis_client):
                 logging.info(f"Парсинг успешен — Фраза: '{phrase}', Тикер: '{symbol}', Источник: '{source}'")
 
                 # Проверка сигнала по базе
-                signal_row = await check_signal_in_db(phrase, source)
+                signal_row = await check_signal_in_db(phrase)
                 if signal_row:
                     logging.info(f"Сигнал '{phrase}' успешно найден и активен (id={signal_row['id']}).")
                 else:
@@ -93,17 +93,17 @@ async def listen_signals(redis_client):
             except Exception as e:
                 logging.error(f"Ошибка обработки сигнала: {e}")
 
-# Функция проверки сигнала в таблице signals
-async def check_signal_in_db(phrase, source):
+# Функция проверки сигнала в таблице signals (без учёта source)
+async def check_signal_in_db(phrase):
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         query = """
         SELECT id, enabled FROM signals 
         WHERE (long_phrase=$1 OR short_phrase=$1 OR long_exit_phrase=$1 OR short_exit_phrase=$1)
-        AND source=$2 AND enabled=true
+        AND enabled=true
         LIMIT 1
         """
-        signal_row = await conn.fetchrow(query, phrase, source)
+        signal_row = await conn.fetchrow(query, phrase)
         return signal_row
     except Exception as e:
         logging.error(f"Ошибка при запросе к signals: {e}")
