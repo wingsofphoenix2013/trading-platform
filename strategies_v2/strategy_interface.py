@@ -94,7 +94,7 @@ class StrategyInterface:
                 return False, "Ошибка при расчёте текущей загрузки депозита"
 
             if total_open_positions >= strategy_params['deposit']:
-                пункт return False, "Депозит исчерпан текущими позициями"
+                return False, "Депозит исчерпан текущими позициями"
 
             # Проверка №2: Разрешена ли торговля по тикеру
             query_ticker = "SELECT tradepermission FROM tickers WHERE symbol = $1"
