@@ -89,6 +89,17 @@ async def listen_signals(redis_client):
                 if signal_row:
                     logging.info(f"Сигнал '{phrase}' успешно найден и активен (id={signal_row['id']}).")
 
+                    # Логируем сигнал
+                    log_id = await log_signal(
+                        signal_id=signal_row['id'],
+                        ticker_symbol=symbol,
+                        direction='long' if 'LONG' in phrase else 'short' if 'SHORT' in phrase else 'unknown',
+                        source=source,
+                        raw_message=signal_data,
+                        status='new'
+                    )
+                    logging.info(f"Сигнал '{phrase}' залогирован с id={log_id}.")
+
                     # Проверка связанных стратегий
                     linked_strategies = await get_linked_strategies(signal_row['id'])
                     if linked_strategies:
@@ -147,7 +158,24 @@ async def get_linked_strategies(signal_id):
         return []
     finally:
         await conn.close()
-                
+        
+# Функция логирования сигнала в таблицу signal_logs
+async def log_signal(signal_id, ticker_symbol, direction, source, raw_message, status='new'):
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        query = """
+        INSERT INTO signal_logs (signal_id, ticker_symbol, direction, source, raw_message, received_at, status)
+        VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+        RETURNING id
+        """
+        log_row = await conn.fetchrow(query, signal_id, ticker_symbol, direction, source, raw_message, status)
+        return log_row['id']
+    except Exception as e:
+        logging.error(f"Ошибка логирования сигнала в signal_logs: {e}")
+        return None
+    finally:
+        await conn.close()
+                        
 # Основной цикл приложения
 async def main_loop():
     logging.info("strategies_v2_main.py успешно запустился.")
