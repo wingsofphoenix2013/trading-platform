@@ -4,11 +4,17 @@ import redis.asyncio as redis
 import os
 import sys
 import asyncpg
-
-# Импорт и регистрация стратегий
-# Импорт и регистрация стратегий
 from strategy_interface import StrategyInterface
 from strategy_1 import Strategy1
+
+# --- Конфигурация Базы Данных ---
+DATABASE_URL = os.getenv("DATABASE_URL")
+REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+
+# Импорт и регистрация стратегий
+
 
 strategy_interface = StrategyInterface(DATABASE_URL)
 
@@ -24,11 +30,6 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-# --- Конфигурация Базы Данных ---
-DATABASE_URL = os.getenv("DATABASE_URL")
-REDIS_HOST = os.getenv("REDIS_HOST")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # Проверка подключения к PostgreSQL
 async def test_db_connection():
