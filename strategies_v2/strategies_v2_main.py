@@ -6,10 +6,11 @@ import sys
 import asyncpg
 
 # Импорт и регистрация стратегий
+# Импорт и регистрация стратегий
 from strategy_interface import StrategyInterface
 from strategy_1 import Strategy1
 
-strategy_interface = StrategyInterface()
+strategy_interface = StrategyInterface(DATABASE_URL)
 
 strategies = {
     "test-1": Strategy1(strategy_interface),

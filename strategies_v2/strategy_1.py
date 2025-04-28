@@ -6,9 +6,10 @@ class Strategy1:
 
     async def on_signal(self, signal):
         logging.info(f"Стратегия №1 получила сигнал: {signal}")
-        await self.interface.open_position(
-            strategy_name='strategy_1',
-            symbol=signal['symbol'],
-            direction='long' if 'LONG' in signal['phrase'] else 'short',
-            params={}
-        )
+
+        # Загружаем параметры из базы
+        params = await self.interface.get_strategy_params('test-1')
+        if params:
+            logging.info(f"Параметры стратегии загружены: {params}")
+        else:
+            logging.error("Не удалось загрузить параметры стратегии.")
