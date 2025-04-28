@@ -61,6 +61,15 @@ class Strategy1:
                 return
 
         logging.info("Специфичные проверки пройдены, открываем позицию.")
+        # Тест расчёта размера позиции (ВСТАВЬ ЭТОТ КОД ДЛЯ ТЕСТА!)
+        price = await redis_client.get(f"price:{signal['symbol']}")
+        position_size = await self.interface.calculate_position_size(params, signal['symbol'], price)
+
+        if position_size:
+            logging.info(f"Расчётный размер позиции для {signal['symbol']}: {position_size}")
+        else:
+            logging.warning("Ошибка расчёта размера позиции.")
+            
         await self.interface.open_position(
             strategy_name='strategy_1',
             symbol=signal['symbol'],
