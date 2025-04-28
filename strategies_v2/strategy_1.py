@@ -7,7 +7,7 @@ class Strategy1:
     def __init__(self, interface):
         self.interface = interface
 
-       async def on_signal(self, signal):
+    async def on_signal(self, signal):
         logging.info(f"Стратегия №1 получила сигнал: {signal}")
 
         params = await self.load_params()
