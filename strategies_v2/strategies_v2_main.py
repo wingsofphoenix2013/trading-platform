@@ -15,12 +15,10 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # Импорт и регистрация стратегий
 
-
 strategy_interface = StrategyInterface(DATABASE_URL)
 
 strategies = {
     "test-1": Strategy1(strategy_interface),
-    "another-test": Strategy1(strategy_interface),
 }
 
 # Настройка логирования с немедленным flush в stdout
