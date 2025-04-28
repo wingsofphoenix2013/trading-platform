@@ -94,7 +94,7 @@ class StrategyInterface:
                 return False, "Ошибка при расчёте текущей загрузки депозита"
 
             if total_open_positions >= strategy_params['deposit']:
-                return False, "Депозит исчерпан текущими позициями"
+                пункт return False, "Депозит исчерпан текущими позициями"
 
             # Проверка №2: Разрешена ли торговля по тикеру
             query_ticker = "SELECT tradepermission FROM tickers WHERE symbol = $1"
@@ -118,4 +118,31 @@ class StrategyInterface:
             logging.error(f"Ошибка выполнения базовых проверок: {e}")
             return False, f"Ошибка выполнения проверок: {e}"
         finally:
-            await conn.close()            
+            await conn.close()
+    # Метод получения EMA50 и ATR из Redis
+    async def get_ema_atr(self, symbol, timeframe):
+        redis_client = redis.Redis(
+            host=os.getenv("REDIS_HOST"),
+            port=int(os.getenv("REDIS_PORT")),
+            password=os.getenv("REDIS_PASSWORD"),
+            decode_responses=True,
+            ssl=True
+        )
+        try:
+            ema_key = f"{symbol}:{timeframe}:EMA:50"
+            atr_key = f"{symbol}:{timeframe}:ATR:atr"
+
+            ema_value = await redis_client.get(ema_key)
+            atr_value = await redis_client.get(atr_key)
+
+            if ema_value is None or atr_value is None:
+                logging.warning(f"Не найдены данные EMA или ATR для {symbol} {timeframe}")
+                return None, None
+
+            return Decimal(ema_value), Decimal(atr_value)
+
+        except Exception as e:
+            logging.error(f"Ошибка получения EMA и ATR: {e}")
+            return None, None
+        finally:
+            await redis_client.close()                        
