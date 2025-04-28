@@ -111,5 +111,49 @@ class Strategy1:
 
         if position_id:
             logging.info(f"Позиция успешно открыта с ID={position_id}")
+            ema, atr = await self.interface.get_ema_atr(signal['symbol'], params['timeframe'])
+            if not atr:
+                logging.error("Не удалось получить ATR для расчёта TP/SL.")
+                return
+
+            targets = await self.calculate_tp_sl(
+                direction='long' if 'LONG' in signal['phrase'] else 'short',
+                entry_price=current_price,
+                quantity=position_size,
+                atr=atr
+            )
+
+            await self.interface.create_position_targets(position_id, targets)
         else:
             logging.error("Ошибка открытия позиции!")
+    # Метод расчёта уровней TP и SL для позиции (стратегия №1)
+    async def calculate_tp_sl(self, direction, entry_price, quantity, atr):
+        tp_levels = [
+            {"level": 1, "multiplier": Decimal('1.5'), "quantity_pct": Decimal('0.5')},
+            {"level": 2, "multiplier": Decimal('2.5'), "quantity_pct": Decimal('0.3')},
+            {"level": 3, "multiplier": Decimal('3.5'), "quantity_pct": Decimal('0.2')},
+        ]
+
+        targets = []
+
+        # TP
+        for tp in tp_levels:
+            tp_price = (entry_price + tp['multiplier'] * atr) if direction == 'long' else (entry_price - tp['multiplier'] * atr)
+            tp_quantity = (quantity * tp['quantity_pct']).quantize(Decimal('1e-8'))
+            targets.append({
+                "type": "TP",
+                "price": tp_price,
+                "quantity": tp_quantity,
+                "level": tp['level']
+            })
+
+        # SL (100% на 1.5 ATR)
+        sl_price = (entry_price - Decimal('1.5') * atr) if direction == 'long' else (entry_price + Decimal('1.5') * atr)
+        targets.append({
+            "type": "SL",
+            "price": sl_price,
+            "quantity": quantity,
+            "level": None
+        })
+
+        return targets            
