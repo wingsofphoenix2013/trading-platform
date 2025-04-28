@@ -227,14 +227,14 @@ class StrategyInterface:
         try:
             query = """
             INSERT INTO position_targets 
-                (position_id, target_type, target_price, quantity, level, status, created_at)
-            VALUES ($1, $2, $3, $4, $5, 'active', NOW())
+                (position_id, type, price, quantity, level, hit, canceled)
+            VALUES ($1, $2, $3, $4, $5, false, false)
             """
             for target in targets:
                 await conn.execute(
                     query,
                     position_id,
-                    target["type"],
+                    target["type"].lower(),
                     target["price"],
                     target["quantity"],
                     target["level"]
@@ -243,4 +243,4 @@ class StrategyInterface:
         except Exception as e:
             logging.error(f"Ошибка создания уровней TP/SL: {e}")
         finally:
-            await conn.close()                        
+            await conn.close()          
