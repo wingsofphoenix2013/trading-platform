@@ -1,4 +1,7 @@
 import logging
+import os
+import redis.asyncio as redis
+from decimal import Decimal
 
 class Strategy1:
     def __init__(self, interface):
