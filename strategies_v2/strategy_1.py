@@ -39,7 +39,7 @@ class Strategy1:
             decode_responses=True,
             ssl=True
         )
-        current_markprice = await redis_client.get(f"{signal['symbol']}:markprice")
+        current_markprice = await redis_client.get(f"price:{signal['symbol']}")
         await redis_client.close()
 
         if current_markprice is None:
