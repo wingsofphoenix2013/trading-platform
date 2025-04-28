@@ -1,10 +1,14 @@
 import logging
 
-# Инициализация стратегии №1
 class Strategy1:
-    def __init__(self):
-        logging.info("Стратегия №1 запустилась и готова принимать сигналы.")
+    def __init__(self, interface):
+        self.interface = interface
 
     async def on_signal(self, signal):
-        # Заглушка приёма сигнала
         logging.info(f"Стратегия №1 получила сигнал: {signal}")
+        await self.interface.open_position(
+            strategy_name='strategy_1',
+            symbol=signal['symbol'],
+            direction='long' if 'LONG' in signal['phrase'] else 'short',
+            params={}
+        )
