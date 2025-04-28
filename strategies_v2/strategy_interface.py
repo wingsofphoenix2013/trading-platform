@@ -58,7 +58,7 @@ class StrategyInterface:
                 precision_price = pos['precision_price']
 
                 # Берём текущую цену из Redis
-                current_markprice = await redis_client.get(f"{symbol}:markprice")
+                current_markprice = await redis_client.get(f"price:{symbol}")
                 if current_markprice is None:
                     logging.warning(f"Нет текущей цены для тикера {symbol}. Пропускаем.")
                     continue
