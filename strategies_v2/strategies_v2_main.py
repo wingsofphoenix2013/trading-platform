@@ -6,11 +6,14 @@ import sys
 import asyncpg
 
 # Импорт и регистрация стратегий
+from strategy_interface import StrategyInterface
 from strategy_1 import Strategy1
+
+strategy_interface = StrategyInterface()
 
 strategies = {
     "test-1": Strategy1(strategy_interface),
-    "another-test": Strategy1(strategy_interface),  # используем временно ту же стратегию-заглушку
+    "another-test": Strategy1(strategy_interface),
 }
 
 # Настройка логирования с немедленным flush в stdout
@@ -20,10 +23,6 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-# вверху файла strategies_v2_main.py
-from strategy_interface import StrategyInterface
-
-strategy_interface = StrategyInterface()
 # --- Конфигурация Базы Данных ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 REDIS_HOST = os.getenv("REDIS_HOST")
