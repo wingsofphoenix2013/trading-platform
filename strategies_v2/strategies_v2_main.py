@@ -4,6 +4,7 @@ import redis.asyncio as redis
 import os
 import sys
 import asyncpg
+import json
 from decimal import Decimal, ROUND_DOWN
 from strategy_interface import StrategyInterface
 from strategy_1 import Strategy1
@@ -58,9 +59,6 @@ async def load_tickers_periodically(strategy_interface, tickers_storage):
         
         await asyncio.sleep(300)  # Повтор каждые 5 минут
 # Асинхронный цикл мониторинга текущих цен
-def log_price(symbol, price):
-    logging.info(f"Текущая цена {symbol}: {price}")
-
 async def monitor_prices(redis_client, tickers_storage):
     while True:
         for symbol, params in tickers_storage.items():
@@ -69,15 +67,13 @@ async def monitor_prices(redis_client, tickers_storage):
                 if price_str:
                     precision = params['precision_price']
                     price = Decimal(price_str).quantize(Decimal(f'1e-{precision}'), rounding=ROUND_DOWN)
-                    logging.info(f"Текущая цена {symbol}: {price}")
+                    logging.debug(f"Текущая цена {symbol}: {price}")
                 else:
                     logging.warning(f"Цена для {symbol} отсутствует в Redis.")
             except Exception as e:
                 logging.error(f"Ошибка при получении цены {symbol} из Redis: {e}")
 
         await asyncio.sleep(5)
-
-import json
 # Асинхронная функция подписки, парсинга и проверки сигналов по БД
 async def listen_signals(redis_client):
     pubsub = redis_client.pubsub()
