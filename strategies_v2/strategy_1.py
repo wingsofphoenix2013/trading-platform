@@ -61,8 +61,11 @@ class Strategy1:
                 return
 
         logging.info("Специфичные проверки пройдены, открываем позицию.")
-        # Тест расчёта размера позиции (ВСТАВЬ ЭТОТ КОД ДЛЯ ТЕСТА!)
+
+        # Получаем текущую цену
         price = await redis_client.get(f"price:{signal['symbol']}")
+
+        # Расчёт размера позиции
         position_size = await self.interface.calculate_position_size(params, signal['symbol'], price)
 
         if position_size:
@@ -70,6 +73,21 @@ class Strategy1:
                 f"Расчётный размер позиции для {signal['symbol']}: {position_size} по цене {price} USDT "
                 f"(общая сумма {Decimal(position_size) * Decimal(price)} USDT)"
             )
+
+            # Открываем виртуальную позицию в таблице positions
+            position_id = await self.interface.open_virtual_position(
+                strategy_id=params['id'],
+                log_id=signal['log_id'],
+                symbol=signal['symbol'],
+                direction='long' if 'LONG' in signal['phrase'] else 'short',
+                entry_price=price,
+                quantity=position_size
+            )
+
+            if position_id:
+                logging.info(f"Позиция успешно открыта с ID={position_id}")
+            else:
+                logging.error("Ошибка открытия позиции!")
         else:
             logging.warning("Ошибка расчёта размера позиции.")
             
