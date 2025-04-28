@@ -119,6 +119,11 @@ class StrategyInterface:
             already_open = await self.has_open_position(strategy_id, symbol, direction)
             if already_open:
                 return False, "Уже есть открытая позиция по этому тикеру и направлению"
+                
+            # Проверка №5: Проверка наличия открытой позиции в противоположном направлении
+            opposite_open = await self.has_opposite_open_position(strategy_id, symbol, direction)
+            if opposite_open:
+                return False, "Уже есть открытая позиция по этому тикеру в противоположном направлении"
 
             # Все проверки пройдены
             return True, "Базовые проверки пройдены успешно"
@@ -264,4 +269,21 @@ class StrategyInterface:
             logging.error(f"Ошибка проверки открытых позиций: {e}")
             return True  # При ошибке считаем, что позиция есть (для безопасности)
         finally:
-            await conn.close()                      
+            await conn.close()    
+    # Проверка наличия открытой позиции в противоположном направлении
+    async def has_opposite_open_position(self, strategy_id, symbol, direction):
+        opposite_direction = 'short' if direction == 'long' else 'long'
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = """
+            SELECT COUNT(*) FROM positions
+            WHERE strategy_id = $1 AND symbol = $2 AND direction = $3 
+              AND status IN ('open', 'partial')
+            """
+            count = await conn.fetchval(query, strategy_id, symbol, opposite_direction)
+            return count > 0
+        except Exception as e:
+            logging.error(f"Ошибка проверки противоположных открытых позиций: {e}")
+            return True  # Безопасный ответ
+        finally:
+            await conn.close()                          
