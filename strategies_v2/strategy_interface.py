@@ -184,3 +184,30 @@ class StrategyInterface:
             return None
         finally:
             await conn.close()
+    # Метод создания виртуальной позиции в базе данных
+    async def open_virtual_position(self, strategy_id, log_id, symbol, direction, entry_price, quantity):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            notional_value = (Decimal(entry_price) * Decimal(quantity)).quantize(Decimal('1e-8'))
+
+            # Начальный PnL с учетом комиссии 0.05%
+            commission = (notional_value * Decimal('0.0005')).quantize(Decimal('1e-8'))
+            initial_pnl = -commission
+
+            query = """
+            INSERT INTO positions
+            (strategy_id, log_id, symbol, direction, entry_price, quantity, notional_value, quantity_left, status, created_at, pnl)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $6, 'open', NOW(), $8)
+            RETURNING id
+            """
+            position_id = await conn.fetchval(query, strategy_id, log_id, symbol, direction, entry_price, quantity, notional_value, initial_pnl)
+            
+            logging.info(f"Открыта позиция ID={position_id}, тикер={symbol}, направление={direction}, размер={quantity}, цена входа={entry_price}, комиссия={commission}")
+            
+            return position_id
+
+        except Exception as e:
+            logging.error(f"Ошибка при открытии позиции: {e}")
+            return None
+        finally:
+            await conn.close()            
