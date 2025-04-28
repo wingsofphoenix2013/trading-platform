@@ -97,10 +97,13 @@ class StrategyInterface:
                 return False, "Депозит исчерпан текущими позициями"
 
             # Проверка №2: Разрешена ли торговля по тикеру
-            query_ticker = "SELECT tradepermission FROM tickers WHERE symbol = $1"
+            query_ticker = """
+            SELECT tradepermission FROM tickers WHERE symbol = $1
+            """
             ticker_tradepermission = await conn.fetchval(query_ticker, symbol)
-            if not ticker_tradepermission:
-                return False, "Торговля по тикеру запрещена (tradepermission=false)"
+
+            if ticker_tradepermission != 'enabled':
+                return False, "Торговля по тикеру запрещена (tradepermission != 'enabled')"
 
             # Проверка №3: Если стратегия ограничивает набор тикеров
             if not strategy_params['use_all_tickers']:
