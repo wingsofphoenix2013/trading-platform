@@ -45,15 +45,6 @@ async def test_db_connection():
 
 # Список тикеров для мониторинга (позже загружается из базы)
 SYMBOLS = ["BTCUSDT", "AVAXUSDT"]
-
-# Импорт и регистрация стратегий
-from strategy_1 import Strategy1
-
-strategies = {
-    "test-1": Strategy1(),
-    "another-test": Strategy1(),  # пока используем ту же заглушку
-}
-
 # Асинхронный цикл мониторинга текущих цен
 def log_price(symbol, price):
     logging.info(f"Текущая цена {symbol}: {price}")
