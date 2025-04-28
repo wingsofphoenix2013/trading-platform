@@ -210,4 +210,37 @@ class StrategyInterface:
             logging.error(f"Ошибка при открытии позиции: {e}")
             return None
         finally:
-            await conn.close()            
+            await conn.close()
+    # Метод добавления уровней TP и SL в таблицу position_targets
+    async def create_position_targets(self, position_id, targets):
+        """
+        Создаёт записи TP и SL для указанной позиции.
+
+        :param position_id: ID открытой позиции
+        :param targets: список словарей с уровнями TP и SL в формате:
+            [
+                {"type": "TP", "price": Decimal, "quantity": Decimal, "level": 1},
+                {"type": "SL", "price": Decimal, "quantity": Decimal, "level": None}
+            ]
+        """
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = """
+            INSERT INTO position_targets 
+                (position_id, target_type, target_price, quantity, level, status, created_at)
+            VALUES ($1, $2, $3, $4, $5, 'active', NOW())
+            """
+            for target in targets:
+                await conn.execute(
+                    query,
+                    position_id,
+                    target["type"],
+                    target["price"],
+                    target["quantity"],
+                    target["level"]
+                )
+            logging.info(f"Добавлены уровни TP/SL для позиции ID={position_id}")
+        except Exception as e:
+            logging.error(f"Ошибка создания уровней TP/SL: {e}")
+        finally:
+            await conn.close()                        
