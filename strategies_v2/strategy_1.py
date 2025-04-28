@@ -7,24 +7,23 @@ class Strategy1:
     def __init__(self, interface):
         self.interface = interface
 
-    async def on_signal(self, signal):
+       async def on_signal(self, signal):
         logging.info(f"Стратегия №1 получила сигнал: {signal}")
 
         params = await self.load_params()
         if not params:
             return
 
-        current_price = await self.get_current_price(signal['symbol'])
-        if not current_price:
-            return
-
-        # Явно берём переданное направление
         direction = signal['direction']
 
-        # Выполняем базовые проверки
+        # Базовые проверки должны быть ДО получения цены!
         checks_passed, message = await self.interface.perform_basic_checks(params, signal['symbol'], direction)
         if not checks_passed:
             logging.warning(f"Базовые проверки не пройдены: {message}")
+            return
+
+        current_price = await self.get_current_price(signal['symbol'])
+        if not current_price:
             return
 
         checks_passed = await self.run_checks(params, signal, current_price)
