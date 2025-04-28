@@ -148,4 +148,36 @@ class StrategyInterface:
             logging.error(f"Ошибка получения EMA и ATR: {e}")
             return None, None
         finally:
-            await redis_client.close()                        
+            await redis_client.close()    
+    # Метод расчёта размера позиции с учётом максимума и точности
+    async def calculate_position_size(self, strategy_params, symbol, price):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            # Получаем точность qty из таблицы tickers
+            query_precision = "SELECT precision_qty FROM tickers WHERE symbol = $1"
+            precision_qty = await conn.fetchval(query_precision, symbol)
+            
+            if precision_qty is None:
+                logging.error(f"Не найдена точность (precision_qty) для тикера {symbol}")
+                return None
+            
+            # Рассчитываем максимальный объём позиции в базовом активе
+            max_qty = Decimal(strategy_params['position_limit']) / Decimal(price)
+            
+            # Округляем с учётом precision_qty
+            position_qty = max_qty.quantize(Decimal(f'1e-{precision_qty}'))
+
+            # Проверка, чтобы объём позиции был не менее 90% от максимума
+            min_allowed_qty = (Decimal('0.9') * max_qty).quantize(Decimal(f'1e-{precision_qty}'))
+
+            if position_qty < min_allowed_qty:
+                logging.warning("Расчётный объём меньше минимально разрешённого (90%).")
+                return None
+
+            return position_qty
+
+        except Exception as e:
+            logging.error(f"Ошибка расчёта размера позиции: {e}")
+            return None
+        finally:
+            await conn.close()                                
