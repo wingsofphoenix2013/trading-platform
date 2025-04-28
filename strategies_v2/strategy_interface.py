@@ -301,4 +301,27 @@ class StrategyInterface:
         except Exception as e:
             logging.error(f"Ошибка логирования действия стратегии: {e}")
         finally:
-            await conn.close()                                  
+            await conn.close()      
+    # Метод получения активных тикеров из таблицы tickers
+    async def get_active_tickers(self):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = """
+            SELECT symbol, precision_price, precision_qty
+            FROM tickers
+            WHERE enabled = true AND tradepermission = 'enabled'
+            """
+            rows = await conn.fetch(query)
+            tickers = {
+                row['symbol']: {
+                    'precision_price': row['precision_price'],
+                    'precision_qty': row['precision_qty']
+                } for row in rows
+            }
+            logging.info(f"Актуальные тикеры загружены из базы: {list(tickers.keys())}")
+            return tickers
+        except Exception as e:
+            logging.error(f"Ошибка загрузки активных тикеров: {e}")
+            return {}
+        finally:
+            await conn.close()                                        

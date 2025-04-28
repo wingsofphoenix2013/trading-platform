@@ -28,7 +28,8 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-
+# Хранилище тикеров (глобальное для всего приложения)
+tickers_storage = {}
 # Проверка подключения к PostgreSQL
 async def test_db_connection():
     try:
@@ -43,18 +44,33 @@ async def test_db_connection():
     except Exception as e:
         logging.error(f"Ошибка подключения к БД: {e}")
 
-# Список тикеров для мониторинга (позже загружается из базы)
-SYMBOLS = ["BTCUSDT", "AVAXUSDT"]
+# Асинхронный метод для загрузки актуальных тикеров из БД
+async def load_tickers_periodically(strategy_interface, tickers_storage):
+    while True:
+        new_tickers = await strategy_interface.get_active_tickers()
+        if new_tickers:
+            tickers_storage.clear()
+            tickers_storage.update(new_tickers)
+            logging.info(f"Список тикеров обновлён: {list(tickers_storage.keys())}")
+        else:
+            logging.warning("Не удалось обновить список тикеров.")
+        
+        await asyncio.sleep(300)  # Повтор каждые 5 минут
 # Асинхронный цикл мониторинга текущих цен
 def log_price(symbol, price):
     logging.info(f"Текущая цена {symbol}: {price}")
 
-async def monitor_prices(redis_client):
+async def monitor_prices(redis_client, tickers_storage):
     while True:
-        for symbol in SYMBOLS:
+        for symbol, params in tickers_storage.items():
             try:
-                price = await redis_client.get(f'price:{symbol}')
-                log_price(symbol, price)
+                price_str = await redis_client.get(f'price:{symbol}')
+                if price_str:
+                    precision = params['precision_price']
+                    price = Decimal(price_str).quantize(Decimal(f'1e-{precision}'), rounding=ROUND_DOWN)
+                    logging.info(f"Текущая цена {symbol}: {price}")
+                else:
+                    logging.warning(f"Цена для {symbol} отсутствует в Redis.")
             except Exception as e:
                 logging.error(f"Ошибка при получении цены {symbol} из Redis: {e}")
 
@@ -200,10 +216,11 @@ async def main_loop():
         ssl=True
     )
 
-    # Параллельный запуск мониторинга цен и подписки на сигналы
+    # Параллельный запуск мониторинга цен, подписки на сигналы и загрузки тикеров
     await asyncio.gather(
-        monitor_prices(redis_client),
-        listen_signals(redis_client)
+        monitor_prices(redis_client, tickers_storage),
+        listen_signals(redis_client),
+        load_tickers_periodically(strategy_interface, tickers_storage)
     )
 
 # Запуск основного цикла
