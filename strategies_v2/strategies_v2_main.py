@@ -114,7 +114,7 @@ async def listen_signals(redis_client):
                             if strategy_name in strategies:
                                 await strategies[strategy_name].on_signal({
                                     'phrase': phrase,
-                                    'symbol': symbol
+                                    'symbol': symbol,
                                     'log_id': log_id
                                 })
                                 logging.info(f"Стратегия '{strategy_name}' запущена по сигналу '{phrase}' для тикера '{symbol}'.")
