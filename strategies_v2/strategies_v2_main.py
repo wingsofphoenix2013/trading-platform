@@ -139,7 +139,7 @@ async def check_signal_in_db(phrase):
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         query = """
-        SELECT id, enabled FROM signals 
+        SELECT id, enabled, long_phrase, short_phrase FROM signals 
         WHERE (long_phrase=$1 OR short_phrase=$1 OR long_exit_phrase=$1 OR short_exit_phrase=$1)
         AND enabled=true
         LIMIT 1
