@@ -83,7 +83,7 @@ class StrategyInterface:
             await conn.close()
             await redis_client.close()
     # Метод выполнения базовых проверок перед открытием позиции
-    async def perform_basic_checks(self, strategy_params, symbol):
+    async def perform_basic_checks(self, strategy_params, symbol, direction):
         conn = await asyncpg.connect(self.database_url)
         try:
             strategy_id = strategy_params['id']
@@ -114,6 +114,11 @@ class StrategyInterface:
                 strategy_ticker_enabled = await conn.fetchval(query_strategy_ticker, strategy_id, symbol)
                 if not strategy_ticker_enabled:
                     return False, "Тикер не разрешен для этой стратегии"
+
+            # Проверка №4: Проверка наличия открытых позиций по тикеру и направлению
+            already_open = await self.has_open_position(strategy_id, symbol, direction)
+            if already_open:
+                return False, "Уже есть открытая позиция по этому тикеру и направлению"
 
             # Все проверки пройдены
             return True, "Базовые проверки пройдены успешно"
@@ -243,4 +248,20 @@ class StrategyInterface:
         except Exception as e:
             logging.error(f"Ошибка создания уровней TP/SL: {e}")
         finally:
-            await conn.close()          
+            await conn.close()
+    # Метод проверки наличия открытых позиций по стратегии, тикеру и направлению
+    async def has_open_position(self, strategy_id, symbol, direction):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = """
+            SELECT COUNT(*) FROM positions
+            WHERE strategy_id = $1 AND symbol = $2 AND direction = $3 
+              AND status IN ('open', 'partial')
+            """
+            count = await conn.fetchval(query, strategy_id, symbol, direction)
+            return count > 0
+        except Exception as e:
+            logging.error(f"Ошибка проверки открытых позиций: {e}")
+            return True  # При ошибке считаем, что позиция есть (для безопасности)
+        finally:
+            await conn.close()                      

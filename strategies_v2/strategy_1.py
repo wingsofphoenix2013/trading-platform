@@ -18,6 +18,15 @@ class Strategy1:
         if not current_price:
             return
 
+        # Явно берём переданное направление
+        direction = signal['direction']
+
+        # Выполняем базовые проверки
+        checks_passed, message = await self.interface.perform_basic_checks(params, signal['symbol'], direction)
+        if not checks_passed:
+            logging.warning(f"Базовые проверки не пройдены: {message}")
+            return
+
         checks_passed = await self.run_checks(params, signal, current_price)
         if not checks_passed:
             return

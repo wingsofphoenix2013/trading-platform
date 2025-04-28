@@ -61,7 +61,6 @@ async def monitor_prices(redis_client):
         await asyncio.sleep(5)
 
 import json
-
 # Асинхронная функция подписки, парсинга и проверки сигналов по БД
 async def listen_signals(redis_client):
     pubsub = redis_client.pubsub()
@@ -90,11 +89,20 @@ async def listen_signals(redis_client):
                 if signal_row:
                     logging.info(f"Сигнал '{phrase}' успешно найден и активен (id={signal_row['id']}).")
 
+                    # Явно определяем направление сигнала
+                    if phrase == signal_row['long_phrase']:
+                        direction = 'long'
+                    elif phrase == signal_row['short_phrase']:
+                        direction = 'short'
+                    else:
+                        logging.error(f"Получена неизвестная фраза сигнала: '{phrase}'")
+                        continue  # Пропускаем сигнал, так как не удалось определить направление
+
                     # Логируем сигнал
                     log_id = await log_signal(
                         signal_id=signal_row['id'],
                         ticker_symbol=symbol,
-                        direction='long' if 'LONG' in phrase else 'short' if 'SHORT' in phrase else 'unknown',
+                        direction=direction,
                         source=source,
                         raw_message=signal_data,
                         status='new'
@@ -113,7 +121,8 @@ async def listen_signals(redis_client):
                                 await strategies[strategy_name].on_signal({
                                     'phrase': phrase,
                                     'symbol': symbol,
-                                    'log_id': log_id
+                                    'log_id': log_id,
+                                    'direction': direction
                                 })
                                 logging.info(f"Стратегия '{strategy_name}' запущена по сигналу '{phrase}' для тикера '{symbol}'.")
                             else:
@@ -125,7 +134,6 @@ async def listen_signals(redis_client):
 
             except Exception as e:
                 logging.error(f"Ошибка обработки сигнала: {e}")
-
 # Функция проверки сигнала в таблице signals
 async def check_signal_in_db(phrase):
     conn = await asyncpg.connect(DATABASE_URL)
