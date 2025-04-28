@@ -4,6 +4,7 @@ import redis.asyncio as redis
 import os
 import sys
 import asyncpg
+from decimal import Decimal, ROUND_DOWN
 from strategy_interface import StrategyInterface
 from strategy_1 import Strategy1
 
