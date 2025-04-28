@@ -309,7 +309,7 @@ class StrategyInterface:
             query = """
             SELECT symbol, precision_price, precision_qty
             FROM tickers
-            WHERE enabled = true AND tradepermission = 'enabled'
+            WHERE status = 'enabled' AND tradepermission = 'enabled'
             """
             rows = await conn.fetch(query)
             tickers = {
@@ -324,4 +324,4 @@ class StrategyInterface:
             logging.error(f"Ошибка загрузки активных тикеров: {e}")
             return {}
         finally:
-            await conn.close()                                        
+            await conn.close()                                     
