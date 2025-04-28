@@ -66,7 +66,10 @@ class Strategy1:
         position_size = await self.interface.calculate_position_size(params, signal['symbol'], price)
 
         if position_size:
-            logging.info(f"Расчётный размер позиции для {signal['symbol']}: {position_size}")
+            logging.info(
+                f"Расчётный размер позиции для {signal['symbol']}: {position_size} по цене {price} USDT "
+                f"(общая сумма {Decimal(position_size) * Decimal(price)} USDT)"
+            )
         else:
             logging.warning("Ошибка расчёта размера позиции.")
             
