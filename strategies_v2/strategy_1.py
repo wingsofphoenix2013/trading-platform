@@ -56,21 +56,37 @@ class Strategy1:
             logging.error(f"Ошибка преобразования цены из Redis в Decimal для тикера {symbol}: {e}")
             return None
         
-    # Метод специфичных проверок (например, EMA50/ATR)
+    # Метод специфичных проверок (EMA50/ATR)
     async def run_checks(self, params, signal, current_price):
-        result = await self.interface.check_ema_atr(
-            symbol=signal['symbol'],
-            timeframe=params['timeframe'],
-            markprice=current_price,
-            direction=signal['phrase']
-        )
-        if not result['can_trade']:
-            logging.warning(result['message'])
+        ema, atr = await self.interface.get_ema_atr(signal['symbol'], params['timeframe'])
+
+        if ema is None or atr is None:
+            logging.warning(f"Недостаточно данных (EMA50 или ATR) для {signal['symbol']}.")
             return False
 
-        logging.info("Специфичные проверки пройдены, открываем позицию.")
-        return True
+        if 'LONG' in signal['phrase']:
+            condition = current_price >= (ema - Decimal('0.5') * atr)
+            message = (
+                f"Цена {current_price} ниже требуемой {(ema - Decimal('0.5') * atr)}. Вход отменён."
+                if not condition else "Лонг вход разрешен."
+            )
+        elif 'SHORT' in signal['phrase']:
+            condition = current_price <= (ema + Decimal('0.5') * atr)
+            message = (
+                f"Цена {current_price} выше требуемой {(ema + Decimal('0.5') * atr)}. Вход отменён."
+                if not condition else "Шорт вход разрешен."
+            )
+        else:
+            logging.warning("Неизвестное направление сигнала.")
+            return False
 
+        if not condition:
+            logging.warning(message)
+            return False
+
+        logging.info("Специфичные проверки пройдены успешно.")
+        return True
+        
     # Метод открытия виртуальной позиции (с учётом комиссий)
     async def open_position(self, params, signal, current_price):
         position_size = await self.interface.calculate_position_size(params, signal['symbol'], current_price)
