@@ -286,4 +286,19 @@ class StrategyInterface:
             logging.error(f"Ошибка проверки противоположных открытых позиций: {e}")
             return True  # Безопасный ответ
         finally:
-            await conn.close()                          
+            await conn.close()    
+    # Универсальный метод логирования действий стратегии в signal_log_entries
+    async def log_strategy_action(self, log_id, strategy_id, status, position_id=None, note=None):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = """
+            INSERT INTO signal_log_entries 
+                (log_id, strategy_id, status, position_id, note, logged_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+            """
+            await conn.execute(query, log_id, strategy_id, status, position_id, note)
+            logging.info(f"Действие стратегии залогировано: {status}, позиция: {position_id}, note: {note}")
+        except Exception as e:
+            logging.error(f"Ошибка логирования действия стратегии: {e}")
+        finally:
+            await conn.close()                                  

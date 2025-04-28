@@ -12,6 +12,14 @@ class Strategy1:
 
         params = await self.load_params()
         if not params:
+            message = "Ошибка загрузки параметров стратегии"
+            logging.error(message)
+            await self.interface.log_strategy_action(
+                log_id=signal['log_id'],
+                strategy_id=None,
+                status='ignored_by_check',
+                note=message
+            )
             return
 
         direction = signal['direction']
@@ -20,18 +28,40 @@ class Strategy1:
         checks_passed, message = await self.interface.perform_basic_checks(params, signal['symbol'], direction)
         if not checks_passed:
             logging.warning(f"Базовые проверки не пройдены: {message}")
+            await self.interface.log_strategy_action(
+                log_id=signal['log_id'],
+                strategy_id=params['id'],
+                status='ignored_by_check',
+                note=message
+            )
             return
 
         current_price = await self.get_current_price(signal['symbol'])
         if not current_price:
+            message = f"Нет текущей цены для тикера {signal['symbol']}"
+            logging.warning(message)
+            await self.interface.log_strategy_action(
+                log_id=signal['log_id'],
+                strategy_id=params['id'],
+                status='ignored_by_check',
+                note=message
+            )
             return
 
         checks_passed = await self.run_checks(params, signal, current_price)
         if not checks_passed:
+            message = "Специфичные проверки не пройдены"
+            logging.warning(message)
+            await self.interface.log_strategy_action(
+                log_id=signal['log_id'],
+                strategy_id=params['id'],
+                status='ignored_by_check',
+                note=message
+            )
             return
 
         await self.open_position(params, signal, current_price)
-
+        
     # Метод загрузки параметров стратегии
     async def load_params(self):
         params = await self.interface.get_strategy_params('test-1')
@@ -97,10 +127,17 @@ class Strategy1:
         
     # Метод открытия виртуальной позиции (с учётом комиссий)
     async def open_position(self, params, signal, current_price):
+        direction = signal['direction']
         position_size = await self.interface.calculate_position_size(params, signal['symbol'], current_price)
 
         if not position_size:
             logging.warning("Ошибка расчёта размера позиции.")
+            await self.interface.log_strategy_action(
+                log_id=signal['log_id'],
+                strategy_id=params['id'],
+                status='ignored_by_check',
+                note='Ошибка расчёта размера позиции'
+            )
             return
 
         logging.info(
@@ -112,20 +149,30 @@ class Strategy1:
             strategy_id=params['id'],
             log_id=signal['log_id'],
             symbol=signal['symbol'],
-            direction='long' if 'LONG' in signal['phrase'] else 'short',
+            direction=direction,
             entry_price=current_price,
             quantity=position_size
         )
 
         if position_id:
             logging.info(f"Позиция успешно открыта с ID={position_id}")
+
+            # Логируем успешное открытие позиции
+            await self.interface.log_strategy_action(
+                log_id=signal['log_id'],
+                strategy_id=params['id'],
+                status='position_opened',
+                position_id=position_id,
+                note=f"Позиция открыта: {signal['symbol']}, направление: {direction}, qty={position_size}, цена={current_price}"
+            )
+
             ema, atr = await self.interface.get_ema_atr(signal['symbol'], params['timeframe'])
             if not atr:
                 logging.error("Не удалось получить ATR для расчёта TP/SL.")
                 return
 
             targets = await self.calculate_tp_sl(
-                direction='long' if 'LONG' in signal['phrase'] else 'short',
+                direction=direction,
                 entry_price=current_price,
                 quantity=position_size,
                 atr=atr
@@ -134,6 +181,12 @@ class Strategy1:
             await self.interface.create_position_targets(position_id, targets)
         else:
             logging.error("Ошибка открытия позиции!")
+            await self.interface.log_strategy_action(
+                log_id=signal['log_id'],
+                strategy_id=params['id'],
+                status='ignored_by_check',
+                note='Ошибка открытия позиции'
+            )
     # Метод расчёта уровней TP и SL для позиции (стратегия №1)
     async def calculate_tp_sl(self, direction, entry_price, quantity, atr):
         tp_levels = [
