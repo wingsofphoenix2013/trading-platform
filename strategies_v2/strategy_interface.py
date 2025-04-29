@@ -388,7 +388,83 @@ class StrategyInterface:
         except Exception as e:
             logging.error(f"Ошибка при закрытии позиции id={position_id}: {e}")
         finally:
-            await conn.close()                  
+            await conn.close()
+    # --- Уменьшение объёма позиции и пересчёт PnL ---
+    async def reduce_position_quantity(self, position_id, reduce_quantity, exit_price):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = """
+            SELECT entry_price, quantity_left, pnl
+            FROM positions
+            WHERE id = $1
+            """
+            pos = await conn.fetchrow(query, position_id)
+            if not pos:
+                logging.error(f"Позиция id={position_id} не найдена для уменьшения объёма.")
+                return
+
+            entry_price = Decimal(pos['entry_price'])
+            quantity_left = Decimal(pos['quantity_left'])
+            current_pnl = Decimal(pos['pnl'])
+
+            # Расчёт прибыли по частичному закрытию
+            notional = (Decimal(exit_price) * Decimal(reduce_quantity)).quantize(Decimal('1e-8'))
+            commission = (notional * Decimal('0.0005')).quantize(Decimal('1e-8'))
+            realized_pnl = ((Decimal(exit_price) - entry_price) * Decimal(reduce_quantity)) - commission
+            new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'))
+
+            new_quantity_left = (quantity_left - Decimal(reduce_quantity)).quantize(Decimal('1e-8'))
+
+            update_query = """
+            UPDATE positions
+            SET quantity_left = $2,
+                pnl = $3,
+                close_reason = $4
+            WHERE id = $1
+            """
+            await conn.execute(update_query, position_id, new_quantity_left, new_pnl, 'tp1-hit')
+        except Exception as e:
+            logging.error(f"Ошибка при уменьшении объёма позиции id={position_id}: {e}")
+        finally:
+            await conn.close()
+
+    # --- Создание нового SL на уровне entry_price ---
+    async def create_new_sl(self, position_id, sl_price, sl_quantity):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = """
+            INSERT INTO position_targets
+            (position_id, type, price, quantity, level, hit, canceled)
+            VALUES ($1, 'sl', $2, $3, NULL, false, false)
+            """
+            await conn.execute(query, position_id, sl_price, sl_quantity)
+            logging.info(f"Создан новый SL для позиции ID={position_id} на уровне {sl_price}")
+        except Exception as e:
+            logging.error(f"Ошибка при создании нового SL для позиции id={position_id}: {e}")
+        finally:
+            await conn.close()
+
+    # --- Модификация отмены целей: поддержка отмены только SL ---
+    async def cancel_all_targets(self, position_id, sl_only=False):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            if sl_only:
+                query = """
+                UPDATE position_targets
+                SET canceled = true
+                WHERE position_id = $1 AND type = 'sl' AND hit = false AND canceled = false
+                """
+            else:
+                query = """
+                UPDATE position_targets
+                SET canceled = true
+                WHERE position_id = $1 AND hit = false AND canceled = false
+                """
+            await conn.execute(query, position_id)
+        except Exception as e:
+            logging.error(f"Ошибка при отмене целей позиции id={position_id}: {e}")
+        finally:
+            await conn.close()                              
     # Метод получения активных тикеров из таблицы tickers
     async def get_active_tickers(self):
         conn = await asyncpg.connect(self.database_url)

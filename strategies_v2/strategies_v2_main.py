@@ -139,7 +139,37 @@ async def follow_positions(redis_client, open_positions):
 
                 current_price = Decimal(price_str)
                 logging.info(f"Позиция ID={position_id}, символ={symbol}, направление={direction}, цена={current_price}")
+                # --- Проверка срабатывания TP уровней ---
+                for target in data["targets"]:
+                    if target["type"] == "tp" and not target.get("hit", False) and not target.get("canceled", False):
+                        tp_price = target["price"]
 
+                        if (direction == "long" and current_price >= tp_price) or \
+                           (direction == "short" and current_price <= tp_price):
+                            logging.info(f"Срабатывание TP уровня {target['level']} по позиции ID={position_id} на цене {current_price}")
+
+                            # Помечаем TP как выполненный
+                            await strategy_interface.mark_target_hit(target["id"])
+
+                            # Пересчёт позиции: уменьшение количества
+                            await strategy_interface.reduce_position_quantity(position_id, target["quantity"], current_price)
+
+                            # Отмена старого SL
+                            await strategy_interface.cancel_all_targets(position_id, sl_only=True)
+
+                            # Создание нового SL на уровне entry_price
+                            entry_price = data["entry_price"]
+                            await strategy_interface.create_new_sl(position_id, entry_price, data["quantity_left"])
+
+                            # Обновляем данные в памяти
+                            data["quantity_left"] -= target["quantity"]
+                            for t in data["targets"]:
+                                if t["id"] == target["id"]:
+                                    t["hit"] = True
+                                    t["hit_at"] = True  # Можно заменить на реальное время при желании
+                            logging.info(f"Позиция ID={position_id} после TP: новый остаток {data['quantity_left']}, новый SL на {entry_price}")
+
+                            break  # После срабатывания TP одного уровня переходим к следующему проходу
                 # --- Проверка срабатывания SL ---
                 for target in data["targets"]:
                     if target["type"] == "sl":
