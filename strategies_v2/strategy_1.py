@@ -241,3 +241,31 @@ class Strategy1:
         })
 
         return targets
+    # Универсальный метод определения SL после срабатывания TP уровня
+    def get_sl_after_tp(self, level, entry_price, atr, direction):
+        """
+        Возвращает цену нового SL после срабатывания TP определённого уровня.
+        - Если вернуть None — SL не будет создан.
+        - Параметры:
+            - level: уровень TP (1, 2, 3, ...)
+            - entry_price: цена входа в позицию
+            - atr: текущее значение ATR (или None)
+            - direction: 'long' или 'short'
+        """
+        if level == 1:
+            # После TP1: SL на entry_price
+            return entry_price
+
+        elif level == 2 and atr is not None:
+            # После TP2: SL = entry ± 1 ATR
+            if direction == "long":
+                return entry_price + atr
+            else:
+                return entry_price - atr
+
+        elif level == 3:
+            # После TP3 — ничего не делать, позиция закроется полностью
+            return None
+
+        # По умолчанию — не ставим SL
+        return None        

@@ -162,17 +162,33 @@ async def follow_positions(redis_client, open_positions):
                             # Отмена старого SL
                             await strategy_interface.cancel_all_targets(position_id, sl_only=True)
 
-                            # Создание нового SL на уровне entry_price
                             entry_price = data["entry_price"]
-                            await strategy_interface.create_new_sl(position_id, entry_price, data["quantity_left"])
+                            strategy_name = data["strategy_name"]
+
+                            # Получаем ATR (если потребуется стратегии)
+                            ema, atr = await strategy_interface.get_ema_atr(symbol, timeframe="M1")
+
+                            # Запрашиваем у стратегии цену нового SL после срабатывания TP
+                            sl_price = strategies[strategy_name].get_sl_after_tp(
+                                level=target["level"],
+                                entry_price=entry_price,
+                                atr=atr,
+                                direction=direction
+                            )
+
+                            if sl_price is not None:
+                                await strategy_interface.create_new_sl(position_id, sl_price, data["quantity_left"])
+                                logging.info(f"Создан новый SL на уровне {sl_price} после TP уровня {target['level']} для позиции ID={position_id}")
+                            else:
+                                logging.info(f"После TP уровня {target['level']} стратегия не требует постановки нового SL (позиция ID={position_id})")
 
                             # Пометка TP как исполненного в памяти
                             for t in data["targets"]:
                                 if t["id"] == target["id"]:
                                     t["hit"] = True
-                                    t["hit_at"] = True  # Можно заменить на timestamp при необходимости
+                                    t["hit_at"] = True
 
-                            logging.info(f"Позиция ID={position_id} после TP: новый остаток {data['quantity_left']}, новый SL на {entry_price}")
+                            logging.info(f"Позиция ID={position_id} после TP: новый остаток {data['quantity_left']}")
 
                             break  # После одного TP прекращаем обработку этой позиции в этом цикле
 
