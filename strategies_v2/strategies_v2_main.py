@@ -47,8 +47,12 @@ async def load_open_positions(redis_client):
         """
         rows = await conn.fetch(query_positions)
 
+        fresh_position_ids = set()
+
         for row in rows:
             position_id = row['id']
+            fresh_position_ids.add(position_id)
+
             if position_id in open_positions:
                 continue  # уже в памяти, пропускаем
 
@@ -86,6 +90,12 @@ async def load_open_positions(redis_client):
                 "strategy_name": strategy_name,
                 "targets": targets
             }
+
+        # --- Удаление позиций из памяти, которых нет в базе ---
+        to_delete = [pid for pid in open_positions.keys() if pid not in fresh_position_ids]
+        for pid in to_delete:
+            del open_positions[pid]
+            logging.info(f"Удалена позиция ID={pid} из памяти (отсутствует в базе).")
 
         logging.info("Синхронизация новых позиций завершена.")
     except Exception as e:
