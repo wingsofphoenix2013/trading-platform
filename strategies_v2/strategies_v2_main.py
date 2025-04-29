@@ -15,8 +15,11 @@ REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
+# Хранилище тикеров (глобальное для всего приложения)
+tickers_storage = {}
+# Хранилище открытых позиций (глобальное)
+open_positions = {}
 # Импорт и регистрация стратегий
-
 strategy_interface = StrategyInterface(DATABASE_URL, open_positions=open_positions)
 
 strategies = {
@@ -30,10 +33,6 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-# Хранилище тикеров (глобальное для всего приложения)
-tickers_storage = {}
-# Хранилище открытых позиций (глобальное)
-open_positions = {}
 # --- Загрузка открытых позиций из БД при старте ---
 async def load_open_positions(redis_client):
     logging.info("Загрузка открытых позиций из базы данных...")
