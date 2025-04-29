@@ -180,6 +180,22 @@ class Strategy1:
             )
 
             await self.interface.create_position_targets(position_id, targets)
+
+            # 🔥 Немедленная регистрация позиции в оперативной памяти
+            position_data = {
+                "symbol": signal['symbol'],
+                "direction": direction,
+                "entry_price": current_price,
+                "quantity_left": position_size,
+                "strategy_id": params['id'],
+                "targets": targets
+            }
+            self.interface.register_position_in_memory(
+                self.interface.open_positions,
+                position_id,
+                position_data
+            )
+
         else:
             logging.error("Ошибка открытия позиции!")
             await self.interface.log_strategy_action(
@@ -188,6 +204,7 @@ class Strategy1:
                 status='ignored_by_check',
                 note='Ошибка открытия позиции'
             )
+            
     # Метод расчёта уровней TP и SL для позиции (стратегия №1)
     async def calculate_tp_sl(self, symbol, direction, entry_price, quantity, atr):
         precision = await self.interface.get_precision_price(symbol)

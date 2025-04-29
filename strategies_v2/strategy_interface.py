@@ -5,8 +5,9 @@ from decimal import Decimal, ROUND_DOWN
 import os
 
 class StrategyInterface:
-    def __init__(self, database_url):
+    def __init__(self, database_url, open_positions=None):
         self.database_url = database_url
+        self.open_positions = open_positions
 
     async def open_position(self, strategy_name, symbol, direction, params):
         logging.info(
@@ -410,4 +411,12 @@ class StrategyInterface:
             logging.error(f"Ошибка загрузки активных тикеров: {e}")
             return {}
         finally:
-            await conn.close()                                     
+            await conn.close()
+            
+    # Метод для добавления новой позиции в память open_positions
+    def register_position_in_memory(self, open_positions: dict, position_id: int, position_data: dict):
+        if open_positions is not None:
+            open_positions[position_id] = position_data
+            logging.info(f"Позиция ID={position_id} добавлена в open_positions для мониторинга.")
+        else:
+            logging.warning(f"Не удалось зарегистрировать позицию {position_id}: open_positions = None")                                                 

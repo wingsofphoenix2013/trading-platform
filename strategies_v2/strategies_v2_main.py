@@ -17,7 +17,7 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # Импорт и регистрация стратегий
 
-strategy_interface = StrategyInterface(DATABASE_URL)
+strategy_interface = StrategyInterface(DATABASE_URL, open_positions=open_positions)
 
 strategies = {
     "test-1": Strategy1(strategy_interface),
