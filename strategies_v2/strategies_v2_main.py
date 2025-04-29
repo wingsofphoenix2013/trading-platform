@@ -33,16 +33,17 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-# --- Загрузка открытых позиций из БД при старте ---
 async def load_open_positions(redis_client):
     logging.info("Загрузка открытых позиций из базы данных...")
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         open_positions.clear()
         query_positions = """
-        SELECT id, symbol, direction, entry_price, quantity_left, strategy_id
-        FROM positions
-        WHERE status = 'open'
+        SELECT p.id, p.symbol, p.direction, p.entry_price, p.quantity_left,
+               p.strategy_id, s.name AS strategy_name
+        FROM positions p
+        JOIN strategies s ON p.strategy_id = s.id
+        WHERE p.status = 'open'
         """
         rows = await conn.fetch(query_positions)
 
@@ -53,8 +54,8 @@ async def load_open_positions(redis_client):
             entry_price = Decimal(row['entry_price'])
             quantity_left = Decimal(row['quantity_left'])
             strategy_id = row['strategy_id']
+            strategy_name = row['strategy_name']
 
-            # Загружаем активные цели
             query_targets = """
             SELECT id, type, price, quantity, level, hit
             FROM position_targets
@@ -79,6 +80,7 @@ async def load_open_positions(redis_client):
                 "entry_price": entry_price,
                 "quantity_left": quantity_left,
                 "strategy_id": strategy_id,
+                "strategy_name": strategy_name,  # ← ключевая строка
                 "targets": targets
             }
 
