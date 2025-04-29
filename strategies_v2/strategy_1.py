@@ -181,7 +181,7 @@ class Strategy1:
 
             await self.interface.create_position_targets(position_id, targets)
 
-            # 🔥 Немедленная регистрация позиции в оперативной памяти
+            # 🔥 Немедленная регистрация позиции в оперативной памяти наверное
             position_data = {
                 "symbol": signal['symbol'],
                 "direction": direction,
