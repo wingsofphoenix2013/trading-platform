@@ -56,9 +56,9 @@ async def load_open_positions(redis_client):
 
             # Загружаем активные цели
             query_targets = """
-            SELECT id, type, price, quantity, level
+            SELECT id, type, price, quantity, level, hit
             FROM position_targets
-            WHERE position_id = $1 AND hit = false AND canceled = false
+            WHERE position_id = $1 AND canceled = false
             """
             targets_rows = await conn.fetch(query_targets, position_id)
 
@@ -69,7 +69,8 @@ async def load_open_positions(redis_client):
                     "type": target_row['type'],
                     "price": Decimal(target_row['price']),
                     "quantity": Decimal(target_row['quantity']),
-                    "level": target_row['level']
+                    "level": target_row['level'],
+                    "hit": target_row['hit']
                 })
 
             open_positions[position_id] = {
