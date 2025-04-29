@@ -33,7 +33,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-# --- Загрузка новых позиций из базы в память ---
+# --- Загрузка новых позиций из базы в память (с обновлением целей) ---
 async def load_open_positions(redis_client):
     logging.info("Загрузка новых открытых позиций из базы данных...")
     conn = await asyncpg.connect(DATABASE_URL)
@@ -53,9 +53,6 @@ async def load_open_positions(redis_client):
             position_id = row['id']
             fresh_position_ids.add(position_id)
 
-            if position_id in open_positions:
-                continue  # уже в памяти, пропускаем
-
             symbol = row['symbol']
             direction = row['direction']
             entry_price = Decimal(row['entry_price'])
@@ -74,24 +71,28 @@ async def load_open_positions(redis_client):
             for target_row in targets_rows:
                 targets.append({
                     "id": target_row['id'],
-                    "type": target_row['type'].lower(),
+                    "type": target_row['type'].lower(),  # нормализуем
                     "price": Decimal(target_row['price']),
                     "quantity": Decimal(target_row['quantity']),
                     "level": target_row['level'],
                     "hit": target_row['hit']
                 })
 
-            open_positions[position_id] = {
-                "symbol": symbol,
-                "direction": direction,
-                "entry_price": entry_price,
-                "quantity_left": quantity_left,
-                "strategy_id": strategy_id,
-                "strategy_name": strategy_name,
-                "targets": targets
-            }
+            if position_id in open_positions:
+                open_positions[position_id]["targets"] = targets
+                logging.info(f"Обновлены цели позиции ID={position_id}.")
+            else:
+                open_positions[position_id] = {
+                    "symbol": symbol,
+                    "direction": direction,
+                    "entry_price": entry_price,
+                    "quantity_left": quantity_left,
+                    "strategy_id": strategy_id,
+                    "strategy_name": strategy_name,
+                    "targets": targets
+                }
 
-        # --- Удаление позиций из памяти, которых нет в базе ---
+        # Очистка позиций, которых больше нет в БД
         to_delete = [pid for pid in open_positions.keys() if pid not in fresh_position_ids]
         for pid in to_delete:
             del open_positions[pid]
