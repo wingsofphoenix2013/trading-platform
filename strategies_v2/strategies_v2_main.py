@@ -156,6 +156,7 @@ async def follow_positions(redis_client, open_positions):
                 current_price = Decimal(price_str)
                 logging.info(f"Позиция ID={position_id}, символ={symbol}, направление={direction}, цена={current_price}")
                 logging.info(f"Цели позиции ID={position_id}: {data['targets']}")
+
                 # --- Проверка срабатывания TP уровней ---
                 for target in data["targets"]:
                     if target["type"] == "tp" and not target.get("hit", False) and not target.get("canceled", False):
@@ -204,6 +205,14 @@ async def follow_positions(redis_client, open_positions):
                                     t["hit_at"] = True
 
                             logging.info(f"Позиция ID={position_id} после TP: новый остаток {data['quantity_left']}")
+
+                            # --- Закрытие позиции, если всё исполнено ---
+                            if data["quantity_left"] <= Decimal("0.00000001"):
+                                await strategy_interface.cancel_all_targets(position_id)
+                                await strategy_interface.close_position(position_id, current_price, "tp-full")
+                                del open_positions[position_id]
+                                logging.info(f"Позиция ID={position_id} закрыта автоматически при quantity_left = 0.")
+                                break
 
                             break  # После одного TP прекращаем обработку этой позиции в этом цикле
 
