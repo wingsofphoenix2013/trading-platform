@@ -155,7 +155,7 @@ async def follow_positions(redis_client, open_positions):
 
                 current_price = Decimal(price_str)
                 logging.info(f"Позиция ID={position_id}, символ={symbol}, направление={direction}, цена={current_price}")
-
+                logging.info(f"Цели позиции ID={position_id}: {data['targets']}")
                 # --- Проверка срабатывания TP уровней ---
                 for target in data["targets"]:
                     if target["type"] == "tp" and not target.get("hit", False) and not target.get("canceled", False):
