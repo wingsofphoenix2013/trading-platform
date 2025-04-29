@@ -87,6 +87,15 @@ async def load_open_positions(redis_client):
         logging.error(f"Ошибка при загрузке открытых позиций: {e}")
     finally:
         await conn.close()
+# --- Периодическая синхронизация open_positions с базой ---
+async def sync_open_positions_periodically(redis_client, interval_seconds=60):
+    while True:
+        try:
+            await load_open_positions(redis_client)
+            logging.info("Синхронизация open_positions с базой завершена.")
+        except Exception as e:
+            logging.error(f"Ошибка при синхронизации open_positions: {e}")
+        await asyncio.sleep(interval_seconds)        
 # Асинхронный метод для загрузки актуальных тикеров из БД
 async def load_tickers_periodically(strategy_interface, tickers_storage):
     while True:
@@ -295,7 +304,8 @@ async def main_loop():
         monitor_prices(redis_client, tickers_storage),
         listen_signals(redis_client),
         load_tickers_periodically(strategy_interface, tickers_storage),
-        follow_positions(redis_client, open_positions)  # просто указываем функцию
+        follow_positions(redis_client, open_positions),
+        sync_open_positions_periodically(redis_client)  # новый синк
     )
 
 # Запуск основного цикла
