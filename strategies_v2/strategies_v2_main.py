@@ -32,6 +32,9 @@ logging.basicConfig(
 )
 # Хранилище тикеров (глобальное для всего приложения)
 tickers_storage = {}
+
+# Хранилище открытых позиций (глобальное)
+open_positions = {}
 # Проверка подключения к PostgreSQL
 async def test_db_connection():
     try:
