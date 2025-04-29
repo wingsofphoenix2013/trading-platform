@@ -158,7 +158,19 @@ class StrategyInterface:
             logging.error(f"Ошибка получения EMA и ATR: {e}")
             return None, None
         finally:
-            await redis_client.close()    
+            await redis_client.close()
+    # --- Получение точности цены (precision_price) по тикеру ---
+    async def get_precision_price(self, symbol):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = "SELECT precision_price FROM tickers WHERE symbol = $1"
+            precision = await conn.fetchval(query, symbol)
+            return precision
+        except Exception as e:
+            logging.error(f"Ошибка получения precision_price для {symbol}: {e}")
+            return None
+        finally:
+            await conn.close()                
     # Метод расчёта размера позиции с контролем итогового значения
     async def calculate_position_size(self, strategy_params, symbol, price):
         conn = await asyncpg.connect(self.database_url)
