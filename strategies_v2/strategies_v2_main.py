@@ -155,8 +155,8 @@ async def follow_positions(redis_client, open_positions):
                     continue
 
                 current_price = Decimal(price_str)
-                logging.info(f"Позиция ID={position_id}, символ={symbol}, направление={direction}, цена={current_price}")
-                logging.info(f"Цели позиции ID={position_id}: {data['targets']}")
+                # logging.info(f"Позиция ID={position_id}, символ={symbol}, направление={direction}, цена={current_price}") - ОТКЛЮЧЕНО
+                # logging.info(f"Цели позиции ID={position_id}: {data['targets']}") - ОТКЛЮЧЕНО
 
                 # --- Проверка срабатывания TP уровней ---
                 for target in data["targets"]:
