@@ -32,22 +32,8 @@ logging.basicConfig(
 )
 # Хранилище тикеров (глобальное для всего приложения)
 tickers_storage = {}
-
 # Хранилище открытых позиций (глобальное)
 open_positions = {}
-# Проверка подключения к PostgreSQL
-async def test_db_connection():
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        logging.info("Успешное подключение к базе данных.")
-
-        # Простой тестовый запрос
-        row = await conn.fetchrow('SELECT 1 AS test_field;')
-        logging.info(f"Тестовый запрос успешен, получено: {row['test_field']}")
-
-        await conn.close()
-    except Exception as e:
-        logging.error(f"Ошибка подключения к БД: {e}")
 # --- Загрузка открытых позиций из БД при старте ---
 async def load_open_positions(redis_client):
     logging.info("Загрузка открытых позиций из базы данных...")
@@ -278,8 +264,6 @@ async def log_signal(signal_id, ticker_symbol, direction, source, raw_message, s
 async def main_loop():
     logging.info("strategies_v2_main.py успешно запустился.")
 
-    await test_db_connection()
-
     redis_client = redis.Redis(
         host=REDIS_HOST,
         port=REDIS_PORT,
@@ -287,7 +271,8 @@ async def main_loop():
         decode_responses=True,
         ssl=True
     )
-
+    await load_open_positions(redis_client)
+    
     # Параллельный запуск мониторинга цен, подписки на сигналы и загрузки тикеров
     await asyncio.gather(
         monitor_prices(redis_client, tickers_storage),
