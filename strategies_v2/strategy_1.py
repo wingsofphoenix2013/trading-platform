@@ -1,7 +1,7 @@
 import logging
 import os
 import redis.asyncio as redis
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 
 class Strategy1:
     def __init__(self, interface):
