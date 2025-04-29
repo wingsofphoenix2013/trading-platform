@@ -172,6 +172,7 @@ class Strategy1:
                 return
 
             targets = await self.calculate_tp_sl(
+                symbol=signal['symbol'],
                 direction=direction,
                 entry_price=current_price,
                 quantity=position_size,
