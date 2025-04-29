@@ -153,8 +153,10 @@ class Strategy1:
             entry_price=current_price,
             quantity=position_size
         )
-
+            
         if position_id:
+            entry_price = await self.interface.get_entry_price(position_id)
+            
             logging.info(f"Позиция успешно открыта с ID={position_id}")
 
             # Логируем успешное открытие позиции

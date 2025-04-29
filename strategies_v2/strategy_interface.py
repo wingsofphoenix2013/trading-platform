@@ -30,6 +30,14 @@ class StrategyInterface:
             return None
         finally:
             await conn.close()
+    # получение цены входа        
+    async def get_entry_price(self, position_id):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = "SELECT entry_price FROM positions WHERE id = $1"
+            return await conn.fetchval(query, position_id)
+        finally:
+            await conn.close()
     # Метод расчёта текущей загрузки депозита
     async def calculate_current_deposit_usage(self, strategy_id):
         conn = await asyncpg.connect(self.database_url)
@@ -389,12 +397,12 @@ class StrategyInterface:
             logging.error(f"Ошибка при закрытии позиции id={position_id}: {e}")
         finally:
             await conn.close()
-    # --- Уменьшение объёма позиции и пересчёт PnL ---
+        # --- Уменьшение объёма позиции и пересчёт PnL ---
     async def reduce_position_quantity(self, position_id, reduce_quantity, exit_price):
         conn = await asyncpg.connect(self.database_url)
         try:
             query = """
-            SELECT entry_price, quantity_left, pnl
+            SELECT entry_price, quantity_left, pnl, direction
             FROM positions
             WHERE id = $1
             """
@@ -406,13 +414,18 @@ class StrategyInterface:
             entry_price = Decimal(pos['entry_price'])
             quantity_left = Decimal(pos['quantity_left'])
             current_pnl = Decimal(pos['pnl'])
+            direction = pos['direction']
 
             # Расчёт прибыли по частичному закрытию
             notional = (Decimal(exit_price) * Decimal(reduce_quantity)).quantize(Decimal('1e-8'))
             commission = (notional * Decimal('0.0005')).quantize(Decimal('1e-8'))
-            realized_pnl = ((Decimal(exit_price) - entry_price) * Decimal(reduce_quantity)) - commission
-            new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'))
 
+            if direction == "long":
+                realized_pnl = ((Decimal(exit_price) - entry_price) * Decimal(reduce_quantity)) - commission
+            else:  # short
+                realized_pnl = ((entry_price - Decimal(exit_price)) * Decimal(reduce_quantity)) - commission
+
+            new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'))
             new_quantity_left = (quantity_left - Decimal(reduce_quantity)).quantize(Decimal('1e-8'))
 
             update_query = """
