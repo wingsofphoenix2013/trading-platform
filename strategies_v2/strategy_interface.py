@@ -357,13 +357,13 @@ class StrategyInterface:
         finally:
             await conn.close()
 
-    # --- Полное закрытие позиции ---
+        # --- Полное закрытие позиции ---
     async def close_position(self, position_id, exit_price, close_reason):
         conn = await asyncpg.connect(self.database_url)
         try:
             # Получаем данные позиции
             query = """
-            SELECT entry_price, quantity_left, pnl
+            SELECT entry_price, quantity_left, pnl, direction
             FROM positions
             WHERE id = $1
             """
@@ -375,12 +375,18 @@ class StrategyInterface:
             entry_price = Decimal(pos['entry_price'])
             quantity_left = Decimal(pos['quantity_left'])
             current_pnl = Decimal(pos['pnl'])
+            direction = pos['direction']
 
             # Расчёт итогового PnL
             notional = (quantity_left * Decimal(exit_price)).quantize(Decimal('1e-8'))
             commission = (notional * Decimal('0.0005')).quantize(Decimal('1e-8'))
-            realized_pnl = (notional - (quantity_left * entry_price)) - commission
-            new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'))
+
+            if direction == "long":
+                realized_pnl = ((Decimal(exit_price) - entry_price) * quantity_left) - commission
+            else:  # short
+                realized_pnл = ((entry_price - Decimal(exit_price)) * quantity_left) - commission
+
+            new_pnl = (current_pnl + realized_pnл).quantize(Decimal('1e-8'))
 
             update_query = """
             UPDATE positions
