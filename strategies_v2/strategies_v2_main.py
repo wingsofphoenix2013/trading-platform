@@ -120,7 +120,7 @@ async def follow_positions(redis_client, open_positions):
     logging.info("Запущено сопровождение позиций (follow_positions).")
     while True:
         try:
-            for position_id, data in open_positions.items():
+            for position_id, data in list(open_positions.items()):
                 symbol = data["symbol"]
                 direction = data["direction"]
 
@@ -131,10 +131,27 @@ async def follow_positions(redis_client, open_positions):
 
                 current_price = Decimal(price_str)
                 logging.info(f"Позиция ID={position_id}, символ={symbol}, направление={direction}, цена={current_price}")
+
+                # --- Проверка срабатывания SL ---
+                for target in data["targets"]:
+                    if target["type"] == "sl":
+                        sl_price = target["price"]
+
+                        if (direction == "long" and current_price <= sl_price) or \
+                           (direction == "short" and current_price >= sl_price):
+                            logging.info(f"Срабатывание SL по позиции ID={position_id} на цене {current_price}")
+
+                            await strategy_interface.mark_target_hit(target["id"])
+                            await strategy_interface.cancel_all_targets(position_id)
+                            await strategy_interface.close_position(position_id, current_price, "sl")
+
+                            # Удаляем позицию из памяти
+                            del open_positions[position_id]
+                            break
         except Exception as e:
             logging.error(f"Ошибка в процессе сопровождения позиций: {e}")
         
-        await asyncio.sleep(1)        
+        await asyncio.sleep(1)
 # Асинхронная функция подписки, парсинга и проверки сигналов по БД
 async def listen_signals(redis_client):
     pubsub = redis_client.pubsub()

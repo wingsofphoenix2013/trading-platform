@@ -301,7 +301,77 @@ class StrategyInterface:
         except Exception as e:
             logging.error(f"Ошибка логирования действия стратегии: {e}")
         finally:
-            await conn.close()      
+            await conn.close()
+    # --- Пометить цель как выполненную ---
+    async def mark_target_hit(self, target_id):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = """
+            UPDATE position_targets
+            SET hit = true, hit_at = NOW()
+            WHERE id = $1
+            """
+            await conn.execute(query, target_id)
+        except Exception as e:
+            logging.error(f"Ошибка при пометке цели hit: {e}")
+        finally:
+            await conn.close()
+
+    # --- Отменить все оставшиеся цели позиции ---
+    async def cancel_all_targets(self, position_id):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            query = """
+            UPDATE position_targets
+            SET canceled = true
+            WHERE position_id = $1 AND hit = false AND canceled = false
+            """
+            await conn.execute(query, position_id)
+        except Exception as e:
+            logging.error(f"Ошибка при отмене целей позиции: {e}")
+        finally:
+            await conn.close()
+
+    # --- Полное закрытие позиции ---
+    async def close_position(self, position_id, exit_price, close_reason):
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            # Получаем данные позиции
+            query = """
+            SELECT entry_price, quantity_left, pnl
+            FROM positions
+            WHERE id = $1
+            """
+            pos = await conn.fetchrow(query, position_id)
+            if not pos:
+                logging.error(f"Позиция id={position_id} не найдена для закрытия.")
+                return
+
+            entry_price = Decimal(pos['entry_price'])
+            quantity_left = Decimal(pos['quantity_left'])
+            current_pnl = Decimal(pos['pnl'])
+
+            # Расчёт итогового PnL
+            notional = (quantity_left * Decimal(exit_price)).quantize(Decimal('1e-8'))
+            commission = (notional * Decimal('0.0005')).quantize(Decimal('1e-8'))
+            realized_pnl = (notional - (quantity_left * entry_price)) - commission
+            new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'))
+
+            update_query = """
+            UPDATE positions
+            SET status = 'closed',
+                quantity_left = 0,
+                closed_at = NOW(),
+                exit_price = $2,
+                close_reason = $3,
+                pnl = $4
+            WHERE id = $1
+            """
+            await conn.execute(update_query, position_id, exit_price, close_reason, new_pnl)
+        except Exception as e:
+            logging.error(f"Ошибка при закрытии позиции id={position_id}: {e}")
+        finally:
+            await conn.close()                  
     # Метод получения активных тикеров из таблицы tickers
     async def get_active_tickers(self):
         conn = await asyncpg.connect(self.database_url)
