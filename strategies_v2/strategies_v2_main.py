@@ -74,6 +74,26 @@ async def monitor_prices(redis_client, tickers_storage):
                 logging.error(f"Ошибка при получении цены {symbol} из Redis: {e}")
 
         await asyncio.sleep(5)
+# --- Фоновая задача сопровождения открытых позиций ---
+async def follow_positions(redis_client, open_positions):
+    logging.info("Запущено сопровождение позиций (follow_positions).")
+    while True:
+        try:
+            for position_id, data in open_positions.items():
+                symbol = data["symbol"]
+                direction = data["direction"]
+
+                price_str = await redis_client.get(f'price:{symbol}')
+                if not price_str:
+                    logging.warning(f"Цена для {symbol} отсутствует в Redis.")
+                    continue
+
+                current_price = Decimal(price_str)
+                logging.info(f"Позиция ID={position_id}, символ={symbol}, направление={direction}, цена={current_price}")
+        except Exception as e:
+            logging.error(f"Ошибка в процессе сопровождения позиций: {e}")
+        
+        await asyncio.sleep(1)        
 # Асинхронная функция подписки, парсинга и проверки сигналов по БД
 async def listen_signals(redis_client):
     pubsub = redis_client.pubsub()
@@ -217,7 +237,8 @@ async def main_loop():
     await asyncio.gather(
         monitor_prices(redis_client, tickers_storage),
         listen_signals(redis_client),
-        load_tickers_periodically(strategy_interface, tickers_storage)
+        load_tickers_periodically(strategy_interface, tickers_storage),
+        follow_positions(redis_client, open_positions)
     )
 
 # Запуск основного цикла
