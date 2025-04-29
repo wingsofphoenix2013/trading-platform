@@ -188,7 +188,10 @@ class Strategy1:
                 note='Ошибка открытия позиции'
             )
     # Метод расчёта уровней TP и SL для позиции (стратегия №1)
-    async def calculate_tp_sl(self, direction, entry_price, quantity, atr):
+    async def calculate_tp_sl(self, symbol, direction, entry_price, quantity, atr):
+        precision = await self.interface.get_precision_price(symbol)
+        precision_format = Decimal(f'1e-{precision}')
+
         tp_levels = [
             {"level": 1, "multiplier": Decimal('1.5'), "quantity_pct": Decimal('0.5')},
             {"level": 2, "multiplier": Decimal('2.5'), "quantity_pct": Decimal('0.3')},
@@ -200,6 +203,7 @@ class Strategy1:
         # TP
         for tp in tp_levels:
             tp_price = (entry_price + tp['multiplier'] * atr) if direction == 'long' else (entry_price - tp['multiplier'] * atr)
+            tp_price = tp_price.quantize(precision_format, rounding=ROUND_DOWN)
             tp_quantity = (quantity * tp['quantity_pct']).quantize(Decimal('1e-8'))
             targets.append({
                 "type": "TP",
@@ -210,6 +214,7 @@ class Strategy1:
 
         # SL (100% на 1.5 ATR)
         sl_price = (entry_price - Decimal('1.5') * atr) if direction == 'long' else (entry_price + Decimal('1.5') * atr)
+        sl_price = sl_price.quantize(precision_format, rounding=ROUND_DOWN)
         targets.append({
             "type": "SL",
             "price": sl_price,
@@ -217,4 +222,4 @@ class Strategy1:
             "level": None
         })
 
-        return targets            
+        return targets

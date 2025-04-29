@@ -198,6 +198,10 @@ class StrategyInterface:
     async def open_virtual_position(self, strategy_id, log_id, symbol, direction, entry_price, quantity):
         conn = await asyncpg.connect(self.database_url)
         try:
+            # Получаем точность округления
+            precision = await conn.fetchval("SELECT precision_price FROM tickers WHERE symbol = $1", symbol)
+            entry_price = Decimal(entry_price).quantize(Decimal(f'1e-{precision}'), rounding=ROUND_DOWN)
+
             notional_value = (Decimal(entry_price) * Decimal(quantity)).quantize(Decimal('1e-8'))
 
             # Начальный PnL с учетом комиссии 0.05%
