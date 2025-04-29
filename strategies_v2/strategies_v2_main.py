@@ -139,6 +139,7 @@ async def follow_positions(redis_client, open_positions):
 
                 current_price = Decimal(price_str)
                 logging.info(f"Позиция ID={position_id}, символ={symbol}, направление={direction}, цена={current_price}")
+
                 # --- Проверка срабатывания TP уровней ---
                 for target in data["targets"]:
                     if target["type"] == "tp" and not target.get("hit", False) and not target.get("canceled", False):
@@ -154,6 +155,9 @@ async def follow_positions(redis_client, open_positions):
                             # Пересчёт позиции: уменьшение количества
                             await strategy_interface.reduce_position_quantity(position_id, target["quantity"], current_price)
 
+                            # Обновляем данные в памяти
+                            data["quantity_left"] -= target["quantity"]
+
                             # Отмена старого SL
                             await strategy_interface.cancel_all_targets(position_id, sl_only=True)
 
@@ -161,15 +165,16 @@ async def follow_positions(redis_client, open_positions):
                             entry_price = data["entry_price"]
                             await strategy_interface.create_new_sl(position_id, entry_price, data["quantity_left"])
 
-                            # Обновляем данные в памяти
-                            data["quantity_left"] -= target["quantity"]
+                            # Пометка TP как исполненного в памяти
                             for t in data["targets"]:
                                 if t["id"] == target["id"]:
                                     t["hit"] = True
-                                    t["hit_at"] = True  # Можно заменить на реальное время при желании
+                                    t["hit_at"] = True  # Можно заменить на timestamp при необходимости
+
                             logging.info(f"Позиция ID={position_id} после TP: новый остаток {data['quantity_left']}, новый SL на {entry_price}")
 
-                            break  # После срабатывания TP одного уровня переходим к следующему проходу
+                            break  # После одного TP прекращаем обработку этой позиции в этом цикле
+
                 # --- Проверка срабатывания SL ---
                 for target in data["targets"]:
                     if target["type"] == "sl":
@@ -181,14 +186,23 @@ async def follow_positions(redis_client, open_positions):
 
                             await strategy_interface.mark_target_hit(target["id"])
                             await strategy_interface.cancel_all_targets(position_id)
-                            await strategy_interface.close_position(position_id, current_price, "sl")
+
+                            # Определяем: был ли до этого выполнен хотя бы один TP
+                            tp_hit_found = any(
+                                t["type"] == "tp" and t.get("hit", False)
+                                for t in data["targets"]
+                            )
+                            close_reason = "sl-tp-hit" if tp_hit_found else "sl"
+
+                            await strategy_interface.close_position(position_id, current_price, close_reason)
 
                             # Удаляем позицию из памяти
                             del open_positions[position_id]
                             break
+
         except Exception as e:
             logging.error(f"Ошибка в процессе сопровождения позиций: {e}")
-        
+
         await asyncio.sleep(1)
 # Асинхронная функция подписки, парсинга и проверки сигналов по БД
 async def listen_signals(redis_client):
