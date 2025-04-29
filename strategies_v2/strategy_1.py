@@ -185,7 +185,7 @@ class Strategy1:
             position_data = {
                 "symbol": signal['symbol'],
                 "direction": direction,
-                "entry_price": current_price,
+                "entry_price": entry_price,
                 "quantity_left": position_size,
                 "strategy_id": params['id'],
                 "strategy_name": "test-1",
