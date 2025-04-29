@@ -48,7 +48,59 @@ async def test_db_connection():
         await conn.close()
     except Exception as e:
         logging.error(f"Ошибка подключения к БД: {e}")
+# --- Загрузка открытых позиций из БД при старте ---
+async def load_open_positions(redis_client):
+    logging.info("Загрузка открытых позиций из базы данных...")
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        open_positions.clear()
+        query_positions = """
+        SELECT id, symbol, direction, entry_price, quantity_left, strategy_id
+        FROM positions
+        WHERE status = 'open'
+        """
+        rows = await conn.fetch(query_positions)
 
+        for row in rows:
+            position_id = row['id']
+            symbol = row['symbol']
+            direction = row['direction']
+            entry_price = Decimal(row['entry_price'])
+            quantity_left = Decimal(row['quantity_left'])
+            strategy_id = row['strategy_id']
+
+            # Загружаем активные цели
+            query_targets = """
+            SELECT id, type, price, quantity, level
+            FROM position_targets
+            WHERE position_id = $1 AND hit = false AND canceled = false
+            """
+            targets_rows = await conn.fetch(query_targets, position_id)
+
+            targets = []
+            for target_row in targets_rows:
+                targets.append({
+                    "id": target_row['id'],
+                    "type": target_row['type'],
+                    "price": Decimal(target_row['price']),
+                    "quantity": Decimal(target_row['quantity']),
+                    "level": target_row['level']
+                })
+
+            open_positions[position_id] = {
+                "symbol": symbol,
+                "direction": direction,
+                "entry_price": entry_price,
+                "quantity_left": quantity_left,
+                "strategy_id": strategy_id,
+                "targets": targets
+            }
+
+        logging.info(f"Открытые позиции загружены: {list(open_positions.keys())}")
+    except Exception as e:
+        logging.error(f"Ошибка при загрузке открытых позиций: {e}")
+    finally:
+        await conn.close()
 # Асинхронный метод для загрузки актуальных тикеров из БД
 async def load_tickers_periodically(strategy_interface, tickers_storage):
     while True:
@@ -241,7 +293,7 @@ async def main_loop():
         monitor_prices(redis_client, tickers_storage),
         listen_signals(redis_client),
         load_tickers_periodically(strategy_interface, tickers_storage),
-        follow_positions(redis_client, open_positions)
+        follow_positions(redis_client, open_positions)  # просто указываем функцию
     )
 
 # Запуск основного цикла
