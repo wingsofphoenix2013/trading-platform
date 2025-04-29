@@ -188,6 +188,7 @@ class Strategy1:
                 "entry_price": current_price,
                 "quantity_left": position_size,
                 "strategy_id": params['id'],
+                "strategy_name": "test-1",
                 "targets": targets
             }
             self.interface.register_position_in_memory(
