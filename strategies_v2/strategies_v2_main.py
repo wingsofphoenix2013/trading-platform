@@ -74,7 +74,7 @@ async def load_open_positions(redis_client):
             for target_row in targets_rows:
                 targets.append({
                     "id": target_row['id'],
-                    "type": target_row['type'],
+                    "type": target_row['type'].lower(),
                     "price": Decimal(target_row['price']),
                     "quantity": Decimal(target_row['quantity']),
                     "level": target_row['level'],
