@@ -33,11 +33,11 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
+# --- Загрузка новых позиций из базы в память ---
 async def load_open_positions(redis_client):
-    logging.info("Загрузка открытых позиций из базы данных...")
+    logging.info("Загрузка новых открытых позиций из базы данных...")
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        open_positions.clear()
         query_positions = """
         SELECT p.id, p.symbol, p.direction, p.entry_price, p.quantity_left,
                p.strategy_id, s.name AS strategy_name
@@ -49,6 +49,9 @@ async def load_open_positions(redis_client):
 
         for row in rows:
             position_id = row['id']
+            if position_id in open_positions:
+                continue  # уже в памяти, пропускаем
+
             symbol = row['symbol']
             direction = row['direction']
             entry_price = Decimal(row['entry_price'])
@@ -80,11 +83,11 @@ async def load_open_positions(redis_client):
                 "entry_price": entry_price,
                 "quantity_left": quantity_left,
                 "strategy_id": strategy_id,
-                "strategy_name": strategy_name,  # ← ключевая строка
+                "strategy_name": strategy_name,
                 "targets": targets
             }
 
-        logging.info(f"Открытые позиции загружены: {list(open_positions.keys())}")
+        logging.info("Синхронизация новых позиций завершена.")
     except Exception as e:
         logging.error(f"Ошибка при загрузке открытых позиций: {e}")
     finally:
