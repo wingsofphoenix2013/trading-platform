@@ -191,17 +191,26 @@ async function emergencyStop(id) {
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     console.log("DOM готов, скрипт запущен");
+
     document.querySelectorAll('.utc-time').forEach(cell => {
         const utc = cell.dataset.utc;
         if (utc) {
-            const local = new Date(utc);
-            const formatter = new Intl.DateTimeFormat('uk-UA', {
-                year: 'numeric', month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-                timeZone: 'Europe/Kyiv',
-                hour12: false
-            });
-            cell.textContent = formatter.format(local).replace(',', '');
+            try {
+                const local = new Date(utc);
+                if (isNaN(local.getTime())) {
+                    console.warn("Некорректная дата:", utc);
+                    return;
+                }
+                const formatter = new Intl.DateTimeFormat('uk-UA', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    timeZone: 'Europe/Kyiv',
+                    hour12: false
+                });
+                cell.textContent = formatter.format(local).replace(',', '');
+            } catch (e) {
+                console.error("Ошибка преобразования даты:", utc, e);
+            }
         }
     });
 });
