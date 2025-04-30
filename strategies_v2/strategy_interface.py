@@ -8,12 +8,6 @@ class StrategyInterface:
     def __init__(self, database_url, open_positions=None):
         self.database_url = database_url
         self.open_positions = open_positions
-
-    async def open_position(self, strategy_name, symbol, direction, params):
-        logging.info(
-            f"Попытка открыть позицию (стратегия: {strategy_name}, "
-            f"тикер: {symbol}, направление: {direction}, параметры: {params})"
-        )
     # Загрузка параметров стратегии
     async def get_strategy_params(self, strategy_name):
         conn = await asyncpg.connect(self.database_url)
@@ -219,26 +213,38 @@ class StrategyInterface:
     async def open_virtual_position(self, strategy_id, log_id, symbol, direction, entry_price, quantity):
         conn = await asyncpg.connect(self.database_url)
         try:
-            # Получаем точность округления
-            precision = await conn.fetchval("SELECT precision_price FROM tickers WHERE symbol = $1", symbol)
-            entry_price = Decimal(entry_price).quantize(Decimal(f'1e-{precision}'), rounding=ROUND_DOWN)
+            query = """
+            SELECT precision_price, precision_qty
+            FROM tickers
+            WHERE symbol = $1
+            """
+            row = await conn.fetchrow(query, symbol)
+            if not row:
+                logging.error(f"Не найдены precision_price/qty для символа {symbol}")
+                return None
 
-            notional_value = (Decimal(entry_price) * Decimal(quantity)).quantize(Decimal('1e-8'))
+            precision_price = row['precision_price']
+            precision_qty = row['precision_qty']
 
-            # Начальный PnL с учетом комиссии 0.05%
-            commission = (notional_value * Decimal('0.0005')).quantize(Decimal('1e-8'))
+            # Округляем цену и количество по точности тикера
+            entry_price = Decimal(entry_price).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+            quantity = Decimal(quantity).quantize(Decimal(f'1e-{precision_qty}'), rounding=ROUND_DOWN)
+
+            # Вычисление notional и комиссии
+            notional_value = (entry_price * quantity).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
+            commission = (notional_value * Decimal('0.0005')).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
             initial_pnl = -commission
 
-            query = """
+            # Запись позиции
+            query_insert = """
             INSERT INTO positions
             (strategy_id, log_id, symbol, direction, entry_price, quantity, notional_value, quantity_left, status, created_at, pnl)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $6, 'open', NOW(), $8)
             RETURNING id
             """
-            position_id = await conn.fetchval(query, strategy_id, log_id, symbol, direction, entry_price, quantity, notional_value, initial_pnl)
-            
+            position_id = await conn.fetchval(query_insert, strategy_id, log_id, symbol, direction, entry_price, quantity, notional_value, initial_pnl)
+
             logging.info(f"Открыта позиция ID={position_id}, тикер={symbol}, направление={direction}, размер={quantity}, цена входа={entry_price}, комиссия={commission}")
-            
             return position_id
 
         except Exception as e:
@@ -356,14 +362,13 @@ class StrategyInterface:
             logging.error(f"Ошибка при отмене целей позиции: {e}")
         finally:
             await conn.close()
-
-        # --- Полное закрытие позиции ---
+    # --- Полное закрытие позиции ---
     async def close_position(self, position_id, exit_price, close_reason):
         conn = await asyncpg.connect(self.database_url)
         try:
             # Получаем данные позиции
             query = """
-            SELECT entry_price, quantity_left, pnl, direction
+            SELECT entry_price, quantity_left, pnl, direction, symbol
             FROM positions
             WHERE id = $1
             """
@@ -376,17 +381,36 @@ class StrategyInterface:
             quantity_left = Decimal(pos['quantity_left'])
             current_pnl = Decimal(pos['pnl'])
             direction = pos['direction']
+            symbol = pos['symbol']
+
+            # Получаем точности округления
+            query_precision = """
+            SELECT precision_price, precision_qty
+            FROM tickers
+            WHERE symbol = $1
+            """
+            row = await conn.fetchrow(query_precision, symbol)
+            if not row:
+                logging.error(f"Не найдены precision_* для символа {symbol}")
+                return
+
+            precision_price = row['precision_price']
+            precision_qty = row['precision_qty']
+
+            # Округляем значения
+            exit_price = Decimal(exit_price).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+            quantity_left = quantity_left.quantize(Decimal(f'1e-{precision_qty}'), rounding=ROUND_DOWN)
 
             # Расчёт итогового PnL
-            notional = (quantity_left * Decimal(exit_price)).quantize(Decimal('1e-8'))
-            commission = (notional * Decimal('0.0005')).quantize(Decimal('1e-8'))
+            notional = (exit_price * quantity_left).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
+            commission = (notional * Decimal('0.0005')).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
 
             if direction == "long":
-                realized_pnl = ((Decimal(exit_price) - entry_price) * quantity_left) - commission
-            else:  # short
-                realized_pnl = ((entry_price - Decimal(exit_price)) * quantity_left) - commission
+                realized_pnl = ((exit_price - entry_price) * quantity_left) - commission
+            else:
+                realized_pnl = ((entry_price - exit_price) * quantity_left) - commission
 
-            new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'))
+            new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
 
             update_query = """
             UPDATE positions
@@ -399,16 +423,17 @@ class StrategyInterface:
             WHERE id = $1
             """
             await conn.execute(update_query, position_id, exit_price, close_reason, new_pnl)
+
         except Exception as e:
             logging.error(f"Ошибка при закрытии позиции id={position_id}: {e}")
         finally:
             await conn.close()
-        # --- Уменьшение объёма позиции и пересчёт PnL ---
-    async def reduce_position_quantity(self, position_id, reduce_quantity, exit_price):
+    # --- Уменьшение объёма позиции и пересчёт PnL ---
+    async def reduce_position_quantity(self, position_id, reduce_quantity, exit_price, level=None):
         conn = await asyncpg.connect(self.database_url)
         try:
             query = """
-            SELECT entry_price, quantity_left, pnl, direction
+            SELECT entry_price, quantity_left, pnl, direction, symbol
             FROM positions
             WHERE id = $1
             """
@@ -421,32 +446,62 @@ class StrategyInterface:
             quantity_left = Decimal(pos['quantity_left'])
             current_pnl = Decimal(pos['pnl'])
             direction = pos['direction']
+            symbol = pos['symbol']
+
+            # Получаем точности округления
+            query_precision = """
+            SELECT precision_price, precision_qty
+            FROM tickers
+            WHERE symbol = $1
+            """
+            row = await conn.fetchrow(query_precision, symbol)
+            if not row:
+                logging.error(f"Не найдены precision_* для символа {symbol}")
+                return
+
+            precision_price = row['precision_price']
+            precision_qty = row['precision_qty']
+
+            # Округляем входные значения
+            exit_price = Decimal(exit_price).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
+            reduce_quantity = Decimal(reduce_quantity).quantize(Decimal(f'1e-{precision_qty}'), rounding=ROUND_DOWN)
 
             # Расчёт прибыли по частичному закрытию
-            notional = (Decimal(exit_price) * Decimal(reduce_quantity)).quantize(Decimal('1e-8'))
-            commission = (notional * Decimal('0.0005')).quantize(Decimal('1e-8'))
+            notional = (exit_price * reduce_quantity).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
+            commission = (notional * Decimal('0.0005')).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
 
             if direction == "long":
-                realized_pnl = ((Decimal(exit_price) - entry_price) * Decimal(reduce_quantity)) - commission
-            else:  # short
-                realized_pnl = ((entry_price - Decimal(exit_price)) * Decimal(reduce_quantity)) - commission
+                realized_pnl = ((exit_price - entry_price) * reduce_quantity) - commission
+            else:
+                realized_pnl = ((entry_price - exit_price) * reduce_quantity) - commission
 
-            new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'))
-            new_quantity_left = (quantity_left - Decimal(reduce_quantity)).quantize(Decimal('1e-8'))
+            new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
+            new_quantity_left = (quantity_left - reduce_quantity).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
 
-            update_query = """
-            UPDATE positions
-            SET quantity_left = $2,
-                pnl = $3,
-                close_reason = $4
-            WHERE id = $1
-            """
-            await conn.execute(update_query, position_id, new_quantity_left, new_pnl, 'tp1-hit')
+            # Обновляем позицию (с временным close_reason, если level указан)
+            if level is not None:
+                close_reason = f"tp{level}-hit"
+                update_query = """
+                UPDATE positions
+                SET quantity_left = $2,
+                    pnl = $3,
+                    close_reason = $4
+                WHERE id = $1
+                """
+                await conn.execute(update_query, position_id, new_quantity_left, new_pnl, close_reason)
+            else:
+                update_query = """
+                UPDATE positions
+                SET quantity_left = $2,
+                    pnl = $3
+                WHERE id = $1
+                """
+                await conn.execute(update_query, position_id, new_quantity_left, new_pnl)
+
         except Exception as e:
             logging.error(f"Ошибка при уменьшении объёма позиции id={position_id}: {e}")
         finally:
             await conn.close()
-
     # --- Создание нового SL на уровне entry_price ---
     async def create_new_sl(self, position_id, sl_price, sl_quantity):
         conn = await asyncpg.connect(self.database_url)
