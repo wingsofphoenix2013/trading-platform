@@ -9,16 +9,16 @@ from decimal import Decimal, ROUND_DOWN
 from strategy_interface import StrategyInterface
 from strategy_1 import Strategy1
 from strategy_1_1 import Strategy1_1
-from strategy_1_1 import Strategy1_2
+from strategy_1_2 import Strategy1_2
 from strategy_2 import Strategy2
 from strategy_2_1 import Strategy2_1
-from strategy_2_1 import Strategy2_2
+from strategy_2_2 import Strategy2_2
 from strategy_3 import Strategy3
 from strategy_3_1 import Strategy3_1
-from strategy_3_1 import Strategy3_2
+from strategy_3_2 import Strategy3_2
 from strategy_4 import Strategy4
 from strategy_4_1 import Strategy4_1
-from strategy_4_1 import Strategy4_2
+from strategy_4_2 import Strategy4_2
 
 # --- Конфигурация Базы Данных ---
 DATABASE_URL = os.getenv("DATABASE_URL")
