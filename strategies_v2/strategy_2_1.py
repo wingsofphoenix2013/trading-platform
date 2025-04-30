@@ -3,7 +3,7 @@ import os
 import redis.asyncio as redis
 from decimal import Decimal, ROUND_DOWN
 
-class Strategy1_1:
+class Strategy2_1:
     def __init__(self, interface):
         self.interface = interface
 
