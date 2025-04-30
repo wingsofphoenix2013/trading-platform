@@ -384,9 +384,9 @@ class StrategyInterface:
             if direction == "long":
                 realized_pnl = ((Decimal(exit_price) - entry_price) * quantity_left) - commission
             else:  # short
-                realized_pnл = ((entry_price - Decimal(exit_price)) * quantity_left) - commission
+                realized_pnl = ((entry_price - Decimal(exit_price)) * quantity_left) - commission
 
-            new_pnl = (current_pnl + realized_pnл).quantize(Decimal('1e-8'))
+            new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'))
 
             update_query = """
             UPDATE positions
