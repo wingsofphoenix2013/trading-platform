@@ -377,8 +377,14 @@ class StrategyInterface:
                 logging.error(f"Позиция id={position_id} не найдена для закрытия.")
                 return
 
-            entry_price = Decimal(pos['entry_price'])
             quantity_left = Decimal(pos['quantity_left'])
+
+            # 🔒 Защита от повторного закрытия
+            if quantity_left <= Decimal("0"):
+                logging.warning(f"Пропущено закрытие позиции ID={position_id}: quantity_left = 0")
+                return
+
+            entry_price = Decimal(pos['entry_price'])
             current_pnl = Decimal(pos['pnl'])
             direction = pos['direction']
             symbol = pos['symbol']
