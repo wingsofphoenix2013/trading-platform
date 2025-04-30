@@ -8,6 +8,7 @@ import json
 from decimal import Decimal, ROUND_DOWN
 from strategy_interface import StrategyInterface
 from strategy_1 import Strategy1
+from strategy_1_1 import Strategy1_1
 
 # --- Конфигурация Базы Данных ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -24,6 +25,7 @@ strategy_interface = StrategyInterface(DATABASE_URL, open_positions=open_positio
 
 strategies = {
     "test-1": Strategy1(strategy_interface),
+    "test-1_1": Strategy1_1(strategy_interface),
 }
 
 # Настройка логирования с немедленным flush в stdout
