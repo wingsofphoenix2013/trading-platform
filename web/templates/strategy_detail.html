@@ -75,7 +75,7 @@
                 <tr>
                     <td>{{ loop.index }}</td>
                     <td>{{ pos.symbol }}</td>
-                    <td>{{ pos.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td class="utc-time" data-utc="{{ pos.created_at.isoformat() }}">{{ pos.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                     <td>{{ pos.direction }}</td>
                     <td>{{ pos.close_reason or "в работе" }}</td>
                     <td>{{ '%.4f' | format(pos.pnl or 0.0) }}</td>
@@ -133,9 +133,9 @@
         <tr>
             <td>{{ loop.index + ((page - 1) * 20) }}</td>
             <td>{{ pos.symbol }}</td>
-            <td>{{ pos.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td class="utc-time" data-utc="{{ pos.created_at.isoformat() }}">{{ pos.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
             <td>{{ '%.4f' | format(pos.entry_price) }}</td>
-            <td>{{ pos.closed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td class="utc-time" data-utc="{{ pos.closed_at.isoformat() }}">{{ pos.closed_at.strftime('%Y-%m-%d %H:%M') }}</td>
             <td>{{ pos.close_reason or 'n/a' }}</td>
             <td>{{ '%.4f' | format(pos.pnl or 0.0) }}</td>
         </tr>
@@ -187,6 +187,21 @@ async function emergencyStop(id) {
         location.reload();
     }
 }
+</script>
+<script>
+document.querySelectorAll('.utc-time').forEach(cell => {
+    const utc = cell.dataset.utc;
+    if (utc) {
+        const local = new Date(utc);
+        const formatter = new Intl.DateTimeFormat('uk-UA', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            timeZone: 'Europe/Kyiv',
+            hour12: false
+        });
+        cell.textContent = formatter.format(local).replace(',', '');
+    }
+});
 </script>    
 </body>
 </html>
