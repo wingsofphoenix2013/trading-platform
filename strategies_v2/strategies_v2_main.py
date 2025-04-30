@@ -34,10 +34,10 @@ strategies = {
     "test-1_1": Strategy1_1(strategy_interface),
     "test-2": Strategy2(strategy_interface),
     "test-2_1": Strategy2_1(strategy_interface),
-    "test-3": Strategy1(strategy_interface),
-    "test-3_1": Strategy1_1(strategy_interface),
-    "test-4": Strategy2(strategy_interface),
-    "test-4_1": Strategy2_1(strategy_interface),
+    "test-3": Strategy3(strategy_interface),
+    "test-3_1": Strategy3_1(strategy_interface),
+    "test-4": Strategy4(strategy_interface),
+    "test-4_1": Strategy4_1(strategy_interface),
 }
 
 # Настройка логирования с немедленным flush в stdout
