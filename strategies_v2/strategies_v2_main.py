@@ -11,6 +11,10 @@ from strategy_1 import Strategy1
 from strategy_1_1 import Strategy1_1
 from strategy_2 import Strategy2
 from strategy_2_1 import Strategy2_1
+from strategy_3 import Strategy3
+from strategy_3_1 import Strategy3_1
+from strategy_4 import Strategy4
+from strategy_4_1 import Strategy4_1
 
 # --- Конфигурация Базы Данных ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -30,6 +34,10 @@ strategies = {
     "test-1_1": Strategy1_1(strategy_interface),
     "test-2": Strategy2(strategy_interface),
     "test-2_1": Strategy2_1(strategy_interface),
+    "test-3": Strategy1(strategy_interface),
+    "test-3_1": Strategy1_1(strategy_interface),
+    "test-4": Strategy2(strategy_interface),
+    "test-4_1": Strategy2_1(strategy_interface),
 }
 
 # Настройка логирования с немедленным flush в stdout

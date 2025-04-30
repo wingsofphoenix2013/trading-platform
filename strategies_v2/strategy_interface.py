@@ -162,6 +162,39 @@ class StrategyInterface:
             return None, None
         finally:
             await redis_client.close()
+    # Метод получения параметров канала линейной регрессии из Redis
+    async def get_lr_params(self, symbol, timeframe):
+        redis_client = redis.Redis(
+            host=os.getenv("REDIS_HOST"),
+            port=int(os.getenv("REDIS_PORT")),
+            password=os.getenv("REDIS_PASSWORD"),
+            decode_responses=True,
+            ssl=True
+        )
+        try:
+            base_key = f"{symbol}:{timeframe}:LR:"
+            keys = ["lr_angle", "lr_trend", "lr_mid", "lr_upper", "lr_lower"]
+
+            values = {}
+            for key in keys:
+                raw = await redis_client.get(base_key + key)
+                if raw is None:
+                    logging.warning(f"LR параметр отсутствует: {base_key + key}")
+                    values[key] = None
+                else:
+                    try:
+                        values[key] = Decimal(raw)
+                    except Exception as e:
+                        logging.error(f"Ошибка преобразования {base_key + key}: {e}")
+                        values[key] = None
+
+            return values
+
+        except Exception as e:
+            logging.error(f"Ошибка получения LR параметров для {symbol} {timeframe}: {e}")
+            return {}
+        finally:
+            await redis_client.close()            
     # --- Получение точности цены (precision_price) по тикеру ---
     async def get_precision_price(self, symbol):
         conn = await asyncpg.connect(self.database_url)
