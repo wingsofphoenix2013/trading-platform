@@ -232,7 +232,7 @@ class StrategyInterface:
 
             # Вычисление notional и комиссии
             notional_value = (entry_price * quantity).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
-            commission = (notional_value * Decimal('0.0005')).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
+            commission = (notional_value * Decimal('0.001')).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
             initial_pnl = -commission
 
             # Запись позиции
@@ -407,14 +407,11 @@ class StrategyInterface:
             exit_price = Decimal(exit_price).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
             quantity_left = quantity_left.quantize(Decimal(f'1e-{precision_qty}'), rounding=ROUND_DOWN)
 
-            # Расчёт итогового PnL
-            notional = (exit_price * quantity_left).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
-            commission = (notional * Decimal('0.0005')).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
-
+            # Расчёт итогового PnL (без комиссии)
             if direction == "long":
-                realized_pnl = ((exit_price - entry_price) * quantity_left) - commission
+                realized_pnl = (exit_price - entry_price) * quantity_left
             else:
-                realized_pnl = ((entry_price - exit_price) * quantity_left) - commission
+                realized_pnl = (entry_price - exit_price) * quantity_left
 
             new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
 
@@ -472,14 +469,11 @@ class StrategyInterface:
             exit_price = Decimal(exit_price).quantize(Decimal(f'1e-{precision_price}'), rounding=ROUND_DOWN)
             reduce_quantity = Decimal(reduce_quantity).quantize(Decimal(f'1e-{precision_qty}'), rounding=ROUND_DOWN)
 
-            # Расчёт прибыли по частичному закрытию
-            notional = (exit_price * reduce_quantity).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
-            commission = (notional * Decimal('0.0005')).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
-
+            # Расчёт прибыли по частичному закрытию (без комиссии)
             if direction == "long":
-                realized_pnl = ((exit_price - entry_price) * reduce_quantity) - commission
+                realized_pnl = (exit_price - entry_price) * reduce_quantity
             else:
-                realized_pnl = ((entry_price - exit_price) * reduce_quantity) - commission
+                realized_pnl = (entry_price - exit_price) * reduce_quantity
 
             new_pnl = (current_pnl + realized_pnl).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
             new_quantity_left = (quantity_left - reduce_quantity).quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
