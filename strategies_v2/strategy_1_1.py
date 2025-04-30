@@ -214,9 +214,9 @@ class Strategy1_1:
         precision_format = Decimal(f'1e-{precision}')
 
         tp_levels = [
-            {"level": 1, "multiplier": Decimal('1.5'), "quantity_pct": Decimal('0.5')},
-            {"level": 2, "multiplier": Decimal('2.5'), "quantity_pct": Decimal('0.3')},
-            {"level": 3, "multiplier": Decimal('3.5'), "quantity_pct": Decimal('0.2')},
+            {"level": 1, "multiplier": Decimal('3.0'), "quantity_pct": Decimal('0.5')},
+            {"level": 2, "multiplier": Decimal('4.0'), "quantity_pct": Decimal('0.3')},
+            {"level": 3, "multiplier": Decimal('5.0'), "quantity_pct": Decimal('0.2')},
         ]
 
         targets = []
@@ -234,7 +234,7 @@ class Strategy1_1:
             })
 
         # SL (100% на 1.5 ATR)
-        sl_price = (entry_price - Decimal('1.5') * atr) if direction == 'long' else (entry_price + Decimal('1.5') * atr)
+        sl_price = (entry_price - Decimal('2.0') * atr) if direction == 'long' else (entry_price + Decimal('2.0') * atr)
         sl_price = sl_price.quantize(precision_format, rounding=ROUND_DOWN)
         targets.append({
             "type": "SL",

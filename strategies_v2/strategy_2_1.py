@@ -3,7 +3,7 @@ import os
 import redis.asyncio as redis
 from decimal import Decimal, ROUND_DOWN
 
-class Strategy1:
+class Strategy1_1:
     def __init__(self, interface):
         self.interface = interface
 
@@ -64,7 +64,7 @@ class Strategy1:
         
     # Метод загрузки параметров стратегии
     async def load_params(self):
-        params = await self.interface.get_strategy_params('test-1')
+        params = await self.interface.get_strategy_params('test-2_1')
         if not params:
             logging.error("Не удалось загрузить параметры стратегии.")
         else:
@@ -190,7 +190,7 @@ class Strategy1:
                 "entry_price": entry_price,
                 "quantity_left": position_size,
                 "strategy_id": params['id'],
-                "strategy_name": "test-1",
+                "strategy_name": "test-2_1",
                 "targets": targets
             }
             self.interface.register_position_in_memory(
@@ -214,9 +214,9 @@ class Strategy1:
         precision_format = Decimal(f'1e-{precision}')
 
         tp_levels = [
-            {"level": 1, "multiplier": Decimal('2.0'), "quantity_pct": Decimal('0.5')},
-            {"level": 2, "multiplier": Decimal('3.0'), "quantity_pct": Decimal('0.3')},
-            {"level": 3, "multiplier": Decimal('4.0'), "quantity_pct": Decimal('0.2')},
+            {"level": 1, "multiplier": Decimal('3.0'), "quantity_pct": Decimal('0.5')},
+            {"level": 2, "multiplier": Decimal('4.0'), "quantity_pct": Decimal('0.3')},
+            {"level": 3, "multiplier": Decimal('5.0'), "quantity_pct": Decimal('0.2')},
         ]
 
         targets = []
