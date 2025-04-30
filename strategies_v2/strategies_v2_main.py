@@ -9,12 +9,16 @@ from decimal import Decimal, ROUND_DOWN
 from strategy_interface import StrategyInterface
 from strategy_1 import Strategy1
 from strategy_1_1 import Strategy1_1
+from strategy_1_1 import Strategy1_2
 from strategy_2 import Strategy2
 from strategy_2_1 import Strategy2_1
+from strategy_2_1 import Strategy2_2
 from strategy_3 import Strategy3
 from strategy_3_1 import Strategy3_1
+from strategy_3_1 import Strategy3_2
 from strategy_4 import Strategy4
 from strategy_4_1 import Strategy4_1
+from strategy_4_1 import Strategy4_2
 
 # --- Конфигурация Базы Данных ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -32,12 +36,16 @@ strategy_interface = StrategyInterface(DATABASE_URL, open_positions=open_positio
 strategies = {
     "test-1": Strategy1(strategy_interface),
     "test-1_1": Strategy1_1(strategy_interface),
+    "test-1_2": Strategy1_2(strategy_interface),
     "test-2": Strategy2(strategy_interface),
     "test-2_1": Strategy2_1(strategy_interface),
+    "test-2_2": Strategy2_2(strategy_interface),
     "test-3": Strategy3(strategy_interface),
     "test-3_1": Strategy3_1(strategy_interface),
+    "test-3_2": Strategy3_2(strategy_interface),
     "test-4": Strategy4(strategy_interface),
     "test-4_1": Strategy4_1(strategy_interface),
+    "test-4_2": Strategy4_2(strategy_interface),
 }
 
 # Настройка логирования с немедленным flush в stdout
