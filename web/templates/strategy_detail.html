@@ -190,6 +190,7 @@ async function emergencyStop(id) {
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    console.log("DOM готов, скрипт запущен");
     document.querySelectorAll('.utc-time').forEach(cell => {
         const utc = cell.dataset.utc;
         if (utc) {
