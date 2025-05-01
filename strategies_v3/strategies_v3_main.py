@@ -3,7 +3,7 @@ import asyncio
 import logging
 import redis.asyncio as redis
 import asyncpg
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 
 # 🔸 Настройка логирования
 logging.basicConfig(level=logging.INFO)
