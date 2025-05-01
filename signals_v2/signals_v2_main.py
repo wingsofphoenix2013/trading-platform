@@ -140,6 +140,8 @@ async def process_signal(entry_id, data):
         return
 
     symbol = symbol_raw.strip().upper()
+    if symbol.endswith(".P"):
+        symbol = symbol[:-2]
 
     # 🔹 Проверка тикера (по кешу)
     if symbol not in TICKERS or TICKERS[symbol] != "enabled":
