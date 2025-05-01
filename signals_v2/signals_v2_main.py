@@ -97,9 +97,9 @@ async def process_signal(entry_id, data):
     # 🔹 Преобразование временных полей
     from dateutil import parser
     try:
-        bar_time = parser.isoparse(bar_time) if bar_time else None
-        sent_at = parser.isoparse(sent_at) if sent_at else None
-        received_at = parser.isoparse(received_at) if received_at else datetime.utcnow()
+        bar_time = parser.isoparse(bar_time).replace(tzinfo=None) if bar_time else None
+        sent_at = parser.isoparse(sent_at).replace(tzinfo=None) if sent_at else None
+        received_at = parser.isoparse(received_at).replace(tzinfo=None) if received_at else datetime.utcnow()
     except Exception as e:
         await log_system_event(
             level="ERROR",
