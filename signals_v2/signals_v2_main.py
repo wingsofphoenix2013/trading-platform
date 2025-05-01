@@ -29,7 +29,18 @@ TICKERS = {}
 # 🔸 Подключение к PostgreSQL
 async def get_db():
     return await asyncpg.connect(DATABASE_URL)
-
+# 🔸 Запись события или ошибки в таблицу system_logs
+async def log_system_event(level, message, source, details=None, action_flag=None):
+    try:
+        conn = await get_db()
+        await conn.execute("""
+            INSERT INTO system_logs (level, message, source, details, action_flag, created_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+        """, level, message, source, details, action_flag)
+    except Exception as e:
+        logging.error(f"❌ Не удалось записать лог в system_logs: {e}")
+    finally:
+        await conn.close()
 # 🔸 Загрузка тикеров из БД (status = enabled)
 async def load_tickers():
     global TICKERS
