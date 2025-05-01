@@ -3,6 +3,7 @@ import asyncio
 import logging
 import redis.asyncio as redis
 import asyncpg
+import importlib
 from decimal import Decimal, ROUND_DOWN
 
 # 🔸 Настройка логирования
@@ -77,7 +78,16 @@ async def monitor_prices():
 # 🔸 Основной обработчик задач
 async def handle_task(entry_id, data):
     logging.info(f"📥 Получена задача: {data}")
-    # TODO: вызов стратегии через on_signal(data)
+
+    importlib.invalidate_caches()  # очистка кэша импортов
+    strategy_name = data["strategy"]
+    module_name = f"strategies_v3.{strategy_name}"
+
+    try:
+        strategy_module = importlib.import_module(module_name)
+        await strategy_module.on_signal(data, None)  # interface пока не передаём
+    except Exception as e:
+        logging.error(f"❌ Ошибка при вызове стратегии {strategy_name}: {e}")
 
 # 🔸 Слушаем Redis Stream
 async def listen_strategy_tasks():
