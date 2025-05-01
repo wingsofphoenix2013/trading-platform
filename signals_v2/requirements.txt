@@ -1,3 +1,4 @@
 redis
 asyncpg
 python-dotenv
+python-dateutil
