@@ -4,6 +4,7 @@ import logging
 import redis.asyncio as redis
 import asyncpg
 from datetime import datetime
+from dateutil import parser
 
 # 🔸 Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -59,7 +60,6 @@ async def refresh_tickers_periodically():
     while True:
         await load_tickers()
         await asyncio.sleep(300)
-
 # 🔸 Обработка одного сигнала из Redis Stream
 async def process_signal(entry_id, data):
     logging.info(f"📥 Обработка сигнала: {data}")
@@ -94,6 +94,21 @@ async def process_signal(entry_id, data):
         )
         return
 
+    # 🔹 Преобразование временных полей
+    from dateutil import parser
+    try:
+        bar_time = parser.isoparse(bar_time) if bar_time else None
+        sent_at = parser.isoparse(sent_at) if sent_at else None
+        received_at = parser.isoparse(received_at) if received_at else datetime.utcnow()
+    except Exception as e:
+        await log_system_event(
+            level="ERROR",
+            message="Ошибка преобразования дат",
+            source="signal_worker",
+            details=str(e)
+        )
+        return
+
     conn = await get_db()
     try:
         # 🔹 Поиск сигнала по фразе
@@ -120,7 +135,7 @@ async def process_signal(entry_id, data):
             direction = "short"
 
         # 🔹 UID сигнала (message + symbol + bar_time)
-        uid = f"{message}:{symbol}:{bar_time}"
+        uid = f"{message}:{symbol}:{bar_time.isoformat()}"
         exists = await conn.fetchval("SELECT id FROM signals_v2_log WHERE uid = $1", uid)
         if exists:
             await log_system_event(
@@ -154,7 +169,6 @@ async def process_signal(entry_id, data):
         )
     finally:
         await conn.close()
-
 # 🔸 Цикл чтения сигналов из Redis Stream
 async def listen_signals():
     logging.info("🚀 Signal Worker (v2) запущен. Ожидание сигналов...")
