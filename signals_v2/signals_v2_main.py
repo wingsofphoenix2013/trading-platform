@@ -23,10 +23,12 @@ redis_client = redis.Redis(
     decode_responses=True,
     ssl=True
 )
-
 # 🔸 Глобальный словарь тикеров: symbol → tradepermission
 TICKERS = {}
-
+# 🔸 Глобальный словарь стратегий: name → данные
+STRATEGIES = {}
+# 🔸 Глобальная связка сигнальных фраз с именами стратегий
+STRATEGY_SIGNALS = {}        
 # 🔸 Подключение к PostgreSQL
 async def get_db():
     return await asyncpg.connect(DATABASE_URL)
@@ -54,12 +56,67 @@ async def load_tickers():
         logging.error(f"❌ Ошибка при загрузке тикеров: {e}")
     finally:
         await conn.close()
-
 # 🔸 Фоновое обновление тикеров каждые 5 минут
 async def refresh_tickers_periodically():
     while True:
         await load_tickers()
         await asyncio.sleep(300)
+# 🔸 Загрузка всех стратегий из таблицы strategies_v2
+# Хранит включённые стратегии в памяти для фильтрации при маршрутизации сигналов
+async def load_strategies():
+    global STRATEGIES
+    try:
+        conn = await get_db()
+        rows = await conn.fetch("""
+            SELECT id, name, enabled, archived, allow_open, use_all_tickers
+            FROM strategies_v2
+        """)
+        STRATEGIES = {
+            row["name"]: {
+                "id": row["id"],
+                "enabled": row["enabled"],
+                "archived": row["archived"],
+                "allow_open": row["allow_open"],
+                "use_all_tickers": row["use_all_tickers"]
+            } for row in rows
+        }
+        logging.info(f"✅ Загрузка стратегий: {len(STRATEGIES)} шт.")
+    except Exception as e:
+        await log_system_event("ERROR", "Ошибка при загрузке стратегий", "signal_worker", str(e))
+    finally:
+        await conn.close()
+# 🔸 Загрузка связей стратегия ↔ сигнал из strategy_signals_v2
+# Формирует карту сигнальных фраз → список стратегий, которые на них подписаны
+async def load_strategy_signals():
+    global STRATEGY_SIGNALS
+    try:
+        conn = await get_db()
+        rows = await conn.fetch("""
+            SELECT ss.strategy_id, s.name, ss.signal_id, sv.short_phrase, sv.long_phrase
+            FROM strategy_signals_v2 ss
+            JOIN strategies_v2 s ON ss.strategy_id = s.id
+            JOIN signals_v2 sv ON ss.signal_id = sv.id
+            WHERE s.enabled = true AND s.archived = false
+        """)
+        signals_map = {}
+        for row in rows:
+            for phrase in [row["short_phrase"], row["long_phrase"]]:
+                if phrase not in signals_map:
+                    signals_map[phrase] = []
+                signals_map[phrase].append(row["name"])
+        STRATEGY_SIGNALS = signals_map
+        logging.info(f"✅ Загрузка strategy_signals: {len(STRATEGY_SIGNALS)} сигнальных фраз")
+    except Exception as e:
+        await log_system_event("ERROR", "Ошибка при загрузке strategy_signals", "signal_worker", str(e))
+    finally:
+        await conn.close()
+# 🔸 Фоновая задача: периодически обновляет кеш стратегий и связей
+# Используется для отслеживания изменений через UI/админку
+async def refresh_strategies_periodically():
+    while True:
+        await load_strategies()
+        await load_strategy_signals()
+        await asyncio.sleep(300)        
 # 🔸 Обработка одного сигнала из Redis Stream
 async def process_signal(entry_id, data):
     logging.info(f"📥 Обработка сигнала: {data}")
@@ -201,7 +258,11 @@ async def listen_signals():
 # 🔸 Главная точка запуска: загрузка тикеров + запуск слушателя сигналов
 async def main():
     await load_tickers()
+    await load_strategies()
+    await load_strategy_signals()
     asyncio.create_task(refresh_tickers_periodically())
+    asyncio.create_task(refresh_strategies_periodically())
+    await log_system_event("INFO", "Signal Worker (v2) успешно запущен", "signal_worker")
     await listen_signals()
 
 # 🔸 Точка входа
