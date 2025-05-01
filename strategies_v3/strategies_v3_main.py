@@ -30,7 +30,50 @@ tickers_storage = {}
 # 🔸 Подключение к PostgreSQL
 async def get_db():
     return await asyncpg.connect(DATABASE_URL)
+# 🔸 Загрузка тикеров из базы: symbol → precision_price, precision_qty
+async def load_tickers():
+    global tickers_storage
+    try:
+        conn = await get_db()
+        rows = await conn.fetch("""
+            SELECT symbol, precision_price, precision_qty
+            FROM tickers
+            WHERE status = 'enabled' AND tradepermission = 'enabled'
+        """)
+        tickers_storage = {
+            row["symbol"]: {
+                "precision_price": row["precision_price"],
+                "precision_qty": row["precision_qty"]
+            } for row in rows
+        }
+        logging.info(f"✅ Загружено тикеров: {len(tickers_storage)}")
+    except Exception as e:
+        logging.error(f"❌ Ошибка при загрузке тикеров: {e}")
+    finally:
+        await conn.close()
+# 🔸 Периодическая перезагрузка тикеров из базы
+async def refresh_tickers_periodically():
+    while True:
+        await load_tickers()
+        await asyncio.sleep(300)
+# 🔸 Мониторинг цен: чтение Redis ключей вида price:{symbol} с округлением
+latest_prices = {}
 
+async def monitor_prices():
+    while True:
+        for symbol, meta in tickers_storage.items():
+            try:
+                price_str = await redis_client.get(f"price:{symbol}")
+                if price_str:
+                    precision = meta["precision_price"]
+                    price = Decimal(price_str).quantize(Decimal(f'1e-{precision}'), rounding=ROUND_DOWN)
+                    latest_prices[symbol] = price
+                    logging.debug(f"{symbol}: {price}")
+                else:
+                    logging.warning(f"⚠️ Цена отсутствует в Redis для {symbol}")
+            except Exception as e:
+                logging.error(f"Ошибка получения цены {symbol}: {e}")
+        await asyncio.sleep(1)                
 # 🔸 Основной обработчик задач
 async def handle_task(entry_id, data):
     logging.info(f"📥 Получена задача: {data}")
@@ -67,6 +110,9 @@ async def listen_strategy_tasks():
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
+    await load_tickers()
+    asyncio.create_task(refresh_tickers_periodically())
+    asyncio.create_task(monitor_prices())
     await listen_strategy_tasks()
 
 if __name__ == "__main__":
