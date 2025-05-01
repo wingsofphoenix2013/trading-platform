@@ -215,7 +215,35 @@ async def process_signal(entry_id, data):
              raw_message, bar_time, sent_at, received_at, uid)
 
         logging.info(f"✅ Сигнал записан в signals_v2_log (id={log_id})")
+        
+        # 🔸 Поиск подписанных стратегий по фразе
+        subscribed = STRATEGY_SIGNALS.get(message, [])
+        if not subscribed:
+            logging.info(f"ℹ️ Нет стратегий, подписанных на {message}")
+            return
 
+        for strategy_name in subscribed:
+            strat = STRATEGIES.get(strategy_name)
+            if not strat:
+                continue  # Стратегия не загружена
+
+            if not strat["enabled"] or strat["archived"] or not strat["allow_open"]:
+                logging.info(f"⚠️ Стратегия {strategy_name} пропущена (выключена / архив / пауза)")
+                continue
+
+            task_payload = {
+                "strategy": strategy_name,
+                "symbol": symbol,
+                "direction": direction,
+                "bar_time": bar_time.isoformat(),
+                "sent_at": sent_at.isoformat() if sent_at else "",
+                "received_at": received_at.isoformat(),
+                "log_id": str(log_id)
+            }
+
+            await redis_client.xadd("strategy_tasks", task_payload)
+            logging.info(f"📤 Задача отправлена в strategy_tasks для стратегии {strategy_name}")
+            
     except Exception as e:
         logging.error(f"❌ Исключение в process_signal: {e}")
         await log_system_event(
