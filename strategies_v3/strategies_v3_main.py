@@ -79,16 +79,22 @@ async def monitor_prices():
 async def handle_task(entry_id, data):
     logging.info(f"📥 Получена задача: {data}")
 
-    importlib.invalidate_caches()  # очистка кэша импортов
+    importlib.invalidate_caches()
     strategy_name = data["strategy"]
     module_name = f"strategies_v3.{strategy_name}"
 
+    # 🔹 Инициализация интерфейса
+    interface = StrategyInterface(
+        database_url=DATABASE_URL,
+        open_positions=open_positions
+    )
+
     try:
         strategy_module = importlib.import_module(module_name)
-        await strategy_module.on_signal(data, None)  # interface пока не передаём
+        await strategy_module.on_signal(data, interface)
     except Exception as e:
         logging.error(f"❌ Ошибка при вызове стратегии {strategy_name}: {e}")
-
+        
 # 🔸 Слушаем Redis Stream
 async def listen_strategy_tasks():
     group = "strategy-workers"
