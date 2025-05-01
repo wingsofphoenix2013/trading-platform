@@ -60,10 +60,100 @@ async def refresh_tickers_periodically():
         await load_tickers()
         await asyncio.sleep(300)
 
-# 🔸 Обработка одного сигнала из потока
+# 🔸 Обработка одного сигнала из Redis Stream
 async def process_signal(entry_id, data):
-    logging.info(f"📥 Получен сигнал из Redis Stream: {data}")
-    # TODO: парсинг, проверка message и symbol, сверка с TICKERS, запись в БД
+    logging.info(f"📥 Обработка сигнала: {data}")
+
+    # 🔹 Распаковка данных
+    message = data.get("message")
+    symbol_raw = data.get("symbol")
+    bar_time = data.get("bar_time")
+    sent_at = data.get("sent_at")
+    received_at = data.get("received_at")
+    raw_message = str(data)
+
+    # 🔹 Базовая валидация
+    if not message or not symbol_raw:
+        await log_system_event(
+            level="WARNING",
+            message="Сигнал без message или symbol — пропущен",
+            source="signal_worker",
+            details=raw_message
+        )
+        return
+
+    symbol = symbol_raw.strip().upper()
+
+    # 🔹 Проверка тикера (по кешу)
+    if symbol not in TICKERS or TICKERS[symbol] != "enabled":
+        await log_system_event(
+            level="WARNING",
+            message=f"Тикер {symbol} не разрешён к торговле",
+            source="signal_worker",
+            details=raw_message
+        )
+        return
+
+    conn = await get_db()
+    try:
+        # 🔹 Поиск сигнала по фразе
+        signal_row = await conn.fetchrow("""
+            SELECT * FROM signals_v2
+            WHERE (long_phrase = $1 OR short_phrase = $1)
+              AND enabled = true
+        """, message)
+        if not signal_row:
+            await log_system_event(
+                level="WARNING",
+                message=f"Фраза '{message}' не зарегистрирована в signals_v2",
+                source="signal_worker",
+                details=raw_message
+            )
+            return
+
+        signal_id = signal_row["id"]
+        source = signal_row["source"]
+        direction = None
+        if message == signal_row["long_phrase"]:
+            direction = "long"
+        elif message == signal_row["short_phrase"]:
+            direction = "short"
+
+        # 🔹 UID сигнала (message + symbol + bar_time)
+        uid = f"{message}:{symbol}:{bar_time}"
+        exists = await conn.fetchval("SELECT id FROM signals_v2_log WHERE uid = $1", uid)
+        if exists:
+            await log_system_event(
+                level="INFO",
+                message=f"Повтор сигнала — uid {uid}",
+                source="signal_worker"
+            )
+            return
+
+        # 🔹 Вставка в signals_v2_log
+        log_id = await conn.fetchval("""
+            INSERT INTO signals_v2_log (
+                signal_id, symbol, direction, source, message,
+                raw_message, bar_time, sent_at, received_at,
+                logged_at, status, uid
+            )
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),'new',$10)
+            RETURNING id
+        """, signal_id, symbol, direction, source, message,
+             raw_message, bar_time, sent_at, received_at, uid)
+
+        logging.info(f"✅ Сигнал записан в signals_v2_log (id={log_id})")
+
+    except Exception as e:
+        logging.error(f"❌ Исключение в process_signal: {e}")
+        await log_system_event(
+            level="ERROR",
+            message="Ошибка при обработке сигнала",
+            source="signal_worker",
+            details=str(e)
+        )
+    finally:
+        await conn.close()
 
 # 🔸 Цикл чтения сигналов из Redis Stream
 async def listen_signals():
