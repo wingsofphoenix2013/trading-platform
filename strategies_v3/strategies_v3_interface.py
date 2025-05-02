@@ -29,7 +29,7 @@ class StrategyInterface:
     # 🔸 Получение пула PostgreSQL
     async def get_pg(self):
         if not self._pg_pool:
-            self._pg_pool = await asyncpg.create_pool(dsn=self.pg_dsn)
+            self._pg_pool = await asyncpg.create_pool(dsn=self.pg_dsn, min_size=1, max_size=5)
         return self._pg_pool
         
     # 🔸 Загрузка тикеров с precision
