@@ -27,7 +27,8 @@ redis_client = redis.Redis(
 # 🔸 Хранилища в памяти
 open_positions = {}
 tickers_storage = {}
-
+# 🔸 Импорт стратегий
+from strategies_v3.strategies_v3_interface import StrategyInterface
 # 🔸 Подключение к PostgreSQL
 async def get_db():
     return await asyncpg.connect(DATABASE_URL)
