@@ -90,12 +90,11 @@ async def load_strategy_tickers():
             use_all = strategy.get("use_all_tickers", False)
 
             if use_all:
-                # Все тикеры из tickers_storage с разрешением
+                # Все тикеры с разрешением (без учета is_active)
                 allowed = {
                     symbol for symbol, t in tickers_storage.items()
                     if t["status"] == "enabled" and
-                       t["tradepermission"] == "enabled" and
-                       t["is_active"]
+                       t["tradepermission"] == "enabled"
                 }
             else:
                 rows = await conn.fetch("""
