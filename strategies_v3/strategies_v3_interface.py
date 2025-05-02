@@ -1,12 +1,13 @@
-from strategies_v3_main import strategies_cache, strategy_allowed_tickers, open_positions
-
 # 🔸 Универсальный интерфейс для стратегий v3
 
 class StrategyInterface:
-    def __init__(self, redis_client, database_url):
+    def __init__(self, redis_client, database_url, strategies_cache, strategy_allowed_tickers, open_positions):
         # 🔸 Подключение к Redis и базе данных
         self.redis = redis_client
         self.database_url = database_url
+        self.strategies_cache = strategies_cache
+        self.strategy_allowed_tickers = strategy_allowed_tickers
+        self.open_positions = open_positions
 
     # 🔸 Логирование действия стратегии
     async def log_strategy_action(self, strategy_id: int, log_id: int, status: str, note: str, position_id: int = None):
@@ -20,7 +21,7 @@ class StrategyInterface:
 
         # 🔹 Найти стратегию
         strategy_id = None
-        for sid, data in strategies_cache.items():
+        for sid, data in self.strategies_cache.items():
             if data["name"] == strategy_name:
                 strategy_id = sid
                 strategy = data
@@ -30,12 +31,12 @@ class StrategyInterface:
             return False, "Базовые проверки не пройдены — стратегия не найдена"
 
         # 🔹 Проверка разрешённого тикера
-        allowed = strategy_allowed_tickers.get(strategy_id, set())
+        allowed = self.strategy_allowed_tickers.get(strategy_id, set())
         if symbol not in allowed:
             return False, "Базовые проверки не пройдены — тикер не разрешён для этой стратегии"
 
         # 🔹 Поиск открытой позиции
-        for pos in open_positions.values():
+        for pos in self.open_positions.values():
             if pos["strategy_id"] == strategy_id and pos["symbol"] == symbol:
                 if pos["direction"] == direction:
                     return False, "Базовые проверки не пройдены — позиция в этом направлении уже открыта"
@@ -49,7 +50,7 @@ class StrategyInterface:
 
     # 🔸 Поиск ID стратегии по имени
     async def get_strategy_id_by_name(self, strategy_name: str) -> int:
-        for sid, data in strategies_cache.items():
+        for sid, data in self.strategies_cache.items():
             if data["name"] == strategy_name:
                 return sid
         return None

@@ -129,7 +129,13 @@ async def handle_task(task_data: dict):
         logging.warning(f"⚠️ Стратегия не найдена: {strategy_name}")
         return
 
-    interface = StrategyInterface(redis_client=redis_client, database_url=DATABASE_URL)
+    interface = StrategyInterface(
+        redis_client=redis_client,
+        database_url=DATABASE_URL,
+        strategies_cache=strategies_cache,
+        strategy_allowed_tickers=strategy_allowed_tickers,
+        open_positions=open_positions
+    )
 
     try:
         await strategy.on_signal(task_data, interface)
