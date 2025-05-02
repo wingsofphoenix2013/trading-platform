@@ -9,6 +9,9 @@ from strategies_v3_interface import StrategyInterface
 
 logging.basicConfig(level=logging.INFO)
 
+# 🔸 Импорт логики стратегии (явно)
+from strategy_1 import on_signal as strategy_1_on_signal
+
 # 🔸 Хранилища в памяти
 tickers_storage = {}
 open_positions = {}
@@ -184,9 +187,16 @@ async def handle_task(task_data: dict):
             )
             return
 
-        # 🔹 Вызов логики стратегии
-        mod = importlib.import_module(strategy_name)
-        signal_result = await mod.on_signal(task_data, interface)
+        # 🔹 Вызов логики стратегии (ручной импорт)
+        if strategy_name == "strategy_1":
+            from strategy_1 import on_signal as strategy_1_on_signal
+            signal_result = await strategy_1_on_signal(task_data, interface)
+        else:
+            await interface.log_strategy_action(
+                log_id=log_id, strategy_id=strategy_id,
+                status="error", note=f"Неизвестная стратегия: {strategy_name}"
+            )
+            return
 
         if signal_result.get("action") != "open":
             await interface.log_strategy_action(
@@ -206,11 +216,10 @@ async def handle_task(task_data: dict):
     except Exception as e:
         await interface.log_strategy_action(
             log_id=log_id,
-            strategy_id=strategies_cache.get(task_data.get("strategy"), {}).get("id"),
+            strategy_id=strategy_id,
             status="error",
             note=f"Ошибка при обработке: {e}"
-        )
-# 🔸 Главная точка запуска
+        )# 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
     await load_tickers()
