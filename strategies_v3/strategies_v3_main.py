@@ -86,12 +86,111 @@ async def refresh_tickers_periodically():
 async def monitor_prices():
     while True:
         await asyncio.sleep(1)
-
-# 🔸 Основной цикл получения задач
+# 🔸 Слушатель Redis Stream strategy_tasks
 async def listen_strategy_tasks():
-    while True:
-        await asyncio.sleep(1)
+    interface = StrategyInterface()
+    redis = await interface.get_redis()
+    group = "strategy_worker_group"
+    consumer = "worker-1"
 
+    try:
+        await redis.xgroup_create("strategy_tasks", group, id="0", mkstream=True)
+    except Exception:
+        pass  # группа уже существует
+
+    while True:
+        try:
+            messages = await redis.xreadgroup(
+                groupname=group,
+                consumername=consumer,
+                streams={"strategy_tasks": ">"},
+                count=10,
+                block=500
+            )
+            for stream_name, msgs in messages:
+                for msg_id, msg_data in msgs:
+                    task = {k: v for k, v in msg_data.items()}
+                    logging.info(f"📥 Получена задача: {task}")
+                    await handle_task(task)
+        except Exception as e:
+            logging.error(f"Ошибка чтения из Redis Stream: {e}")
+            await asyncio.sleep(1)
+# 🔸 Обработка одной задачи из Redis Stream
+async def handle_task(task_data: dict):
+    try:
+        interface = StrategyInterface()
+        strategy_name = task_data["strategy"]
+        symbol = task_data["symbol"]
+        direction = task_data["direction"]
+        log_id = int(task_data["log_id"])
+
+        strategy = strategies_cache.get(strategy_name)
+        strategy_id = strategy["id"] if strategy else None
+
+        # 🔹 Проверка тикера
+        if symbol not in tickers_storage:
+            await interface.log_strategy_action(
+                log_id=log_id, strategy_id=strategy_id,
+                status="ignored_by_check", note="Тикер не найден в tickers_storage"
+            )
+            return
+
+        if tickers_storage[symbol]["tradepermission"] != "enabled":
+            await interface.log_strategy_action(
+                log_id=log_id, strategy_id=strategy_id,
+                status="ignored_by_check", note="Торговля тикером запрещена"
+            )
+            return
+
+        if symbol not in allowed_symbols.get(strategy_name, set()):
+            await interface.log_strategy_action(
+                log_id=log_id, strategy_id=strategy_id,
+                status="ignored_by_check", note="Тикер не разрешён для стратегии"
+            )
+            return
+
+        if (strategy_name, symbol) in open_positions:
+            await interface.log_strategy_action(
+                log_id=log_id, strategy_id=strategy_id,
+                status="ignored_by_check", note="Позиция уже открыта"
+            )
+            return
+
+        # 🔹 Получение цены
+        entry_price = latest_prices.get(symbol)
+        if not entry_price:
+            await interface.log_strategy_action(
+                log_id=log_id, strategy_id=strategy_id,
+                status="error", note="Нет актуальной цены в Redis"
+            )
+            return
+
+        # 🔹 Вызов логики стратегии
+        mod = __import__(f"strategies_v3.{strategy_name}", fromlist=["on_signal"])
+        signal_result = await mod.on_signal(task_data, interface)
+
+        if signal_result.get("action") != "open":
+            await interface.log_strategy_action(
+                log_id=log_id, strategy_id=strategy_id,
+                status="ignored_by_check", note="Стратегия отклонила сигнал"
+            )
+            return
+
+        # 🔹 Открытие позиции
+        position_id = await interface.open_position(strategy_name, symbol, direction, entry_price, log_id)
+
+        await interface.log_strategy_action(
+            log_id=log_id, strategy_id=strategy_id,
+            status="position_opened", position_id=position_id
+        )
+
+    except Exception as e:
+        await interface.log_strategy_action(
+            log_id=task_data.get("log_id", -1),
+            strategy_id=strategies_cache.get(task_data.get("strategy"), {}).get("id"),
+            status="error",
+            note=f"Ошибка при обработке: {e}"
+        )
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
