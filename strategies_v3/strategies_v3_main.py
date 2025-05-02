@@ -122,7 +122,8 @@ async def handle_task(task_data: dict):
         strategy_name = task_data["strategy"]
         symbol = task_data["symbol"]
         direction = task_data["direction"]
-        log_id = int(task_data["log_id"])
+        log_id_raw = task_data.get("log_id")
+        log_id = int(log_id_raw) if log_id_raw is not None else -1
 
         strategy = strategies_cache.get(strategy_name)
         strategy_id = strategy["id"] if strategy else None
@@ -186,7 +187,7 @@ async def handle_task(task_data: dict):
 
     except Exception as e:
         await interface.log_strategy_action(
-            log_id=task_data.get("log_id", -1),
+            log_id=log_id,
             strategy_id=strategies_cache.get(task_data.get("strategy"), {}).get("id"),
             status="error",
             note=f"Ошибка при обработке: {e}"
