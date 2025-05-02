@@ -95,7 +95,6 @@ async def refresh_tickers_periodically(interface: StrategyInterface):
 async def monitor_prices(interface: StrategyInterface):
     logging.info("🔄 monitor_prices ЗАПУЩЕН")
 
-    interface = StrategyInterface()
     redis = await interface.get_redis()
 
     while True:
