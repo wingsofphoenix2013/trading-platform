@@ -123,11 +123,32 @@ async def listen_strategy_tasks():
         except Exception as e:
             logging.error(f"❌ Ошибка при чтении из Redis Stream: {e}")
             await asyncio.sleep(1)
-            
+# 🔸 Загрузка стратегий из базы
+async def load_strategies():
+    global strategies_cache
+
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        rows = await conn.fetch("""
+            SELECT *
+            FROM strategies_v2
+            WHERE enabled = true AND archived = false
+        """)
+        await conn.close()
+
+        strategies_cache = {
+            row["id"]: dict(row) for row in rows
+        }
+
+        logging.info(f"✅ Загружено стратегий: {len(strategies_cache)}")
+    except Exception as e:
+        logging.error(f"❌ Ошибка при загрузке стратегий: {e}")            
+# 🔸 Главная точка запуска
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
     await load_tickers()
+    await load_strategies()
     asyncio.create_task(refresh_tickers_periodically())
     await listen_strategy_tasks()
     
