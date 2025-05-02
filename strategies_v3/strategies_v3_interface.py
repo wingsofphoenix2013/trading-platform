@@ -4,7 +4,6 @@ import redis.asyncio as redis
 from decimal import Decimal, ROUND_DOWN
 import os
 
-
 # 🔸 Универсальный интерфейс для стратегий v3
 class StrategyInterface:
     def __init__(
@@ -14,7 +13,8 @@ class StrategyInterface:
         strategies_cache,
         strategy_allowed_tickers,
         open_positions,
-        tickers_storage
+        tickers_storage,
+        latest_prices
     ):
         # 🔸 Подключение к Redis и база данных
         self.redis = redis_client
@@ -25,6 +25,7 @@ class StrategyInterface:
         self.strategy_allowed_tickers = strategy_allowed_tickers
         self.open_positions = open_positions
         self.tickers_storage = tickers_storage
+        self.latest_prices = latest_prices
 
     # 🔸 Логирование действия стратегии в signal_log_entries_v2
     async def log_strategy_action(self, strategy_id: int, log_id: int, status: str, note: str, position_id: int = None):
@@ -108,7 +109,7 @@ class StrategyInterface:
 
         strategy = self.strategies_cache.get(strategy_id)
         ticker = self.tickers_storage.get(symbol)
-        entry_price = latest_prices.get(symbol)
+        entry_price = self.latest_prices.get(symbol)
 
         if strategy is None or ticker is None or entry_price is None:
             logging.warning("⚠️ Не найдены данные стратегии, тикера или цены")

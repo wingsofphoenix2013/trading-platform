@@ -154,7 +154,8 @@ async def handle_task(task_data: dict):
         strategies_cache=strategies_cache,
         strategy_allowed_tickers=strategy_allowed_tickers,
         open_positions=open_positions,
-        tickers_storage=tickers_storage
+        tickers_storage=tickers_storage,
+        latest_prices=latest_prices
     )
 
     # 🔹 Выполнение базовых проверок
