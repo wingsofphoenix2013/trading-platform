@@ -34,6 +34,7 @@ open_positions = {}
 latest_prices = {}
 strategies_cache = {}
 strategy_allowed_tickers = {}
+open_positions = {}
 
 # 🔸 Хранилище стратегий (регистрируются вручную)
 strategies = {
@@ -186,13 +187,35 @@ async def load_strategies():
 
         logging.info(f"✅ Загружено стратегий: {len(strategies_cache)}")
     except Exception as e:
-        logging.error(f"❌ Ошибка при загрузке стратегий: {e}")            
+        logging.error(f"❌ Ошибка при загрузке стратегий: {e}")
+# 🔸 Загрузка открытых позиций из базы
+async def load_open_positions():
+    global open_positions
+
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        rows = await conn.fetch("""
+            SELECT *
+            FROM positions_v2
+            WHERE status = 'open'
+        """)
+        await conn.close()
+
+        open_positions = {
+            row["id"]: dict(row) for row in rows
+        }
+
+        logging.info(f"✅ Загружено открытых позиций: {len(open_positions)}")
+    except Exception as e:
+        logging.error(f"❌ Ошибка при загрузке открытых позиций: {e}")  
+                          
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
     await load_tickers()
     await load_strategies()
     await load_strategy_tickers()
+    await load_open_positions()
     asyncio.create_task(refresh_tickers_periodically())
     asyncio.create_task(refresh_strategies_and_tickers_periodically())
     await listen_strategy_tasks()
