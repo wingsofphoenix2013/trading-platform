@@ -112,19 +112,23 @@ class StrategyInterface:
         entry_price = self.latest_prices.get(symbol)
 
         if strategy is None or ticker is None or entry_price is None:
-            logging.warning("⚠️ Не найдены данные стратегии, тикера или цены")
+            logging.warning(f"⚠️ Недостаточно данных: strategy={strategy}, ticker={ticker}, price={entry_price}")
             return None
 
         precision_price = ticker["precision_price"]
         precision_qty = ticker["precision_qty"]
 
-        # 🔹 Расчёт SL-цены
-        sl_type = strategy["sl_type"]
-        sl_value = Decimal(str(strategy["sl_value"]))
+        # Проверка и обработка sl_value
+        sl_value_raw = strategy.get("sl_value")
+        try:
+            sl_value = Decimal(str(sl_value_raw))
+        except Exception as e:
+            logging.error(f"❌ Невалидный sl_value: {sl_value_raw} — {e}")
+            return None
 
+        sl_type = strategy.get("sl_type")
         if sl_type == "percent":
-            sl_percent = sl_value / Decimal("100")
-            delta = entry_price * sl_percent
+            delta = entry_price * (sl_value / Decimal("100"))
         elif sl_type == "atr":
             atr = await self.get_indicator_value(symbol, timeframe, "ATR", "atr")
             if atr is None:
@@ -134,7 +138,6 @@ class StrategyInterface:
         else:
             logging.error(f"❌ Неизвестный тип SL: {sl_type}")
             return None
-
         if direction == "long":
             stop_loss_price = entry_price - delta
         elif direction == "short":
@@ -145,12 +148,15 @@ class StrategyInterface:
 
         stop_loss_price = stop_loss_price.quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
 
-        # 🔹 Максимальный допустимый planned_risk
-        deposit = Decimal(str(strategy["deposit"]))
-        max_risk_pct = Decimal(str(strategy["max_risk"])) / Decimal("100")
-        max_allowed_risk = deposit * max_risk_pct
+        # Проверка и обработка параметров риска
+        try:
+            deposit = Decimal(str(strategy["deposit"]))
+            max_risk_pct = Decimal(str(strategy["max_risk"])) / Decimal("100")
+        except Exception as e:
+            logging.error(f"❌ Ошибка при преобразовании deposit/max_risk: {e}")
+            return None
 
-        # 🔹 Расчёт уже занятого риска
+        max_allowed_risk = deposit * max_risk_pct
         current_risk = sum(
             Decimal(str(p.get("planned_risk", 0)))
             for p in self.open_positions.values()
@@ -170,15 +176,20 @@ class StrategyInterface:
         quantity = (available_risk / risk_per_unit).quantize(Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN)
         notional = (quantity * entry_price).quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
 
-        # 🔹 Проверка по лимиту позиции
-        position_limit = Decimal(str(strategy["position_limit"]))
+        # Проверка по лимиту позиции
+        try:
+            position_limit = Decimal(str(strategy["position_limit"]))
+        except Exception as e:
+            logging.error(f"❌ Невалидный position_limit: {strategy.get('position_limit')} — {e}")
+            return None
+
         if (quantity * entry_price) > position_limit:
             notional = position_limit
             quantity = (notional / entry_price).quantize(Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN)
 
         planned_risk = (quantity * risk_per_unit).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
 
-        # 🔹 Запись в positions_v2
+        # Вставка в БД
         try:
             conn = await asyncpg.connect(self.database_url)
             row = await conn.fetchrow("""
@@ -201,4 +212,4 @@ class StrategyInterface:
 
         except Exception as e:
             logging.error(f"❌ Ошибка при записи позиции: {e}")
-            return None                    
+            return None                 
