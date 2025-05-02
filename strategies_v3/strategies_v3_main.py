@@ -109,7 +109,8 @@ async def load_strategy_tickers():
         await conn.close()
         strategy_allowed_tickers = result
 
-        logging.info(f"✅ Загружены разрешённые тикеры для {len(result)} стратегий")
+        total = sum(len(tickers) for tickers in result.values())
+        logging.info(f"✅ Загружено разрешённых тикеров: {total} (для {len(result)} стратегий)")
 
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке strategy_tickers: {e}")
