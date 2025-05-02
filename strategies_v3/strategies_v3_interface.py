@@ -70,3 +70,15 @@ class StrategyInterface:
             if data["name"] == strategy_name:
                 return sid
         return None
+    # 🔸 Получение значения индикатора из Redis по ключу
+    async def get_indicator_value(self, symbol: str, timeframe: str, *path_parts: str) -> Decimal | None:
+        try:
+            key = f"{symbol}:{timeframe}:" + ":".join(path_parts)
+            value = await self.redis.get(key)
+            if value is None:
+                logging.warning(f"⚠️ Индикатор не найден: {key}")
+                return None
+            return Decimal(value)
+        except Exception as e:
+            logging.error(f"❌ Ошибка при получении индикатора {key}: {e}")
+            return None        
