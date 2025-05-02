@@ -6,11 +6,11 @@ from decimal import Decimal, ROUND_DOWN
 
 # 🔸 Интерфейс стратегий v3
 class StrategyInterface:
-    def __init__(self, strategies_cache: dict):
+    def __init__(self, strategies_cache=None):
         self.pg_dsn = os.getenv("DATABASE_URL")
         self._pg_pool = None
         self._redis = None
-        self.strategies_cache = strategies_cache
+        self.strategies_cache = strategies_cache or {}
 
     # 🔸 Получение подключения к Redis (Upstash / локально)
     async def get_redis(self):
