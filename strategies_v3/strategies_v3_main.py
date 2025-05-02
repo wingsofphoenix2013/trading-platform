@@ -86,20 +86,15 @@ async def refresh_tickers_periodically():
 # 🔸 Мониторинг цен из Redis
 async def monitor_prices():
     logging.info("🔄 monitor_prices ЗАПУЩЕН")
+
     interface = StrategyInterface()
     redis = await interface.get_redis()
 
     while True:
         try:
             for symbol in tickers_storage.keys():
-                if symbol == "TRUMPUSDT":
-                    logging.info("🟢 monitor_prices: вижу TRUMPUSDT в tickers_storage")
-
                 raw_price = await redis.get(f"price:{symbol}")
                 if raw_price:
-                    if symbol == "TRUMPUSDT":
-                        logging.info(f"📈 monitor_prices: TRUMPUSDT цена = {raw_price}")
-
                     try:
                         latest_prices[symbol] = Decimal(raw_price)
                     except Exception as conv_err:
@@ -221,8 +216,7 @@ async def main():
     await load_strategies()
     await load_strategy_tickers()
     asyncio.create_task(refresh_tickers_periodically())
-    # asyncio.create_task(monitor_prices())
-    await monitor_prices()
+    asyncio.create_task(monitor_prices())
     await listen_strategy_tasks()
 
 if __name__ == "__main__":
