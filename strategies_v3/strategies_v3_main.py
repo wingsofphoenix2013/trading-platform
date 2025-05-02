@@ -121,9 +121,8 @@ async def listen_strategy_tasks():
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
     await load_tickers()
-    await asyncio.gather(
-        refresh_tickers_periodically(),
-        listen_strategy_tasks()
-    )
+    asyncio.create_task(refresh_tickers_periodically())
+    await asyncio.to_thread(listen_strategy_tasks)
+    
 if __name__ == "__main__":
     asyncio.run(main())
