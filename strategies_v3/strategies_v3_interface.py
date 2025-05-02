@@ -6,12 +6,12 @@ class StrategyInterface:
         self.redis = redis_client
         self.database_url = database_url
 
+    # 🔸 Логирование действия стратегии
     async def log_strategy_action(self, strategy_id: int, log_id: int, status: str, note: str, position_id: int = None):
-        # 🔸 Заглушка логирования действия стратегии
         print(f"📝 Лог: strategy_id={strategy_id}, log_id={log_id}, status={status}, note={note}")
 
+    # 🔸 Базовые проверки перед открытием позиции
     async def run_basic_checks(self, task: dict) -> tuple[bool, str]:
-        # 🔸 Базовые проверки перед открытием позиции
         strategy_name = task.get("strategy")
         symbol = task.get("symbol")
         direction = task.get("direction")
@@ -44,3 +44,10 @@ class StrategyInterface:
                         return True, "Разрешён реверс — дальнейшие действия определяются стратегией"
 
         return True, "Базовые проверки пройдены"
+
+    # 🔸 Поиск ID стратегии по имени
+    async def get_strategy_id_by_name(self, strategy_name: str) -> int:
+        for sid, data in strategies_cache.items():
+            if data["name"] == strategy_name:
+                return sid
+        return None
