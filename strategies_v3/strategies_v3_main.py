@@ -33,6 +33,7 @@ tickers_storage = {}
 open_positions = {}
 latest_prices = {}
 strategies_cache = {}
+strategy_allowed_tickers = {}
 
 # 🔸 Хранилище стратегий (регистрируются вручную)
 strategies = {
@@ -74,7 +75,50 @@ async def refresh_tickers_periodically():
     while True:
         logging.info("🔄 Обновление тикеров...")
         await load_tickers()
-        await asyncio.sleep(60)       
+        await asyncio.sleep(60)
+# 🔸 Загрузка разрешённых тикеров по стратегиям
+async def load_strategy_tickers():
+    global strategy_allowed_tickers
+
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+
+        result = {}
+
+        for strategy_id, strategy in strategies_cache.items():
+            use_all = strategy.get("use_all_tickers", False)
+
+            if use_all:
+                # Все тикеры из tickers_storage с разрешением
+                allowed = {
+                    symbol for symbol, t in tickers_storage.items()
+                    if t["status"] == "enabled" and
+                       t["tradepermission"] == "enabled" and
+                       t["is_active"]
+                }
+            else:
+                rows = await conn.fetch("""
+                    SELECT symbol
+                    FROM strategy_tickers_v2
+                    WHERE strategy_id = $1
+                """, strategy_id)
+                allowed = {row["symbol"] for row in rows}
+
+            result[strategy_id] = allowed
+
+        await conn.close()
+        strategy_allowed_tickers = result
+        logging.info(f"✅ Загружены разрешённые тикеры для {len(result)} стратегий")
+
+    except Exception as e:
+        logging.error(f"❌ Ошибка при загрузке strategy_tickers: {e}")
+# 🔸 Периодическое обновление стратегий и разрешённых тикеров
+async def refresh_strategies_and_tickers_periodically():
+    while True:
+        logging.info("🔄 Обновление стратегий и тикеров по стратегиям...")
+        await load_strategies()
+        await load_strategy_tickers()
+        await asyncio.sleep(60)                       
 # 🔸 Обработчик одной задачи
 async def handle_task(task_data: dict):
     strategy_name = task_data.get("strategy")
@@ -113,7 +157,7 @@ async def listen_strategy_tasks():
                 consumername=consumer_name,
                 streams={stream_name: ">"},
                 count=10,
-                block=5000
+                block=500
             )
             for stream, messages in entries:
                 for msg_id, msg_data in messages:
@@ -144,12 +188,13 @@ async def load_strategies():
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке стратегий: {e}")            
 # 🔸 Главная точка запуска
-# 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
     await load_tickers()
     await load_strategies()
+    await load_strategy_tickers()
     asyncio.create_task(refresh_tickers_periodically())
+    asyncio.create_task(refresh_strategies_and_tickers_periodically())
     await listen_strategy_tasks()
     
 if __name__ == "__main__":
