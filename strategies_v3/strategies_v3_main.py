@@ -230,12 +230,18 @@ async def handle_task(task_data: dict):
         )
 
     except Exception as e:
+        strategy_id = None
+        strategy = strategies_cache.get(task_data.get("strategy"))
+        if strategy:
+            strategy_id = strategy.get("id")
+
         await interface.log_strategy_action(
             log_id=log_id,
             strategy_id=strategy_id,
             status="error",
             note=f"Ошибка при обработке: {e}"
-        )# 🔸 Главная точка запуска
+        )
+# 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
     await load_tickers()
