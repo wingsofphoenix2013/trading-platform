@@ -203,15 +203,16 @@ async def handle_task(task_data: dict):
             )
             return
 
-        # 🔹 Вызов логики стратегии (ручной импорт)
-        if strategy_name == "strategy_1":
-            signal_result = await strategy_1_on_signal(task_data, interface)
-        else:
+        # 🔹 Вызов логики стратегии из зарегистрированного экземпляра
+        if strategy_name not in strategies:
             await interface.log_strategy_action(
                 log_id=log_id, strategy_id=strategy_id,
-                status="error", note=f"Неизвестная стратегия: {strategy_name}"
+                status="error", note=f"Неизвестная или не зарегистрированная стратегия: {strategy_name}"
             )
             return
+
+        strategy_instance = strategies[strategy_name]
+        signal_result = await strategy_instance.on_signal(task_data)
 
         if signal_result.get("action") != "open":
             await interface.log_strategy_action(
