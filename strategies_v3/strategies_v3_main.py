@@ -7,6 +7,7 @@ import redis.asyncio as redis
 from redis.exceptions import ResponseError
 import json
 import asyncpg
+from decimal import Decimal, ROUND_DOWN
 from strategy_1 import Strategy1
 from strategies_v3_interface import StrategyInterface
 
