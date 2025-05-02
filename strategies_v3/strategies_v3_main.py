@@ -82,9 +82,22 @@ async def refresh_tickers_periodically():
             logging.error(f"Ошибка обновления тикеров/разрешений: {e}")
         await asyncio.sleep(120)
 
-# 🔸 Мониторинг цен (заглушка)
+# 🔸 Мониторинг цен из Redis
 async def monitor_prices():
+    interface = StrategyInterface()
+    redis = await interface.get_redis()
+
     while True:
+        try:
+            for symbol in tickers_storage.keys():
+                raw_price = await redis.get(f"price:{symbol}")
+                if raw_price:
+                    try:
+                        latest_prices[symbol] = Decimal(raw_price)
+                    except Exception as conv_err:
+                        logging.warning(f"❗ Ошибка конвертации цены {symbol}: {raw_price} → {conv_err}")
+        except Exception as e:
+            logging.error(f"Ошибка обновления цен из Redis: {e}")
         await asyncio.sleep(1)
 # 🔸 Слушатель Redis Stream strategy_tasks
 async def listen_strategy_tasks():
