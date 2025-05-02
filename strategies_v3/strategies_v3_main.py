@@ -1,6 +1,7 @@
 # 🔸 Импорты и базовая настройка
 import asyncio
 import logging
+import importlib
 from decimal import Decimal, ROUND_DOWN
 
 # 🔸 Импорт интерфейса стратегии
@@ -184,7 +185,7 @@ async def handle_task(task_data: dict):
             return
 
         # 🔹 Вызов логики стратегии
-        mod = __import__(strategy_name, fromlist=["on_signal"])
+        mod = importlib.import_module(strategy_name)
         signal_result = await mod.on_signal(task_data, interface)
 
         if signal_result.get("action") != "open":
