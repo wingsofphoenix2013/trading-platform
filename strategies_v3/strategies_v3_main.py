@@ -71,14 +71,15 @@ async def load_strategy_tickers():
 
     total = sum(len(v) for v in allowed_symbols.values())
     logging.info(f"✅ Разрешённые тикеры загружены для {len(allowed_symbols)} стратегий, всего связей: {total}")
-# 🔸 Периодическое обновление тикеров
+# 🔸 Периодическое обновление тикеров и разрешений
 async def refresh_tickers_periodically():
     while True:
         try:
             await load_tickers()
+            await load_strategy_tickers()
         except Exception as e:
-            logging.error(f"Ошибка обновления тикеров: {e}")
-        await asyncio.sleep(300)
+            logging.error(f"Ошибка обновления тикеров/разрешений: {e}")
+        await asyncio.sleep(120)
 
 # 🔸 Мониторинг цен (заглушка)
 async def monitor_prices():

@@ -58,7 +58,37 @@ class StrategyInterface:
             SELECT * FROM strategies_v2 WHERE name = $1 AND enabled = true AND archived = false
         """, strategy_name)
         return dict(row) if row else None
+    # 🔸 Исключение тикера из стратегии (моментально + в БД)
+    async def disable_symbol_for_strategy(self, strategy_name: str, symbol: str):
+        pg = await self.get_pg()
 
+        # 🔹 Получение ID стратегии
+        strategy_row = await pg.fetchrow(
+            "SELECT id FROM strategies_v2 WHERE name = $1", strategy_name
+        )
+        if not strategy_row:
+            raise ValueError(f"Стратегия не найдена: {strategy_name}")
+        strategy_id = strategy_row["id"]
+
+        # 🔹 Получение ID тикера
+        ticker_row = await pg.fetchrow(
+            "SELECT id FROM tickers WHERE symbol = $1", symbol
+        )
+        if not ticker_row:
+            raise ValueError(f"Тикер не найден: {symbol}")
+        ticker_id = ticker_row["id"]
+
+        # 🔹 Обновление strategy_tickers_v2
+        await pg.execute("""
+            UPDATE strategy_tickers_v2
+            SET enabled = false
+            WHERE strategy_id = $1 AND ticker_id = $2
+        """, strategy_id, ticker_id)
+
+        # 🔹 Моментальное исключение из памяти
+        from strategies_v3_main import allowed_symbols
+        allowed_symbols.get(strategy_name, set()).discard(symbol)
+        
     # 🔸 Логирование действия стратегии
     async def log_strategy_action(self, *, log_id: int, strategy_id: int, status: str, position_id: int = None, note: str = None):
         pg = await self.get_pg()
