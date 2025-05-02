@@ -4,6 +4,7 @@ import os
 import asyncio
 import logging
 import redis.asyncio as redis
+from redis.exceptions import ResponseError
 import json
 import asyncpg
 from strategy_1 import Strategy1
