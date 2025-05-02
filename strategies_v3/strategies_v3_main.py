@@ -26,6 +26,12 @@ redis_client = redis.Redis(
     ssl=True
 )
 
+# 🔸 Хранилища в памяти
+tickers_storage = {}
+open_positions = {}
+latest_prices = {}
+strategies_cache = {}
+
 # 🔸 Хранилище стратегий (регистрируются вручную)
 strategies = {
     "strategy_1": Strategy1(),
