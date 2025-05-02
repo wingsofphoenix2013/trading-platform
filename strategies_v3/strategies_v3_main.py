@@ -90,8 +90,14 @@ async def monitor_prices():
     while True:
         try:
             for symbol in tickers_storage.keys():
+                if symbol == "TRUMPUSDT":
+                    logging.info("🟢 monitor_prices: вижу TRUMPUSDT в tickers_storage")
+
                 raw_price = await redis.get(f"price:{symbol}")
                 if raw_price:
+                    if symbol == "TRUMPUSDT":
+                        logging.info(f"📈 monitor_prices: TRUMPUSDT цена = {raw_price}")
+
                     try:
                         latest_prices[symbol] = Decimal(raw_price)
                     except Exception as conv_err:
