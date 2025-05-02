@@ -116,7 +116,28 @@ async def refresh_all_periodically():
         await load_strategies()
         await load_strategy_tickers()
         await load_open_positions()
-        await asyncio.sleep(60)                   
+        await asyncio.sleep(60)
+# 🔸 Фоновая задача: обновление цен из Redis (ключи вида price:<symbol>)
+async def monitor_prices():
+    while True:
+        try:
+            keys = await redis_client.keys("price:*")
+            if keys:
+                values = await redis_client.mget(keys)
+                for key, value in zip(keys, values):
+                    if value is None:
+                        continue
+                    symbol = key.split("price:")[1]
+                    try:
+                        price = Decimal(value)
+                        precision = tickers_storage.get(symbol, {}).get("precision_price", 8)
+                        rounded = price.quantize(Decimal(f"1e-{precision}"), rounding=ROUND_DOWN)
+                        latest_prices[symbol] = rounded
+                    except Exception as e:
+                        logging.warning(f"⚠️ Ошибка обработки цены {key}: {value} — {e}")
+        except Exception as e:
+            logging.error(f"❌ Ошибка при чтении цен из Redis: {e}")
+        await asyncio.sleep(1)                           
 # 🔸 Обработчик одной задачи
 async def handle_task(task_data: dict):
     strategy_name = task_data.get("strategy")
@@ -237,6 +258,7 @@ async def main():
     await load_strategy_tickers()
     await load_open_positions()
     asyncio.create_task(refresh_all_periodically())
+    asyncio.create_task(monitor_prices())
     await listen_strategy_tasks()
     
 if __name__ == "__main__":
