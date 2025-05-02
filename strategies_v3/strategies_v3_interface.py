@@ -1,7 +1,7 @@
 # 🔸 Импорты и базовая настройка
 import os
 import asyncpg
-import aioredis
+import redis.asyncio as aioredis
 from decimal import Decimal, ROUND_DOWN
 
 # 🔸 Интерфейс стратегий v3
