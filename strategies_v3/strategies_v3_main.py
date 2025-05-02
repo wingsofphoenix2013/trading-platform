@@ -5,6 +5,7 @@ import asyncio
 import logging
 import redis
 import json
+import asyncpg
 from strategy_1 import Strategy1
 from strategies_v3_interface import StrategyInterface
 
@@ -36,7 +37,42 @@ strategies_cache = {}
 strategies = {
     "strategy_1": Strategy1(),
 }
+# 🔸 Загрузка тикеров из базы
+import asyncpg  # добавить в начало файла, если ещё нет
 
+async def load_tickers():
+    global tickers_storage
+
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        rows = await conn.fetch("""
+            SELECT symbol, precision_price, precision_qty, min_qty,
+                   status, tradepermission, is_active
+            FROM tickers
+            WHERE status = 'enabled'
+        """)
+        await conn.close()
+
+        tickers_storage = {
+            row["symbol"]: {
+                "precision_price": row["precision_price"],
+                "precision_qty": row["precision_qty"],
+                "min_qty": float(row["min_qty"]),
+                "status": row["status"],
+                "tradepermission": row["tradepermission"],
+                "is_active": row["is_active"]
+            }
+            for row in rows
+        }
+
+        logging.info(f"✅ Загружено тикеров: {len(tickers_storage)}")
+    except Exception as e:
+        logging.error(f"❌ Ошибка при загрузке тикеров: {e}")
+# 🔸 Периодическое обновление тикеров
+async def refresh_tickers_periodically():
+    while True:
+        await asyncio.sleep(60)  # ⏱️ раз в 60 секунд
+        await load_tickers()        
 # 🔸 Обработчик одной задачи
 async def handle_task(task_data: dict):
     strategy_name = task_data.get("strategy")
@@ -83,6 +119,8 @@ async def listen_strategy_tasks():
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
+    await load_tickers()
+    asyncio.create_task(refresh_tickers_periodically())
     await listen_strategy_tasks()
 
 if __name__ == "__main__":
