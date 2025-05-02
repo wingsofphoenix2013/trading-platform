@@ -71,12 +71,6 @@ async def load_tickers():
         logging.info(f"✅ Загружено тикеров: {len(tickers_storage)}")
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке тикеров: {e}")
-# 🔸 Периодическое обновление тикеров
-async def refresh_tickers_periodically():
-    while True:
-        logging.info("🔄 Обновление тикеров...")
-        await load_tickers()
-        await asyncio.sleep(60)
 # 🔸 Загрузка разрешённых тикеров по стратегиям
 async def load_strategy_tickers():
     global strategy_allowed_tickers
@@ -114,13 +108,15 @@ async def load_strategy_tickers():
 
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке strategy_tickers: {e}")
-# 🔸 Периодическое обновление стратегий и разрешённых тикеров
-async def refresh_strategies_and_tickers_periodically():
+# 🔸 Периодическое обновление всех данных (тикеры, стратегии, разрешения, позиции)
+async def refresh_all_periodically():
     while True:
-        logging.info("🔄 Обновление стратегий и тикеров по стратегиям...")
+        logging.info("🔄 Обновление тикеров, стратегий и позиций...")
+        await load_tickers()
         await load_strategies()
         await load_strategy_tickers()
-        await asyncio.sleep(60)                       
+        await load_open_positions()
+        await asyncio.sleep(60)                   
 # 🔸 Обработчик одной задачи
 async def handle_task(task_data: dict):
     strategy_name = task_data.get("strategy")
@@ -240,8 +236,7 @@ async def main():
     await load_strategies()
     await load_strategy_tickers()
     await load_open_positions()
-    asyncio.create_task(refresh_tickers_periodically())
-    asyncio.create_task(refresh_strategies_and_tickers_periodically())
+    asyncio.create_task(refresh_all_periodically())
     await listen_strategy_tasks()
     
 if __name__ == "__main__":
