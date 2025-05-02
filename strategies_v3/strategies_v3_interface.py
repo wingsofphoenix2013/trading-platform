@@ -1,3 +1,5 @@
+from strategies_v3_main import strategies_cache, strategy_allowed_tickers, open_positions
+
 # 🔸 Универсальный интерфейс для стратегий v3
 
 class StrategyInterface:
