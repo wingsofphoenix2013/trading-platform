@@ -2,14 +2,28 @@
 
 class Strategy1:
     def __init__(self):
-        # 🔸 Инициализация стратегии без параметров
         pass
 
     async def on_signal(self, task: dict, interface):
-        # 🔸 Метод обработки входящего сигнала
-        strategy_name = task.get("strategy")
-        symbol = task.get("symbol")
-        direction = task.get("direction")
-        log_id = task.get("log_id")
+        ok, note = await interface.run_basic_checks(task)
+        print(f"✅ Проверка: {ok}, Причина: {note}")
 
-        print(f"⚙️ Strategy1: обработка сигнала {strategy_name} {symbol} {direction}, log_id={log_id}")
+        if not ok:
+            strategy_name = task["strategy"]
+            log_id = int(task["log_id"])
+            strategy_id = None
+
+            for sid, data in strategies_cache.items():
+                if data["name"] == strategy_name:
+                    strategy_id = sid
+                    break
+
+            await interface.log_strategy_action(
+                strategy_id=strategy_id,
+                log_id=log_id,
+                status="ignored_by_check",
+                note=note
+            )
+            return
+
+        print("📈 Продолжение логики...")
