@@ -85,8 +85,8 @@ async def load_strategy_tickers(interface: StrategyInterface):
 async def refresh_tickers_periodically(interface: StrategyInterface):
     while True:
         try:
-            await load_tickers()
-            await load_strategy_tickers()
+            await load_tickers(interface)
+            await load_strategy_tickers(interface)
         except Exception as e:
             logging.error(f"Ошибка обновления тикеров/разрешений: {e}")
         await asyncio.sleep(120)
