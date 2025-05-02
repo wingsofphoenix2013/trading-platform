@@ -1,24 +1,27 @@
 # 🔸 Импорты и базовая настройка
 import asyncio
 import logging
-import importlib
 from decimal import Decimal, ROUND_DOWN
 
 # 🔸 Импорт интерфейса стратегии
 from strategies_v3_interface import StrategyInterface
 
-logging.basicConfig(level=logging.INFO)
+# 🔸 Импорт логики стратегии (класс)
+from strategy_1 import Strategy1
 
-# 🔸 Импорт логики стратегии (явно)
-from strategy_1 import on_signal as strategy_1_on_signal
+logging.basicConfig(level=logging.INFO)
 
 # 🔸 Хранилища в памяти
 tickers_storage = {}
 open_positions = {}
 latest_prices = {}
+
 # 🔸 Хранилища стратегий
 strategies_cache = {}
 allowed_symbols = {}
+
+# 🔸 Зарегистрированные стратегии v3
+strategies = {}
 
 # 🔸 Загрузка тикеров из БД
 async def load_tickers():
@@ -237,6 +240,8 @@ async def main():
     await load_tickers()
     await load_strategies()
     await load_strategy_tickers()
+    interface = StrategyInterface()
+    strategies["strategy_1"] = Strategy1(interface)
     asyncio.create_task(refresh_tickers_periodically())
     asyncio.create_task(monitor_prices())
     await listen_strategy_tasks()
