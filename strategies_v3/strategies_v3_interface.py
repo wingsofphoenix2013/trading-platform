@@ -1,21 +1,29 @@
 # 🔸 Импорты и базовая настройка
 import os
 import asyncpg
-import redis.asyncio as aioredis
+import redis.asyncio as redis
 from decimal import Decimal, ROUND_DOWN
 
 # 🔸 Интерфейс стратегий v3
 class StrategyInterface:
     def __init__(self):
-        self.pg_dsn = os.environ["DATABASE_URL"]
-        self.redis_url = os.environ["REDIS_URL"]
+        self.pg_dsn = os.getenv("DATABASE_URL")
         self._pg_pool = None
         self._redis = None
 
-    # 🔸 Получение подключения к Redis (Upstash)
+    # 🔸 Получение подключения к Redis (Upstash / локально)
     async def get_redis(self):
         if not self._redis:
-            self._redis = await aioredis.from_url(self.redis_url, decode_responses=True)
+            host = os.getenv("REDIS_HOST")
+            port = int(os.getenv("REDIS_PORT", "6379"))
+            password = os.getenv("REDIS_PASSWORD")
+            self._redis = redis.Redis(
+                host=host,
+                port=port,
+                password=password,
+                decode_responses=True,
+                ssl=True
+            )
         return self._redis
 
     # 🔸 Получение пула PostgreSQL
@@ -23,7 +31,7 @@ class StrategyInterface:
         if not self._pg_pool:
             self._pg_pool = await asyncpg.create_pool(dsn=self.pg_dsn)
         return self._pg_pool
-
+        
     # 🔸 Загрузка тикеров с precision
     async def load_tickers(self):
         pg = await self.get_pg()
