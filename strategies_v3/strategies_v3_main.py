@@ -89,12 +89,24 @@ async def handle_task(entry_id, data):
         open_positions=open_positions
     )
 
+    # 🔹 Загрузка параметров стратегии
+    params = await interface.get_strategy_params(strategy_name)
+    if not params:
+        await interface.log_strategy_action(
+            log_id=data["log_id"],
+            strategy_id=None,
+            status="ignored_by_check",
+            note=f"Базовые проверки не пройдены — стратегия {strategy_name} отключена или не найдена"
+        )
+        return
+
+    strategy_id = params["id"]
+
     try:
         strategy_module = importlib.import_module(module_name)
         await strategy_module.on_signal(data, interface)
     except Exception as e:
         logging.error(f"❌ Ошибка при вызове стратегии {strategy_name}: {e}")
-        
 # 🔸 Слушаем Redis Stream
 async def listen_strategy_tasks():
     group = "strategy-workers"
