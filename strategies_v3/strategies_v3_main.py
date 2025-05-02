@@ -13,6 +13,14 @@ latest_prices = {}
 # 🔸 Хранилища стратегий
 strategies_cache = {}
 allowed_symbols = {}
+
+# 🔸 Загрузка тикеров из БД
+async def load_tickers():
+    interface = StrategyInterface()
+    global tickers_storage
+    tickers_storage = await interface.load_tickers()
+    logging.info(f"✅ Загружено тикеров: {len(tickers_storage)}")
+
 # 🔸 Загрузка стратегий
 async def load_strategies():
     interface = StrategyInterface()
