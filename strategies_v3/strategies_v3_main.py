@@ -109,9 +109,6 @@ async def load_strategy_tickers():
         await conn.close()
         strategy_allowed_tickers = result
 
-        for strategy_id, tickers in result.items():
-            logging.info(f"🔎 strategy_id={strategy_id} → {sorted(list(tickers))}")
-
         logging.info(f"✅ Загружены разрешённые тикеры для {len(result)} стратегий")
 
     except Exception as e:
