@@ -3,7 +3,7 @@
 import os
 import asyncio
 import logging
-import redis
+import redis.asyncio as redis
 import json
 import asyncpg
 from strategy_1 import Strategy1
@@ -89,7 +89,7 @@ async def handle_task(task_data: dict):
         await strategy.on_signal(task_data, interface)
     except Exception as e:
         logging.error(f"❌ Ошибка при вызове стратегии {strategy_name}: {e}")
-
+        
 # 🔸 Слушатель задач из Redis Stream
 async def listen_strategy_tasks():
     group_name = "strategy_group"
@@ -97,7 +97,7 @@ async def listen_strategy_tasks():
     stream_name = "strategy_tasks"
 
     try:
-        redis_client.xgroup_create(name=stream_name, groupname=group_name, id="0", mkstream=True)
+        await redis_client.xgroup_create(name=stream_name, groupname=group_name, id="0", mkstream=True)
         logging.info("✅ Группа создана.")
     except redis.exceptions.ResponseError as e:
         if "BUSYGROUP" in str(e):
@@ -107,22 +107,28 @@ async def listen_strategy_tasks():
 
     while True:
         try:
-            entries = redis_client.xreadgroup(group_name, consumer_name, {stream_name: ">"}, count=10, block=5000)
+            entries = await redis_client.xreadgroup(
+                groupname=group_name,
+                consumername=consumer_name,
+                streams={stream_name: ">"},
+                count=10,
+                block=5000
+            )
             for stream, messages in entries:
                 for msg_id, msg_data in messages:
                     logging.info(f"📥 Получена задача: {msg_data}")
                     await handle_task(msg_data)
-                    redis_client.xack(stream_name, group_name, msg_id)
+                    await redis_client.xack(stream_name, group_name, msg_id)
         except Exception as e:
             logging.error(f"❌ Ошибка при чтении из Redis Stream: {e}")
             await asyncio.sleep(1)
-
+            
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
     await load_tickers()
     asyncio.create_task(refresh_tickers_periodically())
-    await asyncio.to_thread(listen_strategy_tasks)
+    await listen_strategy_tasks()
     
 if __name__ == "__main__":
     asyncio.run(main())
