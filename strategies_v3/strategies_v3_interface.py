@@ -7,13 +7,24 @@ import os
 
 # 🔸 Универсальный интерфейс для стратегий v3
 class StrategyInterface:
-    def __init__(self, redis_client, database_url, strategies_cache, strategy_allowed_tickers, open_positions):
-        # 🔸 Подключение к Redis и базе данных
+    def __init__(
+        self,
+        redis_client,
+        database_url,
+        strategies_cache,
+        strategy_allowed_tickers,
+        open_positions,
+        tickers_storage
+    ):
+        # 🔸 Подключение к Redis и база данных
         self.redis = redis_client
         self.database_url = database_url
+
+        # 🔸 Хранилища в памяти
         self.strategies_cache = strategies_cache
         self.strategy_allowed_tickers = strategy_allowed_tickers
         self.open_positions = open_positions
+        self.tickers_storage = tickers_storage
 
     # 🔸 Логирование действия стратегии в signal_log_entries_v2
     async def log_strategy_action(self, strategy_id: int, log_id: int, status: str, note: str, position_id: int = None):
@@ -96,7 +107,7 @@ class StrategyInterface:
             return None
 
         strategy = self.strategies_cache.get(strategy_id)
-        ticker = tickers_storage.get(symbol)
+        ticker = self.tickers_storage.get(symbol)
         entry_price = latest_prices.get(symbol)
 
         if strategy is None or ticker is None or entry_price is None:
