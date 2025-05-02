@@ -137,6 +137,23 @@ async def handle_task(task_data: dict):
         open_positions=open_positions
     )
 
+    # 🔹 Выполнение базовых проверок
+    ok, note = await interface.run_basic_checks(task_data)
+    logging.info(f"✅ Проверка: {ok}, Причина: {note}")
+
+    if not ok:
+        strategy_id = await interface.get_strategy_id_by_name(strategy_name)
+        log_id = int(task_data.get("log_id"))
+
+        await interface.log_strategy_action(
+            strategy_id=strategy_id,
+            log_id=log_id,
+            status="ignored_by_check",
+            note=note
+        )
+        return
+
+    # 🔹 Вызов стратегии
     try:
         await strategy.on_signal(task_data, interface)
     except Exception as e:
