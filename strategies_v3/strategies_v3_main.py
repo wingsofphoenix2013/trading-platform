@@ -71,8 +71,9 @@ async def load_tickers():
 # 🔸 Периодическое обновление тикеров
 async def refresh_tickers_periodically():
     while True:
-        await asyncio.sleep(60)  # ⏱️ раз в 60 секунд
-        await load_tickers()        
+        logging.info("🔄 Обновление тикеров...")
+        await load_tickers()
+        await asyncio.sleep(60)       
 # 🔸 Обработчик одной задачи
 async def handle_task(task_data: dict):
     strategy_name = task_data.get("strategy")
