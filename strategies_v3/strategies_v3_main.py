@@ -84,6 +84,7 @@ async def refresh_tickers_periodically():
 
 # 🔸 Мониторинг цен из Redis
 async def monitor_prices():
+    logging.info("🔄 monitor_prices ЗАПУЩЕН")
     interface = StrategyInterface()
     redis = await interface.get_redis()
 
@@ -219,7 +220,8 @@ async def main():
     await load_strategies()
     await load_strategy_tickers()
     asyncio.create_task(refresh_tickers_periodically())
-    asyncio.create_task(monitor_prices())
+    # asyncio.create_task(monitor_prices())
+    await monitor_prices()
     await listen_strategy_tasks()
 
 if __name__ == "__main__":
