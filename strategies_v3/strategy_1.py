@@ -1,5 +1,3 @@
-# 🔸 Стратегия strategy_1
-
 class Strategy1:
     def __init__(self):
         pass
@@ -9,14 +7,8 @@ class Strategy1:
         print(f"✅ Проверка: {ok}, Причина: {note}")
 
         if not ok:
-            strategy_name = task["strategy"]
+            strategy_id = await interface.get_strategy_id_by_name(task["strategy"])
             log_id = int(task["log_id"])
-            strategy_id = None
-
-            for sid, data in strategies_cache.items():
-                if data["name"] == strategy_name:
-                    strategy_id = sid
-                    break
 
             await interface.log_strategy_action(
                 strategy_id=strategy_id,
