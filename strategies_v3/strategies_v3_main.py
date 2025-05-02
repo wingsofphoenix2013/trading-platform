@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from interface import StrategyInterface
+from strategies_v3_interface import StrategyInterface
 
 logging.basicConfig(level=logging.INFO)
 

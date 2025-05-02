@@ -1,61 +1,60 @@
-import asyncpg
-import logging
-import redis.asyncio as redis
+# 🔸 Импорты и базовая настройка
 import os
+import asyncpg
+import aioredis
 from decimal import Decimal, ROUND_DOWN
 
+# 🔸 Интерфейс стратегий v3
 class StrategyInterface:
-    def __init__(self, database_url, open_positions=None):
-        self.database_url = database_url
-        self.open_positions = open_positions
+    def __init__(self):
+        self.pg_dsn = os.environ["DATABASE_URL"]
+        self.redis_url = os.environ["REDIS_URL"]
+        self._pg_pool = None
+        self._redis = None
 
-    # 🔹 Подключение к Redis (для цен, индикаторов)
-    def get_redis(self):
-        return redis.Redis(
-            host=os.getenv("REDIS_HOST"),
-            port=int(os.getenv("REDIS_PORT", 6379)),
-            password=os.getenv("REDIS_PASSWORD"),
-            decode_responses=True,
-            ssl=True
-        )
+    # 🔸 Получение подключения к Redis (Upstash)
+    async def get_redis(self):
+        if not self._redis:
+            self._redis = await aioredis.from_url(self.redis_url, decode_responses=True)
+        return self._redis
 
-    # 🔹 Получение параметров стратегии
-    async def get_strategy_params(self, strategy_name):
-        conn = await asyncpg.connect(self.database_url)
-        try:
-            query = """
-                SELECT * FROM strategies_v2
-                WHERE name = $1 AND enabled = true AND archived = false
-            """
-            return await conn.fetchrow(query, strategy_name)
-        finally:
-            await conn.close()
+    # 🔸 Получение пула PostgreSQL
+    async def get_pg(self):
+        if not self._pg_pool:
+            self._pg_pool = await asyncpg.create_pool(dsn=self.pg_dsn)
+        return self._pg_pool
 
-    # 🔹 Логирование действий стратегии
-    async def log_strategy_action(self, log_id, strategy_id, status, position_id=None, note=None):
-        conn = await asyncpg.connect(self.database_url)
-        try:
-            query = """
-                INSERT INTO signal_log_entries
-                    (log_id, strategy_id, status, position_id, note, logged_at)
-                VALUES ($1, $2, $3, $4, $5, NOW())
-            """
-            await conn.execute(query, log_id, strategy_id, status, position_id, note)
-        except Exception as e:
-            logging.error(f"Ошибка логирования действия стратегии: {e}")
-        finally:
-            await conn.close()
+    # 🔸 Загрузка тикеров с precision
+    async def load_tickers(self):
+        pg = await self.get_pg()
+        query = """
+        SELECT symbol, precision_price, precision_qty, min_qty, tradepermission
+        FROM tickers
+        WHERE status = 'enabled'
+        """
+        rows = await pg.fetch(query)
+        return {
+            row["symbol"]: {
+                "precision_price": row["precision_price"],
+                "precision_qty": row["precision_qty"],
+                "min_qty": row["min_qty"],
+                "tradepermission": row["tradepermission"],
+            }
+            for row in rows
+        }
 
-    # 🔹 Получение текущей цены из Redis
-    async def get_current_price(self, symbol):
-        redis_client = self.get_redis()
-        price_str = await redis_client.get(f"price:{symbol}")
-        await redis_client.close()
-        if not price_str:
-            logging.warning(f"Нет текущей цены для {symbol}")
-            return None
-        try:
-            return Decimal(price_str)
-        except Exception as e:
-            logging.error(f"Ошибка преобразования цены {symbol}: {e}")
-            return None
+    # 🔸 Получение параметров стратегии
+    async def get_strategy_params(self, strategy_name: str):
+        pg = await self.get_pg()
+        row = await pg.fetchrow("""
+            SELECT * FROM strategies_v2 WHERE name = $1 AND enabled = true AND archived = false
+        """, strategy_name)
+        return dict(row) if row else None
+
+    # 🔸 Логирование действия стратегии
+    async def log_strategy_action(self, *, log_id: int, strategy_id: int, status: str, position_id: int = None, note: str = None):
+        pg = await self.get_pg()
+        await pg.execute("""
+            INSERT INTO signal_log_entries_v2 (log_id, strategy_id, status, position_id, note)
+            VALUES ($1, $2, $3, $4, $5)
+        """, log_id, strategy_id, status, position_id, note)
