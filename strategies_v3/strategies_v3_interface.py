@@ -66,6 +66,7 @@ class StrategyInterface:
             INSERT INTO signal_log_entries_v2 (log_id, strategy_id, status, position_id, note)
             VALUES ($1, $2, $3, $4, $5)
         """, log_id, strategy_id, status, position_id, note)
+        
     # 🔸 Исключение тикера из стратегии (моментально + в БД)
     async def disable_symbol_for_strategy(self, strategy_name: str, symbol: str):
         pg = await self.get_pg()
@@ -162,6 +163,11 @@ class StrategyInterface:
         notional_value = (quantity * entry_price).quantize(Decimal("1.0000"))
         planned_risk = (delta * quantity).quantize(Decimal("1.0000"))
 
+        # 🔹 Комиссия
+        commission_rate = Decimal("0.001")
+        commission = (notional_value * commission_rate).quantize(Decimal("1.0000"))
+        pnl = -commission
+
         # 🔹 Получение strategy_id
         strategy_id = strategy["id"]
 
@@ -170,15 +176,18 @@ class StrategyInterface:
             INSERT INTO positions_v2 (
                 strategy_id, log_id, symbol, direction,
                 entry_price, quantity, notional_value,
-                quantity_left, status, created_at, planned_risk
+                quantity_left, status, created_at,
+                planned_risk, pnl
             ) VALUES (
                 $1, $2, $3, $4,
                 $5, $6, $7,
-                $6, 'open', NOW(), $8
+                $6, 'open', NOW(),
+                $8, $9
             )
             RETURNING id
         """, strategy_id, log_id, symbol, direction,
-             entry_price, quantity, notional_value, planned_risk)
+             entry_price, quantity, notional_value,
+             planned_risk, pnl)
 
         position_id = result["id"]
 
@@ -191,7 +200,8 @@ class StrategyInterface:
             "entry_price": entry_price,
             "quantity": quantity,
             "quantity_left": quantity,
-            "planned_risk": planned_risk
+            "planned_risk": planned_risk,
+            "pnl": pnl
         }
 
-        return position_id        
+        return position_id
