@@ -234,6 +234,8 @@ async def handle_task(task_data: dict):
         )
 
     except Exception as e:
+        import traceback
+
         strategy_id = None
         strategy = strategies_cache.get(task_data.get("strategy"))
         if strategy:
@@ -243,12 +245,15 @@ async def handle_task(task_data: dict):
         log_id = int(log_id_raw) if log_id_raw is not None else -1
 
         logging.error(f"🐞 Ошибка при обработке сигнала {task_data.get('strategy')}: {e}")
+        logging.error(traceback.format_exc())
+
         await interface.log_strategy_action(
             log_id=log_id,
             strategy_id=strategy_id,
             status="error",
             note=f"Ошибка при обработке: {e}"
         )
+    
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
