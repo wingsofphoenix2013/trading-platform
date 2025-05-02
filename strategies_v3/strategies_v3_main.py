@@ -202,7 +202,6 @@ async def handle_task(task_data: dict):
 
         # 🔹 Вызов логики стратегии (ручной импорт)
         if strategy_name == "strategy_1":
-            from strategy_1 import on_signal as strategy_1_on_signal
             signal_result = await strategy_1_on_signal(task_data, interface)
         else:
             await interface.log_strategy_action(
