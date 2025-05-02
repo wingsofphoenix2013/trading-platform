@@ -111,6 +111,10 @@ class StrategyInterface:
         ticker = self.tickers_storage.get(symbol)
         entry_price = self.latest_prices.get(symbol)
 
+        logging.info(f"DEBUG: strategy = {strategy}")
+        logging.info(f"DEBUG: ticker = {ticker}")
+        logging.info(f"DEBUG: entry_price = {entry_price}")
+
         if strategy is None or ticker is None or entry_price is None:
             logging.warning(f"⚠️ Недостаточно данных: strategy={strategy}, ticker={ticker}, price={entry_price}")
             return None
@@ -118,8 +122,9 @@ class StrategyInterface:
         precision_price = ticker["precision_price"]
         precision_qty = ticker["precision_qty"]
 
-        # Проверка и обработка sl_value
+        # Проверка sl_value
         sl_value_raw = strategy.get("sl_value")
+        logging.info(f"DEBUG: sl_value_raw = {sl_value_raw}")
         try:
             sl_value = Decimal(str(sl_value_raw))
         except Exception as e:
@@ -127,10 +132,12 @@ class StrategyInterface:
             return None
 
         sl_type = strategy.get("sl_type")
+        logging.info(f"DEBUG: sl_type = {sl_type}")
         if sl_type == "percent":
             delta = entry_price * (sl_value / Decimal("100"))
         elif sl_type == "atr":
             atr = await self.get_indicator_value(symbol, timeframe, "ATR", "atr")
+            logging.info(f"DEBUG: ATR = {atr}")
             if atr is None:
                 logging.warning(f"⚠️ Не удалось получить ATR для {symbol}")
                 return None
@@ -138,6 +145,7 @@ class StrategyInterface:
         else:
             logging.error(f"❌ Неизвестный тип SL: {sl_type}")
             return None
+
         if direction == "long":
             stop_loss_price = entry_price - delta
         elif direction == "short":
@@ -148,7 +156,8 @@ class StrategyInterface:
 
         stop_loss_price = stop_loss_price.quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
 
-        # Проверка и обработка параметров риска
+        # Проверка deposit и max_risk
+        logging.info(f"DEBUG: deposit_raw = {strategy.get('deposit')}, max_risk_raw = {strategy.get('max_risk')}")
         try:
             deposit = Decimal(str(strategy["deposit"]))
             max_risk_pct = Decimal(str(strategy["max_risk"])) / Decimal("100")
@@ -157,18 +166,26 @@ class StrategyInterface:
             return None
 
         max_allowed_risk = deposit * max_risk_pct
-        current_risk = sum(
-            Decimal(str(p.get("planned_risk", 0)))
-            for p in self.open_positions.values()
-            if p["strategy_id"] == strategy_id
-        )
+        logging.info(f"DEBUG: max_allowed_risk = {max_allowed_risk}")
+
+        current_risk = Decimal("0")
+        for p in self.open_positions.values():
+            if p["strategy_id"] == strategy_id:
+                raw_risk = p.get("planned_risk", 0)
+                logging.info(f"DEBUG: existing planned_risk = {raw_risk}")
+                try:
+                    current_risk += Decimal(str(raw_risk))
+                except Exception as e:
+                    logging.warning(f"⚠️ Не удалось разобрать planned_risk: {raw_risk} — {e}")
 
         available_risk = max_allowed_risk - current_risk
+        logging.info(f"DEBUG: available_risk = {available_risk}")
         if available_risk <= 0:
             logging.warning("⚠️ Превышен лимит риска по стратегии")
             return None
 
         risk_per_unit = abs(entry_price - stop_loss_price)
+        logging.info(f"DEBUG: risk_per_unit = {risk_per_unit}")
         if risk_per_unit == 0:
             logging.warning("⚠️ SL слишком близко к цене, риск не определён")
             return None
@@ -176,7 +193,8 @@ class StrategyInterface:
         quantity = (available_risk / risk_per_unit).quantize(Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN)
         notional = (quantity * entry_price).quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
 
-        # Проверка по лимиту позиции
+        # position_limit
+        logging.info(f"DEBUG: position_limit_raw = {strategy.get('position_limit')}")
         try:
             position_limit = Decimal(str(strategy["position_limit"]))
         except Exception as e:
@@ -188,6 +206,7 @@ class StrategyInterface:
             quantity = (notional / entry_price).quantize(Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN)
 
         planned_risk = (quantity * risk_per_unit).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
+        logging.info(f"DEBUG: planned_risk = {planned_risk}")
 
         # Вставка в БД
         try:
@@ -212,4 +231,4 @@ class StrategyInterface:
 
         except Exception as e:
             logging.error(f"❌ Ошибка при записи позиции: {e}")
-            return None                 
+            return None
