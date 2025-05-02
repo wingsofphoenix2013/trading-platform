@@ -81,4 +81,112 @@ class StrategyInterface:
             return Decimal(value)
         except Exception as e:
             logging.error(f"❌ Ошибка при получении индикатора {key}: {e}")
-            return None        
+            return None
+    # 🔸 Открытие позиции: расчёт planned_risk, объёма и запись в positions_v2
+    async def open_position(self, task: dict) -> int | None:
+        strategy_name = task.get("strategy")
+        symbol = task.get("symbol")
+        direction = task.get("direction")
+        log_id = int(task.get("log_id"))
+        timeframe = task.get("timeframe", "M1")
+
+        strategy_id = await self.get_strategy_id_by_name(strategy_name)
+        if strategy_id is None:
+            logging.error("❌ Стратегия не найдена для открытия позиции")
+            return None
+
+        strategy = self.strategies_cache.get(strategy_id)
+        ticker = tickers_storage.get(symbol)
+        entry_price = latest_prices.get(symbol)
+
+        if strategy is None or ticker is None or entry_price is None:
+            logging.warning("⚠️ Не найдены данные стратегии, тикера или цены")
+            return None
+
+        precision_price = ticker["precision_price"]
+        precision_qty = ticker["precision_qty"]
+
+        # 🔹 Расчёт SL-цены
+        sl_type = strategy["sl_type"]
+        sl_value = Decimal(str(strategy["sl_value"]))
+
+        if sl_type == "percent":
+            sl_percent = sl_value / Decimal("100")
+            delta = entry_price * sl_percent
+        elif sl_type == "atr":
+            atr = await self.get_indicator_value(symbol, timeframe, "ATR", "atr")
+            if atr is None:
+                logging.warning(f"⚠️ Не удалось получить ATR для {symbol}")
+                return None
+            delta = atr
+        else:
+            logging.error(f"❌ Неизвестный тип SL: {sl_type}")
+            return None
+
+        if direction == "long":
+            stop_loss_price = entry_price - delta
+        elif direction == "short":
+            stop_loss_price = entry_price + delta
+        else:
+            logging.error("❌ Неверное направление позиции")
+            return None
+
+        stop_loss_price = stop_loss_price.quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
+
+        # 🔹 Максимальный допустимый planned_risk
+        deposit = Decimal(str(strategy["deposit"]))
+        max_risk_pct = Decimal(str(strategy["max_risk"])) / Decimal("100")
+        max_allowed_risk = deposit * max_risk_pct
+
+        # 🔹 Расчёт уже занятого риска
+        current_risk = sum(
+            Decimal(str(p.get("planned_risk", 0)))
+            for p in self.open_positions.values()
+            if p["strategy_id"] == strategy_id
+        )
+
+        available_risk = max_allowed_risk - current_risk
+        if available_risk <= 0:
+            logging.warning("⚠️ Превышен лимит риска по стратегии")
+            return None
+
+        risk_per_unit = abs(entry_price - stop_loss_price)
+        if risk_per_unit == 0:
+            logging.warning("⚠️ SL слишком близко к цене, риск не определён")
+            return None
+
+        quantity = (available_risk / risk_per_unit).quantize(Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN)
+        notional = (quantity * entry_price).quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
+
+        # 🔹 Проверка по лимиту позиции
+        position_limit = Decimal(str(strategy["position_limit"]))
+        if (quantity * entry_price) > position_limit:
+            notional = position_limit
+            quantity = (notional / entry_price).quantize(Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN)
+
+        planned_risk = (quantity * risk_per_unit).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
+
+        # 🔹 Запись в positions_v2
+        try:
+            conn = await asyncpg.connect(self.database_url)
+            row = await conn.fetchrow("""
+                INSERT INTO positions_v2 (
+                    strategy_id, log_id, symbol, direction, entry_price,
+                    quantity, notional_value, quantity_left, status,
+                    created_at, planned_risk
+                ) VALUES (
+                    $1, $2, $3, $4, $5,
+                    $6, $7, $6, 'open',
+                    NOW(), $8
+                ) RETURNING id
+            """, strategy_id, log_id, symbol, direction, entry_price,
+                 quantity, notional, planned_risk)
+            await conn.close()
+
+            position_id = row["id"]
+            logging.info(f"📌 Позиция открыта: ID={position_id}, {symbol}, {direction}, qty={quantity}, risk={planned_risk}")
+            return position_id
+
+        except Exception as e:
+            logging.error(f"❌ Ошибка при записи позиции: {e}")
+            return None                    
