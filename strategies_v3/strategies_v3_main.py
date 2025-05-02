@@ -100,7 +100,7 @@ async def listen_strategy_tasks():
     try:
         await redis_client.xgroup_create(name=stream_name, groupname=group_name, id="0", mkstream=True)
         logging.info("✅ Группа создана.")
-    except redis.exceptions.ResponseError as e:
+    except ResponseError as e:
         if "BUSYGROUP" in str(e):
             logging.info("ℹ️ Группа уже существует.")
         else:
