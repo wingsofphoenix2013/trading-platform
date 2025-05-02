@@ -58,6 +58,14 @@ class StrategyInterface:
             SELECT * FROM strategies_v2 WHERE name = $1 AND enabled = true AND archived = false
         """, strategy_name)
         return dict(row) if row else None
+      
+    # 🔸 Логирование действия стратегии
+    async def log_strategy_action(self, *, log_id: int, strategy_id: int, status: str, position_id: int = None, note: str = None):
+        pg = await self.get_pg()
+        await pg.execute("""
+            INSERT INTO signal_log_entries_v2 (log_id, strategy_id, status, position_id, note)
+            VALUES ($1, $2, $3, $4, $5)
+        """, log_id, strategy_id, status, position_id, note)
     # 🔸 Исключение тикера из стратегии (моментально + в БД)
     async def disable_symbol_for_strategy(self, strategy_name: str, symbol: str):
         pg = await self.get_pg()
@@ -88,11 +96,102 @@ class StrategyInterface:
         # 🔹 Моментальное исключение из памяти
         from strategies_v3_main import allowed_symbols
         allowed_symbols.get(strategy_name, set()).discard(symbol)
-        
-    # 🔸 Логирование действия стратегии
-    async def log_strategy_action(self, *, log_id: int, strategy_id: int, status: str, position_id: int = None, note: str = None):
+                
+    # 🔸 Открытие позиции: расчёт объёма и запись в БД
+    async def open_position(self, strategy_name: str, symbol: str, direction: str, entry_price: float, log_id: int) -> int:
+        from strategies_v3_main import tickers_storage, open_positions, strategies_cache
+
         pg = await self.get_pg()
-        await pg.execute("""
-            INSERT INTO signal_log_entries_v2 (log_id, strategy_id, status, position_id, note)
-            VALUES ($1, $2, $3, $4, $5)
-        """, log_id, strategy_id, status, position_id, note)
+
+        # 🔹 Получение параметров стратегии
+        strategy = strategies_cache[strategy_name]
+        leverage = strategy["leverage"]
+        deposit = Decimal(strategy["deposit"])
+        position_limit = Decimal(strategy["position_limit"])
+        max_risk_pct = Decimal(strategy["max_risk"])
+        sl_type = strategy["sl_type"]
+        sl_value = Decimal(strategy["sl_value"])
+
+        # 🔹 Получение precision по тикеру
+        ticker = tickers_storage[symbol]
+        precision_price = ticker["precision_price"]
+        precision_qty = ticker["precision_qty"]
+
+        # 🔹 Округление цены
+        entry_price = Decimal(entry_price).quantize(Decimal(f"1e-{precision_price}"))
+
+        # 🔹 Расчёт SL-цены
+        if sl_type == "percent":
+            if direction == "long":
+                sl_price = entry_price * (Decimal("1") - sl_value / Decimal("100"))
+            else:
+                sl_price = entry_price * (Decimal("1") + sl_value / Decimal("100"))
+            sl_price = sl_price.quantize(Decimal(f"1e-{precision_price}"))
+        elif sl_type == "atr":
+            raise NotImplementedError("SL по ATR пока не реализован")
+        else:
+            raise ValueError(f"Неизвестный тип SL: {sl_type}")
+
+        delta = abs(entry_price - sl_price)
+        if delta == 0:
+            raise ValueError("SL-уровень совпадает с входом — невозможный риск")
+
+        # 🔹 Расчёт максимально допустимого риска
+        max_risk_abs = deposit * max_risk_pct / Decimal("100")
+
+        # 🔹 Расчёт уже занятого риска
+        total_existing_risk = sum(
+            pos["planned_risk"] for pos in open_positions.values()
+            if pos["strategy"] == strategy_name
+        )
+        remaining_risk = max_risk_abs - total_existing_risk
+        if remaining_risk <= 0:
+            raise ValueError("Превышен лимит риска по стратегии")
+
+        # 🔹 Расчёт максимально возможного объёма
+        quantity = remaining_risk / delta
+
+        # 🔹 Ограничение по position_limit (маржа)
+        max_quantity_by_limit = position_limit / entry_price
+        quantity = min(quantity, max_quantity_by_limit)
+
+        # 🔹 Округление объёма
+        quantity = quantity.quantize(Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN)
+
+        # 🔹 Финальные значения
+        notional_value = (quantity * entry_price).quantize(Decimal("1.0000"))
+        planned_risk = (delta * quantity).quantize(Decimal("1.0000"))
+
+        # 🔹 Получение strategy_id
+        strategy_id = strategy["id"]
+
+        # 🔹 Вставка в таблицу позиций
+        result = await pg.fetchrow("""
+            INSERT INTO positions_v2 (
+                strategy_id, log_id, symbol, direction,
+                entry_price, quantity, notional_value,
+                quantity_left, status, created_at, planned_risk
+            ) VALUES (
+                $1, $2, $3, $4,
+                $5, $6, $7,
+                $6, 'open', NOW(), $8
+            )
+            RETURNING id
+        """, strategy_id, log_id, symbol, direction,
+             entry_price, quantity, notional_value, planned_risk)
+
+        position_id = result["id"]
+
+        # 🔹 Сохранение в память
+        open_positions[(strategy_name, symbol)] = {
+            "position_id": position_id,
+            "strategy": strategy_name,
+            "symbol": symbol,
+            "direction": direction,
+            "entry_price": entry_price,
+            "quantity": quantity,
+            "quantity_left": quantity,
+            "planned_risk": planned_risk
+        }
+
+        return position_id        
