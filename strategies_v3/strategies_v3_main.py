@@ -239,9 +239,12 @@ async def handle_task(task_data: dict):
         if strategy:
             strategy_id = strategy.get("id")
 
+        log_id_raw = task_data.get("log_id")
+        log_id = int(log_id_raw) if log_id_raw is not None else -1
+
         logging.error(f"🐞 Ошибка при обработке сигнала {task_data.get('strategy')}: {e}")
         await interface.log_strategy_action(
-            log_id=log_id if 'log_id' in locals() else -1,
+            log_id=log_id,
             strategy_id=strategy_id,
             status="error",
             note=f"Ошибка при обработке: {e}"
