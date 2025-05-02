@@ -9,10 +9,11 @@ from strategies_v3_main import strategies_cache
 
 # 🔸 Интерфейс стратегий v3
 class StrategyInterface:
-    def __init__(self):
+    def __init__(self, strategies_cache: dict):
         self.pg_dsn = os.getenv("DATABASE_URL")
         self._pg_pool = None
         self._redis = None
+        self.strategies_cache = strategies_cache
 
     # 🔸 Получение подключения к Redis (Upstash / локально)
     async def get_redis(self):
@@ -108,7 +109,7 @@ class StrategyInterface:
         pg = await self.get_pg()
 
         # 🔹 Получение параметров стратегии
-        strategy = strategies_cache[strategy_name]
+        strategy = self.strategies_cache[strategy_name]
         leverage = strategy["leverage"]
         deposit = Decimal(strategy["deposit"])
         position_limit = Decimal(strategy["position_limit"])
