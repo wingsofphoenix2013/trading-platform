@@ -1,4 +1,5 @@
 import logging
+import asyncpg
 
 # 🔸 Универсальный интерфейс для стратегий v3
 class StrategyInterface:
