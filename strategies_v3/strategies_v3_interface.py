@@ -4,9 +4,6 @@ import asyncpg
 import redis.asyncio as redis
 from decimal import Decimal, ROUND_DOWN
 
-# 🔸 Импорт глобального кеша стратегий
-from strategies_v3_main import strategies_cache
-
 # 🔸 Интерфейс стратегий v3
 class StrategyInterface:
     def __init__(self, strategies_cache: dict):
