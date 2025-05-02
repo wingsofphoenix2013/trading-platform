@@ -39,6 +39,10 @@ async def load_strategies():
     strategies_cache = {row["name"]: dict(row) for row in rows}
     logging.info(f"✅ Загружено стратегий: {len(strategies_cache)}")
 
+    # 🔹 Диагностика
+    for name in strategies_cache.keys():
+        logging.info(f"📦 Стратегия загружена: {name}")
+
 # 🔸 Загрузка тикеров, разрешённых для стратегий
 async def load_strategy_tickers():
     interface = StrategyInterface()
@@ -148,7 +152,16 @@ async def handle_task(task_data: dict):
 
         strategy = strategies_cache.get(strategy_name)
         strategy_id = strategy["id"] if strategy else None
-
+        
+        # 🔹 Защита по стратегии
+        if strategy is None:
+            await interface.log_strategy_action(
+                log_id=log_id,
+                strategy_id=None,
+                status="error",
+                note=f"Стратегия {strategy_name} не найдена в кеше"
+            )
+            return
         # 🔹 Проверка тикера
         if symbol not in tickers_storage:
             await interface.log_strategy_action(
