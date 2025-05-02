@@ -1,6 +1,7 @@
 # 🔸 Импорты и базовая настройка
 import asyncio
 import logging
+from decimal import Decimal, ROUND_DOWN
 
 # 🔸 Импорт интерфейса стратегии
 from strategies_v3_interface import StrategyInterface
