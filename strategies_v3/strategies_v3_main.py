@@ -155,6 +155,10 @@ async def handle_task(task_data: dict):
 
         strategy = strategies_cache.get(strategy_name)
         strategy_id = strategy["id"] if strategy else None
+
+        logging.info(f"🧩 Задача: {task_data}")
+        logging.info(f"🧩 strategies_cache.keys(): {list(strategies_cache.keys())}")
+        logging.info(f"🧩 strategies.keys(): {list(strategies.keys())}")
         
         # 🔹 Защита по стратегии
         if strategy is None:
@@ -235,8 +239,9 @@ async def handle_task(task_data: dict):
         if strategy:
             strategy_id = strategy.get("id")
 
+        logging.error(f"🐞 Ошибка при обработке сигнала {task_data.get('strategy')}: {e}")
         await interface.log_strategy_action(
-            log_id=log_id,
+            log_id=log_id if 'log_id' in locals() else -1,
             strategy_id=strategy_id,
             status="error",
             note=f"Ошибка при обработке: {e}"
