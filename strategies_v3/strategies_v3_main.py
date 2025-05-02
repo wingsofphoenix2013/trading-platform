@@ -24,15 +24,13 @@ allowed_symbols = {}
 strategies = {}
 
 # 🔸 Загрузка тикеров из БД
-async def load_tickers():
-    interface = StrategyInterface()
+async def load_tickers(interface: StrategyInterface):
     global tickers_storage
     tickers_storage = await interface.load_tickers()
     logging.info(f"✅ Загружено тикеров: {len(tickers_storage)}")
 
 # 🔸 Загрузка стратегий
-async def load_strategies():
-    interface = StrategyInterface()
+async def load_strategies(interface: StrategyInterface):
     pg = await interface.get_pg()
     rows = await pg.fetch("""
         SELECT * FROM strategies_v2
@@ -47,8 +45,7 @@ async def load_strategies():
         logging.info(f"📦 Стратегия загружена: {name}")
 
 # 🔸 Загрузка тикеров, разрешённых для стратегий
-async def load_strategy_tickers():
-    interface = StrategyInterface()
+async def load_strategy_tickers(interface: StrategyInterface):
     pg = await interface.get_pg()
 
     # 🔹 Загружаем тикеры с разрешённой торговлей
@@ -85,7 +82,7 @@ async def load_strategy_tickers():
     total = sum(len(v) for v in allowed_symbols.values())
     logging.info(f"✅ Разрешённые тикеры загружены для {len(allowed_symbols)} стратегий, всего связей: {total}")
 # 🔸 Периодическое обновление тикеров и разрешений
-async def refresh_tickers_periodically():
+async def refresh_tickers_periodically(interface: StrategyInterface):
     while True:
         try:
             await load_tickers()
@@ -95,7 +92,7 @@ async def refresh_tickers_periodically():
         await asyncio.sleep(120)
 
 # 🔸 Мониторинг цен из Redis
-async def monitor_prices():
+async def monitor_prices(interface: StrategyInterface):
     logging.info("🔄 monitor_prices ЗАПУЩЕН")
 
     interface = StrategyInterface()
@@ -114,8 +111,7 @@ async def monitor_prices():
             logging.error(f"Ошибка обновления цен из Redis: {e}")
         await asyncio.sleep(1)
 # 🔸 Слушатель Redis Stream strategy_tasks
-async def listen_strategy_tasks():
-    interface = StrategyInterface()
+async def listen_strategy_tasks(interface: StrategyInterface):
     redis = await interface.get_redis()
     group = "strategy_worker_group"
     consumer = "worker-1"
@@ -138,15 +134,14 @@ async def listen_strategy_tasks():
                 for msg_id, msg_data in msgs:
                     task = {k: v for k, v in msg_data.items()}
                     logging.info(f"📥 Получена задача: {task}")
-                    await handle_task(task)
+                    await handle_task(task, interface)
                     await redis.xack("strategy_tasks", group, msg_id)
         except Exception as e:
             logging.error(f"Ошибка чтения из Redis Stream: {e}")
             await asyncio.sleep(1)
 # 🔸 Обработка одной задачи из Redis Stream
-async def handle_task(task_data: dict):
+async def handle_task(task_data: dict, interface: StrategyInterface):
     try:
-        interface = StrategyInterface()
         strategy_name = task_data["strategy"]
         symbol = task_data["symbol"]
         direction = task_data["direction"]
@@ -252,19 +247,24 @@ async def handle_task(task_data: dict):
             strategy_id=strategy_id,
             status="error",
             note=f"Ошибка при обработке: {e}"
-        )
+    )
     
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
-    await load_tickers()
-    await load_strategies()
-    await load_strategy_tickers()
-    interface = StrategyInterface()
+
+    interface = StrategyInterface(strategies_cache)
+
+    await load_tickers(interface)
+    await load_strategies(interface)
+    await load_strategy_tickers(interface)
+
     strategies["strategy_1"] = Strategy1(interface)
-    asyncio.create_task(refresh_tickers_periodically())
-    asyncio.create_task(monitor_prices())
-    await listen_strategy_tasks()
+
+    asyncio.create_task(refresh_tickers_periodically(interface))
+    asyncio.create_task(monitor_prices(interface))
+
+    await listen_strategy_tasks(interface)
 
 if __name__ == "__main__":
     asyncio.run(main())
