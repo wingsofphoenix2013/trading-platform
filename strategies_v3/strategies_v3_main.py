@@ -37,20 +37,40 @@ async def load_strategies():
 async def load_strategy_tickers():
     interface = StrategyInterface()
     pg = await interface.get_pg()
-    rows = await pg.fetch("""
+
+    # 🔹 Загружаем тикеры с разрешённой торговлей
+    ticker_rows = await pg.fetch("""
+        SELECT symbol FROM tickers
+        WHERE status = 'enabled' AND tradepermission = 'enabled'
+    """)
+    all_symbols = {row["symbol"] for row in ticker_rows}
+
+    # 🔹 Загружаем стратегии с use_all_tickers = true
+    global allowed_symbols
+    allowed_symbols.clear()
+
+    strategy_all_rows = await pg.fetch("""
+        SELECT name FROM strategies_v2
+        WHERE enabled = true AND archived = false AND use_all_tickers = true
+    """)
+    for row in strategy_all_rows:
+        allowed_symbols[row["name"]] = set(all_symbols)
+
+    # 🔹 Загружаем связи из strategy_tickers_v2 для остальных стратегий
+    specific_rows = await pg.fetch("""
         SELECT s.name AS strategy_name, t.symbol
         FROM strategy_tickers_v2 st
         JOIN strategies_v2 s ON s.id = st.strategy_id
         JOIN tickers t ON t.id = st.ticker_id
-        WHERE st.enabled = true
+        WHERE st.enabled = true AND t.status = 'enabled' AND t.tradepermission = 'enabled'
     """)
-    global allowed_symbols
-    allowed_symbols.clear()
-    for row in rows:
+    for row in specific_rows:
         strategy = row["strategy_name"]
         symbol = row["symbol"]
         allowed_symbols.setdefault(strategy, set()).add(symbol)
-    logging.info(f"✅ Загружено связей стратегия-тикер: {len(rows)}")
+
+    total = sum(len(v) for v in allowed_symbols.values())
+    logging.info(f"✅ Разрешённые тикеры загружены для {len(allowed_symbols)} стратегий, всего связей: {total}")
 # 🔸 Периодическое обновление тикеров
 async def refresh_tickers_periodically():
     while True:
