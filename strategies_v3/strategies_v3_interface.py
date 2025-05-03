@@ -187,10 +187,14 @@ class StrategyInterface:
         if margin_used < (position_limit * Decimal("0.9")).quantize(Decimal("1e-8"), rounding=ROUND_DOWN):
             logging.warning("⚠️ Позиция слишком мала — менее 90% от лимита")
             return None
-
+            
+        # 🔹 Подготовка значений SL для лога
+        sl_percent_log = f"{sl_value}%" if sl_type == "percent" else "N/A"
+        atr_log = f"{atr}" if sl_type == "atr" else "N/A"
+        
         logging.info(f"📊 Расчёт позиции: qty={quantity}, notional={notional_value}, "
                      f"risk={planned_risk}, margin={margin_used}, sl={stop_loss_price}, "
-                     f"entry={entry_price}, leverage={leverage}")
+                     f"entry={entry_price}, leverage={leverage}, SL%={sl_percent_log}, ATR={atr_log}")
 
         return {
             "quantity": quantity,
