@@ -161,13 +161,16 @@ class StrategyInterface:
             if p["strategy_id"] == strategy_id
         )
         free_margin = deposit - total_margin_used
-        if free_margin <= 0:
-            logging.warning("⚠️ Нет свободной маржи")
+
+        # 🔹 Жесткое ограничение на используемую маржу
+        effective_margin_limit = min(free_margin, position_limit)
+        if effective_margin_limit <= 0:
+            logging.warning("⚠️ Нет доступной маржи в рамках position_limit")
             return None
 
         # 🔹 Ограничение qty по двум факторам
         max_qty_by_risk = available_risk / risk_per_unit
-        max_qty_by_margin = (free_margin * leverage) / entry_price
+        max_qty_by_margin = (effective_margin_limit * leverage) / entry_price
         quantity = min(max_qty_by_risk, max_qty_by_margin).quantize(
             Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN
         )
@@ -175,7 +178,7 @@ class StrategyInterface:
         notional_value = (quantity * entry_price).quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
         margin_used = (notional_value / leverage).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
         planned_risk = (quantity * risk_per_unit).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
-
+        
         # 🔹 Проверка по лимиту позиции
         if margin_used > position_limit:
             logging.warning(f"⚠️ Превышен лимит позиции по марже: margin_used={margin_used}, limit={position_limit}")
