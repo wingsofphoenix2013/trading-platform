@@ -166,6 +166,11 @@ class StrategyInterface:
         planned_risk = (quantity * risk_per_unit).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
 
         # 🔹 Проверки на лимит позиции по марже
+        logging.info(f"📐 Расчёт до проверки маржи: "
+                     f"entry={entry_price}, delta={delta}, sl={stop_loss_price}, "
+                     f"risk/unit={risk_per_unit}, avail_risk={available_risk}, "
+                     f"qty={quantity}, notional={notional_value}, leverage={leverage}")
+
         if margin_used > position_limit:
             logging.warning(f"⚠️ Превышен лимит позиции по марже: margin_used={margin_used}, limit={position_limit}")
             return None
