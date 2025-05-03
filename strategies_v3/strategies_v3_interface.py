@@ -132,7 +132,7 @@ class StrategyInterface:
             if atr is None:
                 logging.warning("⚠️ Не удалось получить ATR")
                 return None
-            delta = atr
+            delta = atr * sl_value
         else:
             logging.error(f"❌ Неверный тип SL: {sl_type}")
             return None
