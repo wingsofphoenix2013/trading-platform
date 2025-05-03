@@ -94,7 +94,7 @@ class StrategyInterface:
         except Exception as e:
             logging.error(f"❌ Ошибка при получении индикатора {key}: {e}")
             return None
-    # 🔸 Расчёт объёма позиции без записи в базу
+    # 🔸 Расчёт объёма позиции с учётом двойного ограничения: риск + маржа
     async def calculate_position_size(self, task: dict) -> dict | None:
         strategy_name = task.get("strategy")
         symbol = task.get("symbol")
@@ -124,17 +124,6 @@ class StrategyInterface:
         deposit = Decimal(str(strategy["deposit"]))
         max_risk_pct = Decimal(str(strategy["max_risk"])) / Decimal("100")
 
-        # 🔹 Суммарная уже занятая маржа
-        total_margin_used = sum(
-            Decimal(str(p["notional_value"])) / leverage
-            for p in self.open_positions.values()
-            if p["strategy_id"] == strategy_id
-        )
-
-        if total_margin_used >= deposit:
-            logging.warning("⚠️ Превышен общий лимит по депозиту")
-            return None
-
         # 🔹 SL расчёт
         if sl_type == "percent":
             delta = entry_price * (sl_value / Decimal("100"))
@@ -157,20 +146,37 @@ class StrategyInterface:
             logging.warning("⚠️ SL слишком близко к цене")
             return None
 
-        max_risk = deposit * max_risk_pct
-        available_risk = max_risk
+        # 🔹 Расчёт риска и маржи
+        max_allowed_risk = deposit * max_risk_pct
+        current_risk = sum(
+            Decimal(str(p.get("planned_risk", "0") or "0"))
+            for p in self.open_positions.values()
+            if p["strategy_id"] == strategy_id
+        )
+        available_risk = max_allowed_risk - current_risk
 
-        quantity = (available_risk / risk_per_unit).quantize(Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN)
+        total_margin_used = sum(
+            Decimal(str(p["notional_value"])) / leverage
+            for p in self.open_positions.values()
+            if p["strategy_id"] == strategy_id
+        )
+        free_margin = deposit - total_margin_used
+        if free_margin <= 0:
+            logging.warning("⚠️ Нет свободной маржи")
+            return None
+
+        # 🔹 Ограничение qty по двум факторам
+        max_qty_by_risk = available_risk / risk_per_unit
+        max_qty_by_margin = (free_margin * leverage) / entry_price
+        quantity = min(max_qty_by_risk, max_qty_by_margin).quantize(
+            Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN
+        )
+
         notional_value = (quantity * entry_price).quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
         margin_used = (notional_value / leverage).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
         planned_risk = (quantity * risk_per_unit).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
 
-        # 🔹 Проверки на лимит позиции по марже
-        logging.info(f"📐 Расчёт до проверки маржи: "
-                     f"entry={entry_price}, delta={delta}, sl={stop_loss_price}, "
-                     f"risk/unit={risk_per_unit}, avail_risk={available_risk}, "
-                     f"qty={quantity}, notional={notional_value}, leverage={leverage}")
-
+        # 🔹 Проверка по лимиту позиции
         if margin_used > position_limit:
             logging.warning(f"⚠️ Превышен лимит позиции по марже: margin_used={margin_used}, limit={position_limit}")
             return None
