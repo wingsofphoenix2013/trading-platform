@@ -189,7 +189,8 @@ class StrategyInterface:
             return None
 
         logging.info(f"📊 Расчёт позиции: qty={quantity}, notional={notional_value}, "
-                     f"risk={planned_risk}, margin={margin_used}, sl={stop_loss_price}")
+                     f"risk={planned_risk}, margin={margin_used}, sl={stop_loss_price}, "
+                     f"entry={entry_price}, leverage={leverage}")
 
         return {
             "quantity": quantity,
