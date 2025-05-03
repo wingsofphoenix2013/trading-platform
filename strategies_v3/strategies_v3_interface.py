@@ -94,17 +94,16 @@ class StrategyInterface:
         except Exception as e:
             logging.error(f"❌ Ошибка при получении индикатора {key}: {e}")
             return None
-    # 🔸 Открытие позиции: расчёт planned_risk, объёма и запись в positions_v2
-    async def open_position(self, task: dict) -> int | None:
+    # 🔸 Расчёт объёма позиции без записи в базу
+    async def calculate_position_size(self, task: dict) -> dict | None:
         strategy_name = task.get("strategy")
         symbol = task.get("symbol")
         direction = task.get("direction")
-        log_id = int(task.get("log_id"))
         timeframe = task.get("timeframe", "M1")
 
         strategy_id = await self.get_strategy_id_by_name(strategy_name)
         if strategy_id is None:
-            logging.error("❌ Стратегия не найдена для открытия позиции")
+            logging.error("❌ Стратегия не найдена")
             return None
 
         strategy = self.strategies_cache.get(strategy_id)
@@ -112,93 +111,77 @@ class StrategyInterface:
         entry_price = self.latest_prices.get(symbol)
 
         if strategy is None or ticker is None or entry_price is None:
-            logging.warning("⚠️ Не найдены данные стратегии, тикера или цены")
+            logging.warning("⚠️ Отсутствуют данные: strategy, ticker или entry_price")
             return None
 
         precision_price = ticker["precision_price"]
         precision_qty = ticker["precision_qty"]
 
-        # 🔹 Расчёт SL-цены
         sl_type = strategy["sl_type"]
         sl_value = Decimal(str(strategy["sl_value"]))
-
-        if sl_type == "percent":
-            sl_percent = sl_value / Decimal("100")
-            delta = entry_price * sl_percent
-        elif sl_type == "atr":
-            atr = await self.get_indicator_value(symbol, timeframe, "ATR", "atr")
-            if atr is None:
-                logging.warning(f"⚠️ Не удалось получить ATR для {symbol}")
-                return None
-            delta = atr
-        else:
-            logging.error(f"❌ Неизвестный тип SL: {sl_type}")
-            return None
-
-        if direction == "long":
-            stop_loss_price = entry_price - delta
-        elif direction == "short":
-            stop_loss_price = entry_price + delta
-        else:
-            logging.error("❌ Неверное направление позиции")
-            return None
-
-        stop_loss_price = stop_loss_price.quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
-
-        # 🔹 Максимальный допустимый planned_risk
+        leverage = Decimal(str(strategy["leverage"]))
+        position_limit = Decimal(str(strategy["position_limit"]))
         deposit = Decimal(str(strategy["deposit"]))
         max_risk_pct = Decimal(str(strategy["max_risk"])) / Decimal("100")
-        max_allowed_risk = deposit * max_risk_pct
 
-        # 🔹 Расчёт уже занятого риска
-        current_risk = sum(
-            Decimal(str(p.get("planned_risk", 0)))
+        # 🔹 Суммарная уже занятая маржа
+        total_margin_used = sum(
+            Decimal(str(p["notional_value"])) / leverage
             for p in self.open_positions.values()
             if p["strategy_id"] == strategy_id
         )
 
-        available_risk = max_allowed_risk - current_risk
-        if available_risk <= 0:
-            logging.warning("⚠️ Превышен лимит риска по стратегии")
+        if total_margin_used >= deposit:
+            logging.warning("⚠️ Превышен общий лимит по депозиту")
             return None
+
+        # 🔹 SL расчёт
+        if sl_type == "percent":
+            delta = entry_price * (sl_value / Decimal("100"))
+        elif sl_type == "atr":
+            atr = await self.get_indicator_value(symbol, timeframe, "ATR", "atr")
+            if atr is None:
+                logging.warning("⚠️ Не удалось получить ATR")
+                return None
+            delta = atr
+        else:
+            logging.error(f"❌ Неверный тип SL: {sl_type}")
+            return None
+
+        stop_loss_price = (entry_price - delta if direction == "long" else entry_price + delta).quantize(
+            Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN
+        )
 
         risk_per_unit = abs(entry_price - stop_loss_price)
         if risk_per_unit == 0:
-            logging.warning("⚠️ SL слишком близко к цене, риск не определён")
+            logging.warning("⚠️ SL слишком близко к цене")
             return None
 
+        max_risk = deposit * max_risk_pct
+        available_risk = max_risk
+
         quantity = (available_risk / risk_per_unit).quantize(Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN)
-        notional = (quantity * entry_price).quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
-
-        # 🔹 Проверка по лимиту позиции
-        position_limit = Decimal(str(strategy["position_limit"]))
-        if (quantity * entry_price) > position_limit:
-            notional = position_limit
-            quantity = (notional / entry_price).quantize(Decimal(f"1e-{precision_qty}"), rounding=ROUND_DOWN)
-
+        notional_value = (quantity * entry_price).quantize(Decimal(f"1e-{precision_price}"), rounding=ROUND_DOWN)
+        margin_used = (notional_value / leverage).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
         planned_risk = (quantity * risk_per_unit).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
 
-        # 🔹 Запись в positions_v2
-        try:
-            conn = await asyncpg.connect(self.database_url)
-            row = await conn.fetchrow("""
-                INSERT INTO positions_v2 (
-                    strategy_id, log_id, symbol, direction, entry_price,
-                    quantity, notional_value, quantity_left, status,
-                    created_at, planned_risk
-                ) VALUES (
-                    $1, $2, $3, $4, $5,
-                    $6, $7, $6, 'open',
-                    NOW(), $8
-                ) RETURNING id
-            """, strategy_id, log_id, symbol, direction, entry_price,
-                 quantity, notional, planned_risk)
-            await conn.close()
+        # 🔹 Проверки на лимит позиции по марже
+        if margin_used > position_limit:
+            logging.warning("⚠️ Превышен лимит позиции по марже")
+            return None
 
-            position_id = row["id"]
-            logging.info(f"📌 Позиция открыта: ID={position_id}, {symbol}, {direction}, qty={quantity}, risk={planned_risk}")
-            return position_id
+        if margin_used < (position_limit * Decimal("0.9")).quantize(Decimal("1e-8"), rounding=ROUND_DOWN):
+            logging.warning("⚠️ Позиция слишком мала — менее 90% от лимита")
+            return None
 
-        except Exception as e:
-            logging.error(f"❌ Ошибка при записи позиции: {e}")
-            return None                    
+        logging.info(f"📊 Расчёт позиции: qty={quantity}, notional={notional_value}, "
+                     f"risk={planned_risk}, margin={margin_used}, sl={stop_loss_price}")
+
+        return {
+            "quantity": quantity,
+            "notional_value": notional_value,
+            "planned_risk": planned_risk,
+            "margin_used": margin_used,
+            "entry_price": entry_price,
+            "stop_loss_price": stop_loss_price
+        }
