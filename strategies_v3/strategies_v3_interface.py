@@ -167,7 +167,7 @@ class StrategyInterface:
 
         # 🔹 Проверки на лимит позиции по марже
         if margin_used > position_limit:
-            logging.warning("⚠️ Превышен лимит позиции по марже")
+            logging.warning(f"⚠️ Превышен лимит позиции по марже: margin_used={margin_used}, limit={position_limit}")
             return None
 
         if margin_used < (position_limit * Decimal("0.9")).quantize(Decimal("1e-8"), rounding=ROUND_DOWN):
