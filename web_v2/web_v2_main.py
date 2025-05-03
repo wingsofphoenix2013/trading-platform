@@ -1,17 +1,19 @@
 import os
 import logging
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
+from pathlib import Path
 from datetime import datetime
-import redis.asyncio as redis
-from fastapi.staticfiles import StaticFiles
+
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+import redis.asyncio as redis
 
 # 🔸 Инициализация FastAPI приложения
 app = FastAPI()
-# 🔸 Подключение шаблонов Jinja2
-templates = Jinja2Templates(directory="web_v2/templates")
+
+# 🔸 Абсолютный путь к шаблонам (для совместимости с Render)
+BASE_DIR = Path(__file__).resolve().parent
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # 🔸 Настройка базового логирования
 logging.basicConfig(level=logging.INFO)
@@ -64,6 +66,7 @@ async def webhook_v2(request: Request):
 
     # 🔹 Ответ клиенту
     return JSONResponse({"status": "ok", "received_at": received_at})
+    
 # 🔸 Главная страница
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
