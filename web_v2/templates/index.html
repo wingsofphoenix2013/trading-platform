@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Виртуальная Торговля</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/lucide-static@latest/icons.css" rel="stylesheet">
+    <style>
+      body {
+        background: linear-gradient(to bottom right, #e0f2ff, #fde2e4);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen font-sans text-slate-800">
+    <!-- 🔸 Topbar Navigation -->
+    <header class="w-full bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+        <h1 class="text-2xl font-semibold text-blue-900 tracking-wide">Виртуальная Торговля</h1>
+        <nav class="space-x-4 text-sm font-medium text-slate-700">
+          <a href="/" class="hover:text-blue-600 transition-colors">Главная</a>
+          <a href="/tickers" class="hover:text-blue-600 transition-colors">Тикеры</a>
+          <a href="/indicators" class="hover:text-blue-600 transition-colors">Индикаторы</a>
+          <a href="/signals" class="hover:text-blue-600 transition-colors">Сигналы</a>
+          <a href="/strategies" class="hover:text-blue-600 transition-colors">Стратегии</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- 🔸 Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-10">
+      <!-- 🔸 Dashboard Cards -->
+      <div class="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
+        <div class="p-6 bg-white/80 rounded-2xl shadow-lg transition hover:shadow-xl">
+          <div class="text-slate-500 text-sm mb-1">Статус системы</div>
+          <div class="text-3xl font-bold text-blue-800">🟢 Online</div>
+        </div>
+        <div class="p-6 bg-white/80 rounded-2xl shadow-lg transition hover:shadow-xl">
+          <div class="text-slate-500 text-sm mb-1">Сигналы сегодня</div>
+          <div class="text-3xl font-bold text-blue-800">12</div>
+        </div>
+        <div class="p-6 bg-white/80 rounded-2xl shadow-lg transition hover:shadow-xl">
+          <div class="text-slate-500 text-sm mb-1">Открытых позиций</div>
+          <div class="text-3xl font-bold text-blue-800">3</div>
+        </div>
+        <div class="p-6 bg-white/80 rounded-2xl shadow-lg transition hover:shadow-xl">
+          <div class="text-slate-500 text-sm mb-1">Активных стратегий</div>
+          <div class="text-3xl font-bold text-blue-800">5</div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

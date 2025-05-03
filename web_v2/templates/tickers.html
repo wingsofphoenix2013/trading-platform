@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Тикеры</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/lucide-static@latest/icons.css" rel="stylesheet">
+    <style>
+      body {
+        background: linear-gradient(to bottom right, #e0f2ff, #fde2e4);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen font-sans text-slate-800">
+    <!-- 🔸 Topbar Navigation -->
+    <header class="w-full bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+        <h1 class="text-2xl font-semibold text-blue-900 tracking-wide">Виртуальная Торговля</h1>
+        <nav class="space-x-4 text-sm font-medium text-slate-700">
+          <a href="/" class="hover:text-blue-600 transition-colors">Главная</a>
+          <a href="/tickers" class="text-blue-700 font-semibold">Тикеры</a>
+          <a href="/indicators" class="hover:text-blue-600 transition-colors">Индикаторы</a>
+          <a href="/signals" class="hover:text-blue-600 transition-colors">Сигналы</a>
+          <a href="/strategies" class="hover:text-blue-600 transition-colors">Стратегии</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- 🔸 Page Content -->
+    <main class="max-w-7xl mx-auto px-4 py-10">
+      <h2 class="text-3xl font-semibold mb-6 text-blue-900">Тикеры</h2>
+
+      <div class="overflow-x-auto bg-white/80 rounded-2xl shadow-lg">
+        <table class="min-w-full table-auto text-sm text-left">
+          <thead class="bg-slate-100 text-slate-600 uppercase text-xs">
+            <tr>
+              <th class="px-6 py-3">#</th>
+              <th class="px-6 py-3">Тикер</th>
+              <th class="px-6 py-3">Статус</th>
+              <th class="px-6 py-3">Разрешение</th>
+              <th class="px-6 py-3">Активен</th>
+              <th class="px-6 py-3">Precision</th>
+              <th class="px-6 py-3">Мин. объём</th>
+            </tr>
+          </thead>
+          <tbody class="text-slate-700">
+            <tr class="hover:bg-blue-50 transition">
+              <td class="px-6 py-4">1</td>
+              <td class="px-6 py-4 font-medium text-slate-900">BTCUSDT</td>
+              <td class="px-6 py-4">enabled</td>
+              <td class="px-6 py-4">allowed</td>
+              <td class="px-6 py-4">✅</td>
+              <td class="px-6 py-4">0.01 / 0.001</td>
+              <td class="px-6 py-4">0.001</td>
+            </tr>
+            <tr class="hover:bg-blue-50 transition">
+              <td class="px-6 py-4">2</td>
+              <td class="px-6 py-4 font-medium text-slate-900">ETHUSDT</td>
+              <td class="px-6 py-4">enabled</td>
+              <td class="px-6 py-4">allowed</td>
+              <td class="px-6 py-4">✅</td>
+              <td class="px-6 py-4">0.01 / 0.001</td>
+              <td class="px-6 py-4">0.001</td>
+            </tr>
+            <tr class="hover:bg-blue-50 transition">
+              <td class="px-6 py-4">3</td>
+              <td class="px-6 py-4 font-medium text-slate-900">DOGEUSDT</td>
+              <td class="px-6 py-4">disabled</td>
+              <td class="px-6 py-4">denied</td>
+              <td class="px-6 py-4">❌</td>
+              <td class="px-6 py-4">0.0001 / 0.00001</td>
+              <td class="px-6 py-4">5</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </body>
+</html>

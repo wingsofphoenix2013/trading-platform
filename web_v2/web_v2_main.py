@@ -4,9 +4,14 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from datetime import datetime
 import redis.asyncio as redis
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 
 # 🔸 Инициализация FastAPI приложения
 app = FastAPI()
+# 🔸 Подключение шаблонов Jinja2
+templates = Jinja2Templates(directory="web_v2/templates")
 
 # 🔸 Настройка базового логирования
 logging.basicConfig(level=logging.INFO)
@@ -59,3 +64,27 @@ async def webhook_v2(request: Request):
 
     # 🔹 Ответ клиенту
     return JSONResponse({"status": "ok", "received_at": received_at})
+# 🔸 Главная страница
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+# 🔸 Страница тикеров
+@app.get("/tickers", response_class=HTMLResponse)
+async def tickers(request: Request):
+    return templates.TemplateResponse("tickers.html", {"request": request})
+
+# 🔸 Страница индикаторов
+@app.get("/indicators", response_class=HTMLResponse)
+async def indicators(request: Request):
+    return templates.TemplateResponse("indicators.html", {"request": request})
+
+# 🔸 Страница сигналов
+@app.get("/signals", response_class=HTMLResponse)
+async def signals(request: Request):
+    return templates.TemplateResponse("signals.html", {"request": request})
+
+# 🔸 Страница стратегий
+@app.get("/strategies", response_class=HTMLResponse)
+async def strategies(request: Request):
+    return templates.TemplateResponse("strategies.html", {"request": request})    

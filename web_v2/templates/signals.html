@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Сигналы</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/lucide-static@latest/icons.css" rel="stylesheet">
+    <style>
+      body {
+        background: linear-gradient(to bottom right, #e0f2ff, #fde2e4);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen font-sans text-slate-800">
+    <!-- 🔸 Topbar Navigation -->
+    <header class="w-full bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+        <h1 class="text-2xl font-semibold text-blue-900 tracking-wide">Виртуальная Торговля</h1>
+        <nav class="space-x-4 text-sm font-medium text-slate-700">
+          <a href="/" class="hover:text-blue-600 transition-colors">Главная</a>
+          <a href="/tickers" class="hover:text-blue-600 transition-colors">Тикеры</a>
+          <a href="/indicators" class="hover:text-blue-600 transition-colors">Индикаторы</a>
+          <a href="/signals" class="text-blue-700 font-semibold">Сигналы</a>
+          <a href="/strategies" class="hover:text-blue-600 transition-colors">Стратегии</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- 🔸 Page Content -->
+    <main class="max-w-7xl mx-auto px-4 py-10">
+      <h2 class="text-3xl font-semibold mb-6 text-blue-900">Сигналы</h2>
+
+      <div class="overflow-x-auto bg-white/80 rounded-2xl shadow-lg">
+        <table class="min-w-full table-auto text-sm text-left">
+          <thead class="bg-slate-100 text-slate-600 uppercase text-xs">
+            <tr>
+              <th class="px-6 py-3">Время</th>
+              <th class="px-6 py-3">Символ</th>
+              <th class="px-6 py-3">Сообщение</th>
+              <th class="px-6 py-3">Направление</th>
+              <th class="px-6 py-3">Источник</th>
+            </tr>
+          </thead>
+          <tbody class="text-slate-700">
+            <tr class="hover:bg-blue-50 transition">
+              <td class="px-6 py-4">2025-05-03 20:15:00</td>
+              <td class="px-6 py-4">TRUMPUSDT</td>
+              <td class="px-6 py-4">Long EMA200 M1</td>
+              <td class="px-6 py-4 text-green-600 font-semibold">LONG</td>
+              <td class="px-6 py-4">TradingView</td>
+            </tr>
+            <tr class="hover:bg-blue-50 transition">
+              <td class="px-6 py-4">2025-05-03 20:12:00</td>
+              <td class="px-6 py-4">TRUMPUSDT</td>
+              <td class="px-6 py-4">Short RSI < 30</td>
+              <td class="px-6 py-4 text-red-600 font-semibold">SHORT</td>
+              <td class="px-6 py-4">TradingView</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </body>
+</html>
