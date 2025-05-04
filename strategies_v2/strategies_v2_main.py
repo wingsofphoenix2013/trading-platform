@@ -7,18 +7,18 @@ import asyncpg
 import json
 from decimal import Decimal, ROUND_DOWN
 from strategy_interface import StrategyInterface
-from strategy_1 import Strategy1
-from strategy_1_1 import Strategy1_1
-from strategy_1_2 import Strategy1_2
-from strategy_2 import Strategy2
-from strategy_2_1 import Strategy2_1
-from strategy_2_2 import Strategy2_2
-from strategy_3 import Strategy3
-from strategy_3_1 import Strategy3_1
-from strategy_3_2 import Strategy3_2
-from strategy_4 import Strategy4
-from strategy_4_1 import Strategy4_1
-from strategy_4_2 import Strategy4_2
+from strategy_5 import Strategy5
+from strategy_5_1 import Strategy5_1
+from strategy_5_2 import Strategy5_2
+from strategy_5_3 import Strategy5_3
+from strategy_5_4 import Strategy5_4
+from strategy_5_5 import Strategy5_5
+from strategy_6 import Strategy6
+from strategy_6_1 import Strategy6_1
+from strategy_6_2 import Strategy6_2
+from strategy_6_3 import Strategy6_3
+from strategy_6_4 import Strategy6_4
+from strategy_6_5 import Strategy6_5
 
 # --- Конфигурация Базы Данных ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -34,18 +34,18 @@ open_positions = {}
 strategy_interface = StrategyInterface(DATABASE_URL, open_positions=open_positions)
 
 strategies = {
-    "test-1": Strategy1(strategy_interface),
-    "test-1_1": Strategy1_1(strategy_interface),
-    "test-1_2": Strategy1_2(strategy_interface),
-    "test-2": Strategy2(strategy_interface),
-    "test-2_1": Strategy2_1(strategy_interface),
-    "test-2_2": Strategy2_2(strategy_interface),
-    "test-3": Strategy3(strategy_interface),
-    "test-3_1": Strategy3_1(strategy_interface),
-    "test-3_2": Strategy3_2(strategy_interface),
-    "test-4": Strategy4(strategy_interface),
-    "test-4_1": Strategy4_1(strategy_interface),
-    "test-4_2": Strategy4_2(strategy_interface),
+    "test-5": Strategy5(strategy_interface),
+    "test-5_1": Strategy5_1(strategy_interface),
+    "test-5_2": Strategy5_2(strategy_interface),
+    "test-5_3": Strategy5_3(strategy_interface),
+    "test-5_4": Strategy5_4(strategy_interface),
+    "test-5_5": Strategy5_5(strategy_interface),
+    "test-6": Strategy6(strategy_interface),
+    "test-6_1": Strategy6_1(strategy_interface),
+    "test-6_2": Strategy6_2(strategy_interface),
+    "test-6_3": Strategy6_3(strategy_interface),
+    "test-6_4": Strategy6_4(strategy_interface),
+    "test-6_5": Strategy6_5(strategy_interface),
 }
 
 # Настройка логирования с немедленным flush в stdout
