@@ -5,7 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Новая стратегия</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://unpkg.com/lucide-static@latest/icons.css" rel="stylesheet">
+    <script>
+      function generateTPRows() {
+        const count = parseInt(document.getElementById('tp_count').value);
+        const container = document.getElementById('tp_table');
+        container.innerHTML = '';
+        for (let i = 1; i <= count; i++) {
+          container.innerHTML += `
+            <tr class="border-t">
+              <td class="px-3 py-2">${i}</td>
+              <td><input type="number" name="volume_${i}" class="w-full px-2 py-1 border rounded" placeholder="%" /></td>
+              <td>
+                <select name="tp_type_${i}" class="w-full px-2 py-1 border rounded" onchange="toggleTPValueInput(${i}, this.value)">
+                  <option value="">Выбор...</option>
+                  <option value="percent">percent</option>
+                  <option value="atr">atr</option>
+                  <option value="fixed">fixed</option>
+                  <option value="external_signal">external_signal</option>
+                </select>
+              </td>
+              <td id="tp_value_cell_${i}">
+                <!-- динамическое поле -->
+              </td>
+            </tr>`;
+        }
+      }
+      function toggleTPValueInput(level, type) {
+        const cell = document.getElementById(`tp_value_cell_${level}`);
+        if (type === 'external_signal') {
+          cell.innerHTML = `<select class='w-full px-2 py-1 border rounded'><option>Выбор...</option><option>RSI Exit [enabled]</option><option>Trend Reversal [disabled]</option></select>`;
+        } else if (type === 'percent' || type === 'atr' || type === 'fixed') {
+          cell.innerHTML = `<input type='number' class='w-full px-2 py-1 border rounded' placeholder='Значение' />`;
+        } else {
+          cell.innerHTML = '';
+        }
+      }
+    </script>
     <style>
       body {
         background: linear-gradient(to bottom right, #e0f2ff, #fde2e4);
@@ -13,27 +48,97 @@
     </style>
   </head>
   <body class="min-h-screen font-sans text-slate-800">
-    <!-- 🔸 Topbar Navigation -->
-    <header class="w-full bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
-      <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-        <h1 class="text-2xl font-semibold text-blue-900 tracking-wide">Виртуальная Торговля</h1>
-        <nav class="space-x-4 text-sm font-medium text-slate-700">
-          <a href="/" class="hover:text-blue-600 transition-colors">Главная</a>
-          <a href="/tickers" class="hover:text-blue-600 transition-colors">Тикеры</a>
-          <a href="/indicators" class="hover:text-blue-600 transition-colors">Индикаторы</a>
-          <a href="/signals" class="hover:text-blue-600 transition-colors">Сигналы</a>
-          <a href="/strategies" class="text-blue-700 font-semibold underline underline-offset-4 decoration-blue-500">Стратегии</a>
-        </nav>
-      </div>
-    </header>
+    <main class="max-w-4xl mx-auto px-4 py-10 space-y-10">
+      <h2 class="text-3xl font-semibold text-blue-900">Создание новой стратегии</h2>
 
-    <!-- 🔸 New Strategy Placeholder -->
-    <main class="max-w-4xl mx-auto px-4 py-16">
-      <h2 class="text-3xl font-semibold text-blue-900 mb-4">Создание новой стратегии</h2>
-      <p class="text-slate-600 mb-6">Форма для создания стратегии будет реализована здесь.</p>
+      <!-- 🔹 Блок 1: Общая информация -->
+      <section class="space-y-4">
+        <h3 class="text-xl font-semibold text-blue-800">Общие параметры</h3>
+        <input placeholder="Название" class="w-full px-3 py-2 border rounded" />
+        <textarea placeholder="Описание" class="w-full px-3 py-2 border rounded"></textarea>
+        <div class="grid grid-cols-3 gap-4">
+          <input type="number" placeholder="Депозит" class="w-full px-3 py-2 border rounded" />
+          <input type="number" placeholder="Макс. размер позиции" class="w-full px-3 py-2 border rounded" />
+          <input type="number" placeholder="Макс. риск, %" class="w-full px-3 py-2 border rounded" />
+        </div>
+        <select class="w-full px-3 py-2 border rounded">
+          <option>Выбор управляющего сигнала...</option>
+          <option>Impulse Start [enabled]</option>
+          <option>Breakout [disabled]</option>
+        </select>
+        <select class="w-full px-3 py-2 border rounded">
+          <option>Выбор таймфрейма...</option>
+          <option>M1</option>
+          <option>M5</option>
+          <option>M15</option>
+        </select>
+      </section>
 
-      <div class="p-6 bg-white/80 rounded-2xl shadow-inner border border-blue-200">
-        <p class="text-center text-slate-500 italic">🔧 Страница в разработке</p>
+      <!-- 🔹 Блок 2: SL -->
+      <section class="space-y-4">
+        <h3 class="text-xl font-semibold text-blue-800">Stop-Loss</h3>
+        <label><input type="checkbox" checked /> Использовать SL</label>
+        <select class="w-full px-3 py-2 border rounded">
+          <option>Выбор типа SL...</option>
+          <option value="percent">percent</option>
+          <option value="atr">atr</option>
+        </select>
+        <input type="number" placeholder="Значение SL" class="w-full px-3 py-2 border rounded" />
+      </section>
+
+      <!-- 🔹 Блок 3: TP -->
+      <section class="space-y-4">
+        <h3 class="text-xl font-semibold text-blue-800">Take Profit</h3>
+        <select id="tp_count" onchange="generateTPRows()" class="w-full px-3 py-2 border rounded">
+          <option value="">Выбор количества уровней...</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+        <table class="w-full table-auto text-sm text-left border rounded">
+          <thead class="bg-slate-100">
+            <tr>
+              <th class="px-3 py-2">#</th>
+              <th class="px-3 py-2">Объём, %</th>
+              <th class="px-3 py-2">Тип TP</th>
+              <th class="px-3 py-2">Значение / Сигнал</th>
+            </tr>
+          </thead>
+          <tbody id="tp_table" class="bg-white/80"></tbody>
+        </table>
+      </section>
+
+      <!-- 🔹 Блок 4: Тикеры -->
+      <section class="space-y-4">
+        <h3 class="text-xl font-semibold text-blue-800 flex items-center justify-between">
+          Тикеры
+          <label class="text-sm"><input type="checkbox" id="use_all_tickers" checked disabled /> использовать все</label>
+        </h3>
+        <table class="w-full table-auto text-sm text-left border rounded">
+          <thead class="bg-slate-100">
+            <tr>
+              <th class="px-3 py-2">#</th>
+              <th class="px-3 py-2">Тикер</th>
+              <th class="px-3 py-2">Статус</th>
+              <th class="px-3 py-2">Разрешение</th>
+              <th class="px-3 py-2">✅</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white/80">
+            <tr><td class="px-3 py-2">1</td><td>BTCUSDT</td><td>enabled</td><td>enabled</td><td><input type="checkbox" checked /></td></tr>
+            <tr><td class="px-3 py-2">2</td><td>ETHUSDT</td><td>enabled</td><td>enabled</td><td><input type="checkbox" checked /></td></tr>
+            <tr><td class="px-3 py-2">3</td><td>DOGEUSDT</td><td>enabled</td><td>enabled</td><td><input type="checkbox" checked /></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- 🔹 Кнопка сохранить -->
+      <div class="text-right">
+        <button onclick="alert('Форма отправлена (заглушка)')" class="bg-blue-600 text-white px-6 py-2 rounded-xl shadow hover:bg-blue-700 hover:shadow-lg transition-all">
+          Сохранить стратегию
+        </button>
       </div>
     </main>
   </body>
