@@ -156,22 +156,26 @@ class Strategy5_2:
 
         if direction == "long":
             width = lr_mid - lr_lower
-            zone_limit = width / Decimal("4")
-            lower_bound = lr_lower - zone_limit
-            upper_bound = lr_lower + zone_limit
+            zone_inside = width / Decimal("2")
+            zone_outside = width / Decimal("4")
+
+            lower_bound = lr_lower - zone_outside
+            upper_bound = lr_lower + zone_inside
 
             if not (lower_bound <= current_price <= upper_bound):
-                logging.warning(f"Цена {current_price} вне допустимой зоны LONG: [{lower_bound}, {upper_bound}]. Вход отменён.")
+                logging.warning(f"Цена {current_price} вне допустимой зоны LONG: внутренняя +1/3, внешняя -1/4. Диапазон: [{lower_bound}, {upper_bound}]. Вход отменён.")
                 return False
 
         elif direction == "short":
             width = lr_upper - lr_mid
-            zone_limit = width / Decimal("4")
-            lower_bound = lr_upper - zone_limit
-            upper_bound = lr_upper + zone_limit
+            zone_inside = width / Decimal("2")
+            zone_outside = width / Decimal("4")
+
+            lower_bound = lr_upper - zone_inside
+            upper_bound = lr_upper + zone_outside
 
             if not (lower_bound <= current_price <= upper_bound):
-                logging.warning(f"Цена {current_price} вне допустимой зоны SHORT: [{lower_bound}, {upper_bound}]. Вход отменён.")
+                logging.warning(f"Цена {current_price} вне допустимой зоны SHORT: внутренняя -1/3, внешняя +1/4. Диапазон: [{lower_bound}, {upper_bound}]. Вход отменён.")
                 return False
 
         logging.info("Специфичные проверки (EMA/ATR + lr_angle) пройдены успешно.")
