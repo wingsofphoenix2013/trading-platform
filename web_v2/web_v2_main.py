@@ -90,4 +90,9 @@ async def signals(request: Request):
 # 🔸 Страница стратегий
 @app.get("/strategies", response_class=HTMLResponse)
 async def strategies(request: Request):
-    return templates.TemplateResponse("strategies.html", {"request": request})    
+    return templates.TemplateResponse("strategies.html", {"request": request})
+
+# 🔸 Страница создания новой стратегии
+@app.get("/strategies/new", response_class=HTMLResponse)
+async def strategy_new(request: Request):
+    return templates.TemplateResponse("strategies_new.html", {"request": request})        
