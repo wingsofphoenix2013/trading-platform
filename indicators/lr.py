@@ -43,18 +43,35 @@ async def process_lr(pg_pool, redis, symbol, tf, precision):
     df.reset_index(drop=True, inplace=True)
     df['close'] = df['close'].astype(float)
     df['open_time'] = pd.to_datetime(df['open_time'])
-
     df = df.tail(length)
+
     closes = df['close'].values
+    x = np.arange(len(closes))
+
+    # 🔹 A. Расчёт канала по ценам (как в TradingView)
+    coeffs_raw = np.polyfit(x, closes, deg=1)
+    slope_raw = coeffs_raw[0]
+    mid_raw = np.mean(closes)
+    intercept_raw = mid_raw - slope_raw * (length // 2) + ((1 - (length % 2)) / 2) * slope_raw
+
+    reg_line_raw = slope_raw * x + intercept_raw
+    std_dev = np.sqrt(np.mean((closes - reg_line_raw) ** 2))
+
+    upper = reg_line_raw + 2 * std_dev
+    lower = reg_line_raw - 2 * std_dev
+
+    latest_ts = df.iloc[-1]['open_time']
+    upper_val = safe_round(upper[-1], precision)
+    lower_val = safe_round(lower[-1], precision)
+    mid_val = safe_round(reg_line_raw[-1], precision)
+
+    # 🔹 B. Расчёт угла по нормализованным значениям (для фильтрации тренда)
     base_price = np.mean(closes)
     norm = (closes - base_price) / base_price
-
-    x = np.arange(len(norm))
-    coeffs = np.polyfit(x, norm, deg=1)
-    slope = coeffs[0]
-    intercept = coeffs[1]
-
-    angle = np.degrees(np.arctan(slope))
+    coeffs_norm = np.polyfit(x, norm, deg=1)
+    slope_norm = coeffs_norm[0]
+    angle = np.degrees(np.arctan(slope_norm))
+    angle_val = safe_round(angle, 5)
 
     if angle > angle_up:
         trend = 'up'
@@ -62,18 +79,6 @@ async def process_lr(pg_pool, redis, symbol, tf, precision):
         trend = 'down'
     else:
         trend = 'flat'
-
-    reg_line = slope * x + intercept
-    std_dev = np.std(norm)
-    upper = reg_line + 2 * std_dev
-    lower = reg_line - 2 * std_dev
-
-    latest_ts = df.iloc[-1]['open_time']
-    mid = reg_line[-1]
-    upper_val = safe_round(base_price * (1 + upper[-1]), precision)
-    lower_val = safe_round(base_price * (1 + lower[-1]), precision)
-    mid_val = safe_round(base_price * (1 + mid), precision)
-    angle_val = safe_round(angle, 5)
 
     results = [
         (symbol, tf, latest_ts, 'LR', 'lr_upper', upper_val),
@@ -86,6 +91,18 @@ async def process_lr(pg_pool, redis, symbol, tf, precision):
     for r in results:
         redis_key = f"{symbol}:{tf}:{r[3]}:{r[4]}"
         await redis.set(redis_key, str(r[5]))
+
+    async with pg_pool.acquire() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO indicator_values (symbol, timeframe, open_time, indicator, param_name, value)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT DO NOTHING
+            """,
+            results
+        )
+
+    print(f"[LR] Расчёт завершён для {symbol} / {tf}", flush=True)
 
     async with pg_pool.acquire() as conn:
         await conn.executemany(
