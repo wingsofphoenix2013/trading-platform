@@ -6,18 +6,19 @@
     <title>Стратегии</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://unpkg.com/lucide-static@latest/icons.css" rel="stylesheet">
-    <script>
+<script>
   function generateTPRows() {
     const count = parseInt(document.getElementById('tp_count').value);
     const container = document.getElementById('tp_table');
-    document.getElementById("tp_count_hidden").value = count;  // 🔹 фиксируем количество уровней
+    document.getElementById("tp_count_hidden").value = count;
     container.innerHTML = '';
+
     for (let i = 1; i <= count; i++) {
       container.innerHTML += `
         <tr class="border-t">
           <td class="px-3 py-2">${i}</td>
           <td>
-            <input type="number" name="volume_${i}" class="w-full px-2 py-1 border rounded" placeholder="%" />
+            <input type="number" name="volume_${i}" step="any" class="w-full px-2 py-1 border rounded" placeholder="%" />
           </td>
           <td>
             <select name="tp_type_${i}" class="w-full px-2 py-1 border rounded" onchange="toggleTPValueInput(${i}, this.value)">
@@ -33,34 +34,33 @@
     }
   }
 
-function toggleTPValueInput(level, type) {
-  const cell = document.getElementById(`tp_value_cell_${level}`);
-  if (type === 'external_signal') {
-    const isReverse =
-      document.getElementById("reverse_flag")?.value === "true";
+  function toggleTPValueInput(level, type) {
+    const cell = document.getElementById(`tp_value_cell_${level}`);
+    
+    if (type === 'external_signal') {
+      const isReverse = document.getElementById("reverse_flag")?.value === "true";
+      let options = '<option value="">Выбор...</option>';
 
-    let options = '<option value="">Выбор...</option>';
+      if (isReverse) {
+        options += '<option value="__USE_ACTION_SIGNAL__">Управляющий сигнал</option>';
+      }
 
-    if (isReverse) {
-      options += '<option value="__USE_ACTION_SIGNAL__">Управляющий сигнал</option>';
+      const template = document.getElementById("exit-signal-options");
+      if (template) {
+        options += template.innerHTML;
+      }
+
+      cell.innerHTML = `
+        <select name="tp_value_${level}" class="w-full px-2 py-1 border rounded">
+          ${options}
+        </select>`;
+    } else if (['percent', 'atr', 'fixed'].includes(type)) {
+      cell.innerHTML = `
+        <input name="tp_value_${level}" type="number" step="any" class="w-full px-2 py-1 border rounded" placeholder="Значение" />`;
+    } else {
+      cell.innerHTML = '';
     }
-
-    const template = document.getElementById("exit-signal-options");
-    if (template) {
-      options += template.innerHTML;
-    }
-
-    cell.innerHTML = `
-      <select name="tp_value_${level}" class="w-full px-2 py-1 border rounded">
-        ${options}
-      </select>`;
-  } else if (['percent', 'atr', 'fixed'].includes(type)) {
-    cell.innerHTML = `
-      <input name="tp_value_${level}" type="number" step="any" class="w-full px-2 py-1 border rounded" placeholder="Значение" />`;
-  } else {
-    cell.innerHTML = '';
   }
-}
 
   function handleTickerToggle() {
     const checkboxes = document.querySelectorAll('.ticker-checkbox');
