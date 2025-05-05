@@ -2,7 +2,7 @@ import os
 import logging
 from pathlib import Path
 from datetime import datetime
-
+import asyncpg
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
