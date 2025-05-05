@@ -320,12 +320,17 @@
 
             totalVolume += parseFloat(volumeStr);
 
-            if (tpType !== "external_signal") {
-              if (!valueStr || !/^\d+(\.\d+)?$/.test(valueStr)) {
-                alert(`TP уровень ${i}: значение должно быть числом (например, 0.3).`);
-                return;
-              }
-            }
+            if (tpType === "external_signal") {
+  if (!valueStr) {
+    alert(`TP уровень ${i}: необходимо выбрать сигнал выхода.`);
+    return;
+  }
+} else {
+  if (!valueStr || !/^\d+(\.\d+)?$/.test(valueStr)) {
+    alert(`TP уровень ${i}: значение должно быть числом (например, 0.3).`);
+    return;
+  }
+}
           }
 
           if (Math.round(totalVolume) !== 100) {
