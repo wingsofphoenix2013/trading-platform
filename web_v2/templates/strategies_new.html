@@ -320,7 +320,12 @@
 
             totalVolume += parseFloat(volumeStr);
 
-            if (tpType === "external_signal") {
+if (!tpType) {
+  alert(`TP уровень ${i}: не выбран тип выхода (по сигналу или по значению).`);
+  return;
+}
+
+if (tpType === "external_signal") {
   if (!valueStr) {
     alert(`TP уровень ${i}: необходимо выбрать сигнал выхода.`);
     return;
