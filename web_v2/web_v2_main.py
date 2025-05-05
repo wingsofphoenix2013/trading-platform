@@ -153,7 +153,7 @@ async def create_strategy(request: Request):
              use_stoploss, sl_type, sl_value, reverse, use_all_tickers, timeframe)
         strategy_id = result["id"]
 
-        # 🔹 Сохранение сигнала
+        # 🔹 Сохранение управляющего сигнала
         if action_signal_id > 0:
             await conn.execute("""
                 INSERT INTO strategy_signals_v2 (strategy_id, signal_id, role)
@@ -172,21 +172,30 @@ async def create_strategy(request: Request):
                             VALUES ($1, $2, true)
                         """, strategy_id, ticker["id"])
 
-        # 🔹 Сохранение TP уровней
+        # 🔹 Сохранение TP уровней (включая external_signal)
         tp_count = int(form.get("tp_count") or 0)
         for i in range(1, tp_count + 1):
             tp_type = form.get(f"tp_type_{i}")
             volume_percent = float(form.get(f"volume_{i}") or 0)
             tp_value_raw = form.get(f"tp_value_{i}")
-            tp_value = float(tp_value_raw) if tp_value_raw and tp_type != "external_signal" else None
-            tp_trigger_type = "signal" if tp_type == "external_signal" else "price"
+
+            # 🔸 Логика значения TP
+            if tp_type == "external_signal":
+                tp_value = None
+                trigger_signal_id = int(tp_value_raw) if tp_value_raw else None
+                tp_trigger_type = "signal"
+            else:
+                tp_value = float(tp_value_raw) if tp_value_raw else None
+                trigger_signal_id = None
+                tp_trigger_type = "price"
 
             await conn.execute("""
                 INSERT INTO strategy_tp_levels_v2 (
-                    strategy_id, level, tp_type, tp_value, volume_percent, tp_trigger_type
+                    strategy_id, level, tp_type, tp_value,
+                    volume_percent, tp_trigger_type, trigger_signal_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6)
-            """, strategy_id, i, tp_type, tp_value, volume_percent, tp_trigger_type)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+            """, strategy_id, i, tp_type, tp_value, volume_percent, tp_trigger_type, trigger_signal_id)
 
         return RedirectResponse(url="/strategies", status_code=302)
     finally:

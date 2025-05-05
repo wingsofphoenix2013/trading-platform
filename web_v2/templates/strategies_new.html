@@ -33,22 +33,23 @@
     }
   }
 
-  function toggleTPValueInput(level, type) {
-    const cell = document.getElementById(`tp_value_cell_${level}`);
-    if (type === 'external_signal') {
-      cell.innerHTML = `
-        <select name="tp_value_${level}" class="w-full px-2 py-1 border rounded">
-          <option>Выбор...</option>
-          <option>RSI Exit [enabled]</option>
-          <option>Trend Reversal [disabled]</option>
-        </select>`;
-    } else if (['percent', 'atr', 'fixed'].includes(type)) {
-      cell.innerHTML = `
-        <input name="tp_value_${level}" type="number" class="w-full px-2 py-1 border rounded" placeholder="Значение" />`;
-    } else {
-      cell.innerHTML = '';
-    }
+function toggleTPValueInput(level, type) {
+  const cell = document.getElementById(`tp_value_cell_${level}`);
+  if (type === 'external_signal') {
+    cell.innerHTML = `
+const optionsTemplate = document.getElementById("exit-signal-options").innerHTML;
+cell.innerHTML = `
+  <select name="tp_value_${level}" class="w-full px-2 py-1 border rounded">
+    <option value="">Выбор...</option>
+    ${optionsTemplate}
+  </select>`;
+  } else if (['percent', 'atr', 'fixed'].includes(type)) {
+    cell.innerHTML = `
+      <input name="tp_value_${level}" type="number" step="any" class="w-full px-2 py-1 border rounded" placeholder="Значение" />`;
+  } else {
+    cell.innerHTML = '';
   }
+}
 
   function handleTickerToggle() {
     const checkboxes = document.querySelectorAll('.ticker-checkbox');
@@ -209,5 +210,10 @@
       </div>
 </form>      
     </main>
+<template id="exit-signal-options">
+  {% for s in exit_signals %}
+    <option value="{{ s.id }}">{{ s.name }} [{{ 'enabled' if s.enabled else 'disabled' }}]</option>
+  {% endfor %}
+</template>    
   </body>
 </html>
