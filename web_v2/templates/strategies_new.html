@@ -108,21 +108,21 @@
 <div class="max-w-4xl mx-auto px-6 py-8 bg-white/80 rounded-2xl shadow-xl space-y-10">
   <section class="space-y-4">
     <h3 class="text-xl font-semibold text-blue-800">Общие параметры</h3>
-    <input name="name" placeholder="Название" class="w-full px-3 py-2 border rounded" />
+    <input name="name" id="strategy_name" placeholder="Название" class="w-full px-3 py-2 border rounded" />
     <textarea name="description" placeholder="Описание" class="w-full px-3 py-2 border rounded"></textarea>
     <div class="grid grid-cols-3 gap-4">
-      <input name="deposit" type="number" placeholder="Депозит" class="w-full px-3 py-2 border rounded" />
-      <input name="position_limit" type="number" placeholder="Макс. размер позиции" class="w-full px-3 py-2 border rounded" />
-      <input name="max_risk" type="number" placeholder="Макс. риск, %" class="w-full px-3 py-2 border rounded" />
+      <input name="deposit" id="deposit" type="number" class="w-full px-3 py-2 border rounded" placeholder="Депозит" />
+      <input name="position_limit" id="position_limit" type="number" step="1" min="1" class="w-full px-3 py-2 border rounded" placeholder="Макс. размер позиции" />
+      <input name="max_risk" id="max_risk" type="number" step="1" min="1" max="10" class="w-full px-3 py-2 border rounded" placeholder="Макс. риск, %" />
     </div>
-    <input name="leverage" type="number" placeholder="Плечо (leverage)" class="w-full px-3 py-2 border rounded" />
-<select name="action_signal_id" class="w-full px-3 py-2 border rounded">
+    <input name="leverage" id="leverage" type="number" step="1" min="1" max="50" class="w-full px-3 py-2 border rounded" placeholder="Плечо (leverage)" />
+<select name="action_signal_id" id="action_signal_id" class="w-full px-3 py-2 border rounded">
   <option value="">Выбор управляющего сигнала...</option>
   {% for s in signals %}
     <option value="{{ s.id }}">{{ s.name }} [{{ 'enabled' if s.enabled else 'disabled' }}]</option>
   {% endfor %}
 </select>
-    <select name="timeframe" class="w-full px-3 py-2 border rounded">
+    <select name="timeframe" id="timeframe" class="w-full px-3 py-2 border rounded">
       <option>Выбор таймфрейма...</option>
       <option>M1</option>
       <option>M5</option>
@@ -141,12 +141,12 @@
   <section class="space-y-4">
     <h3 class="text-xl font-semibold text-blue-800">Stop-Loss</h3>
     <label><input name="use_stoploss" type="checkbox" checked /> Использовать SL</label>
-    <select name="sl_type" class="w-full px-3 py-2 border rounded">
+    <select name="sl_type" class="w-full px-3 py-2 border rounded" id="sl_type">
       <option>Выбор типа SL...</option>
       <option value="percent">percent</option>
       <option value="atr">atr</option>
     </select>
-    <input name="sl_value" type="number" placeholder="Значение SL" class="w-full px-3 py-2 border rounded" />
+    <input name="sl_value" id="sl_value" type="number" step="any" class="w-full px-3 py-2 border rounded" placeholder="Значение SL" />
   </section>
 </div>
 <br>
@@ -220,6 +220,147 @@
       <div class="text-center">
         <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-xl shadow hover:bg-blue-700 hover:shadow-lg transition-all">Сохранить стратегию</button>
       </div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const form = document.querySelector("form");
+
+    form.addEventListener("submit", function (e) {
+      // 🔹 Название
+      const name = document.getElementById("strategy_name")?.value.trim();
+      const nameRegex = /^[A-Za-z_]+$/;
+      if (!name) {
+        e.preventDefault();
+        alert("Поле 'Название' обязательно для заполнения.");
+        return;
+      }
+      if (!nameRegex.test(name)) {
+        e.preventDefault();
+        alert("Название может содержать только латинские буквы и символ подчёркивания (_).");
+        return;
+      }
+
+      // 🔹 Депозит
+      const deposit = document.getElementById("deposit")?.value.trim();
+      if (!deposit || !/^\d+$/.test(deposit)) {
+        e.preventDefault();
+        alert("Поле 'Депозит' обязательно и должно быть целым числом.");
+        return;
+      }
+
+      // 🔹 Макс. размер позиции
+      const positionLimit = document.getElementById("position_limit")?.value.trim();
+      if (!positionLimit || !/^\d+$/.test(positionLimit)) {
+        e.preventDefault();
+        alert("Поле 'Максимальный размер позиции' обязательно и должно быть целым числом.");
+        return;
+      }
+
+      // 🔹 Макс. риск
+      const maxRisk = document.getElementById("max_risk")?.value.trim();
+      if (!maxRisk || !/^\d+$/.test(maxRisk)) {
+        e.preventDefault();
+        alert("Поле 'Максимальный риск' обязательно и должно быть целым числом.");
+        return;
+      }
+      if (parseInt(maxRisk, 10) > 10) {
+        e.preventDefault();
+        alert("Максимальный риск не должен превышать 10%.");
+        return;
+      }
+
+      // 🔹 Плечо
+      const leverage = document.getElementById("leverage")?.value.trim();
+      if (!leverage || !/^\d+$/.test(leverage)) {
+        e.preventDefault();
+        alert("Поле 'Плечо' обязательно и должно быть целым числом.");
+        return;
+      }
+      if (parseInt(leverage, 10) > 50) {
+        e.preventDefault();
+        alert("Максимальное плечо не должно превышать 50.");
+        return;
+      }
+
+      // 🔹 Управляющий сигнал
+      const selectedSignal = document.getElementById("action_signal_id")?.value;
+      if (!selectedSignal) {
+        e.preventDefault();
+        alert("Необходимо выбрать управляющий сигнал.");
+        return;
+      }
+
+      // 🔹 Таймфрейм
+      const selectedTimeframe = document.getElementById("timeframe")?.value;
+      if (!selectedTimeframe) {
+        e.preventDefault();
+        alert("Необходимо выбрать таймфрейм.");
+        return;
+      }
+
+      // 🔹 Тип SL
+      const slType = document.getElementById("sl_type")?.value;
+      if (!slType) {
+        e.preventDefault();
+        alert("Необходимо выбрать тип SL.");
+        return;
+      }
+
+      // 🔹 Значение SL
+      const slValue = document.getElementById("sl_value")?.value.trim();
+      if (!slValue || !/^\d+(\.\d+)?$/.test(slValue)) {
+        e.preventDefault();
+        alert("Поле 'Значение SL' должно быть числом (например, 0.3).");
+        return;
+      }
+
+      // 🔹 TP уровни
+      const tpCount = parseInt(document.getElementById("tp_count_hidden")?.value || "0");
+      let totalVolume = 0;
+
+      for (let i = 1; i <= tpCount; i++) {
+        const tpType = document.querySelector(`[name="tp_type_${i}"]`)?.value;
+        const volumeStr = document.querySelector(`[name="volume_${i}"]`)?.value.trim();
+        const valueStr = document.querySelector(`[name="tp_value_${i}"]`)?.value.trim();
+
+        // 🔸 Проверка объёма
+        if (!volumeStr || !/^\d+(\.\d+)?$/.test(volumeStr)) {
+          e.preventDefault();
+          alert(`TP уровень ${i}: поле 'Объём' должно быть числом.`);
+          return;
+        }
+
+        totalVolume += parseFloat(volumeStr);
+
+        // 🔸 Проверка значения TP (если не external_signal)
+        if (tpType !== "external_signal") {
+          if (!valueStr || !/^\d+(\.\d+)?$/.test(valueStr)) {
+            e.preventDefault();
+            alert(`TP уровень ${i}: значение должно быть числом (например, 0.3).`);
+            return;
+          }
+        }
+      }
+
+      if (Math.round(totalVolume) !== 100) {
+        e.preventDefault();
+        alert(`Сумма объёмов всех TP уровней должна равняться 100. Сейчас: ${totalVolume}`);
+        return;
+      }
+
+      // 🔹 Тикеры
+      const useAllTickers = document.getElementById("use_all_tickers")?.checked;
+      if (!useAllTickers) {
+        const checkboxes = document.querySelectorAll(".ticker-checkbox");
+        const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+        if (!anyChecked) {
+          e.preventDefault();
+          alert("Необходимо выбрать хотя бы один тикер.");
+          return;
+        }
+      }
+    });
+  });
+</script>
 </form>      
     </main>
 <template id="exit-signal-options">
