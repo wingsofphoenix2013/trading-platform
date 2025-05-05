@@ -38,7 +38,7 @@
     const cell = document.getElementById(`tp_value_cell_${level}`);
     
     if (type === 'external_signal') {
-      const isReverse = document.getElementById("reverse_flag")?.value === "true";
+      const isReverse = document.querySelector('input[name="reverse"]')?.checked === true;
       let options = '<option value="">Выбор...</option>';
 
       if (isReverse) {
