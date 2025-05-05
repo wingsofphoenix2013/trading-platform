@@ -92,7 +92,29 @@ async def signals(request: Request):
 async def strategies(request: Request):
     return templates.TemplateResponse("strategies.html", {"request": request})
 
-# 🔸 Страница создания новой стратегии
+# 🔸 Страница создания новой стратегии (форма + список сигналов/тикеров)
 @app.get("/strategies/new", response_class=HTMLResponse)
 async def strategy_new(request: Request):
-    return templates.TemplateResponse("strategies_new.html", {"request": request})        
+    conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
+    try:
+        signals = await conn.fetch("""
+            SELECT id, name, signal_type, enabled
+            FROM signals_v2
+            WHERE signal_type = 'action'
+            ORDER BY name
+        """)
+
+        tickers = await conn.fetch("""
+            SELECT symbol, status, tradepermission
+            FROM tickers
+            WHERE status = 'enabled' AND tradepermission = 'enabled'
+            ORDER BY symbol
+        """)
+
+        return templates.TemplateResponse("strategies_new.html", {
+            "request": request,
+            "signals": signals,
+            "tickers": tickers
+        })
+    finally:
+        await conn.close()      
