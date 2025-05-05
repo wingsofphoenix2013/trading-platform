@@ -229,7 +229,7 @@
 
       // 🔹 Проверка названия
       const name = document.getElementById("strategy_name")?.value.trim();
-      const nameRegex = /^[A-Za-z_]+$/;
+      const nameRegex = /^[A-Za-z0-9_]+$/;
       if (!name) {
         alert("Поле 'Название' обязательно для заполнения.");
         return;
