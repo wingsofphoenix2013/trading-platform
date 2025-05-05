@@ -10,15 +10,15 @@ from strategy_interface import StrategyInterface
 from strategy_5 import Strategy5
 from strategy_5_1 import Strategy5_1
 from strategy_5_2 import Strategy5_2
-from strategy_5_3 import Strategy5_2
-from strategy_5_4 import Strategy5_2
-from strategy_5_5 import Strategy5_2
+from strategy_5_3 import Strategy5_3
+from strategy_5_4 import Strategy5_4
+from strategy_5_5 import Strategy5_5
 from strategy_6 import Strategy6
 from strategy_6_1 import Strategy6_1
 from strategy_6_3 import Strategy6_2
-from strategy_6_3 import Strategy6_2
-from strategy_6_4 import Strategy6_2
-from strategy_6_5 import Strategy6_2
+from strategy_6_3 import Strategy6_3
+from strategy_6_4 import Strategy6_4
+from strategy_6_5 import Strategy6_5
 
 # --- Глобальный флаг отладки ---
 debug = os.getenv("DEBUG_MODE", "0") == "1"
