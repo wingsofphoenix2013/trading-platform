@@ -10,9 +10,18 @@ from strategy_interface import StrategyInterface
 from strategy_5 import Strategy5
 from strategy_5_1 import Strategy5_1
 from strategy_5_2 import Strategy5_2
+from strategy_5_3 import Strategy5_2
+from strategy_5_4 import Strategy5_2
+from strategy_5_5 import Strategy5_2
 from strategy_6 import Strategy6
 from strategy_6_1 import Strategy6_1
-from strategy_6_2 import Strategy6_2
+from strategy_6_3 import Strategy6_2
+from strategy_6_3 import Strategy6_2
+from strategy_6_4 import Strategy6_2
+from strategy_6_5 import Strategy6_2
+
+# --- Глобальный флаг отладки ---
+debug = os.getenv("DEBUG_MODE", "0") == "1"
 
 # --- Конфигурация Базы Данных ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -28,12 +37,18 @@ open_positions = {}
 strategy_interface = StrategyInterface(DATABASE_URL, open_positions=open_positions)
 
 strategies = {
-    "test-5": Strategy5(strategy_interface),
-    "test-5_1": Strategy5_1(strategy_interface),
-    "test-5_2": Strategy5_2(strategy_interface),
-    "test-6": Strategy6(strategy_interface),
-    "test-6_1": Strategy6_1(strategy_interface),
-    "test-6_2": Strategy6_2(strategy_interface),
+    "test-5": Strategy5(strategy_interface, debug=debug),
+    "test-5_1": Strategy5_1(strategy_interface, debug=debug),
+    "test-5_2": Strategy5_2(strategy_interface, debug=debug),
+    "test-5_3": Strategy5_2(strategy_interface, debug=debug),
+    "test-5_4": Strategy5_2(strategy_interface, debug=debug),
+    "test-5_5": Strategy5_2(strategy_interface, debug=debug),
+    "test-6": Strategy6(strategy_interface, debug=debug),
+    "test-6_1": Strategy6_1(strategy_interface, debug=debug),
+    "test-6_2": Strategy6_2(strategy_interface, debug=debug),
+    "test-6_3": Strategy6_2(strategy_interface, debug=debug),
+    "test-6_4": Strategy6_2(strategy_interface, debug=debug),
+    "test-6_5": Strategy6_2(strategy_interface, debug=debug),
 }
 
 # Настройка логирования с немедленным flush в stdout

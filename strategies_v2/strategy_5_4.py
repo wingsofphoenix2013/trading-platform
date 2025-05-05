@@ -4,11 +4,13 @@ import redis.asyncio as redis
 from decimal import Decimal, ROUND_DOWN
 
 class Strategy5_4:
-    def __init__(self, interface):
+    def __init__(self, interface, debug=False):
         self.interface = interface
+        self.debug = debug
 
     async def on_signal(self, signal):
-        logging.info(f"Стратегия №1 получила сигнал: {signal}")
+        if self.debug:
+            logging.info(f"Стратегия №1 получила сигнал: {signal}")
 
         params = await self.load_params()
         if not params:
@@ -27,7 +29,8 @@ class Strategy5_4:
         # Базовые проверки должны быть ДО получения цены!
         checks_passed, message = await self.interface.perform_basic_checks(params, signal['symbol'], direction)
         if not checks_passed:
-            logging.warning(f"Базовые проверки не пройдены: {message}")
+            if self.debug:
+                logging.warning(f"Базовые проверки не пройдены: {message}")
             await self.interface.log_strategy_action(
                 log_id=signal['log_id'],
                 strategy_id=params['id'],
@@ -39,7 +42,8 @@ class Strategy5_4:
         current_price = await self.get_current_price(signal['symbol'])
         if not current_price:
             message = f"Нет текущей цены для тикера {signal['symbol']}"
-            logging.warning(message)
+            if self.debug:
+                logging.warning(message)
             await self.interface.log_strategy_action(
                 log_id=signal['log_id'],
                 strategy_id=params['id'],
@@ -51,7 +55,8 @@ class Strategy5_4:
         checks_passed = await self.run_checks(params, signal, current_price)
         if not checks_passed:
             message = "Специфичные проверки не пройдены"
-            logging.warning(message)
+            if self.debug:
+                logging.warning(message)
             await self.interface.log_strategy_action(
                 log_id=signal['log_id'],
                 strategy_id=params['id'],
@@ -68,7 +73,8 @@ class Strategy5_4:
         if not params:
             logging.error("Не удалось загрузить параметры стратегии.")
         else:
-            logging.info(f"Параметры стратегии загружены: {params}")
+            if self.debug:
+                logging.info(f"Параметры стратегии загружены: {params}")
         return params
 
     # Метод получения текущей цены из Redis
@@ -84,7 +90,8 @@ class Strategy5_4:
         await redis_client.close()
 
         if not price_str:
-            logging.warning(f"Нет текущей цены для тикера {symbol}. Пропускаем.")
+            if self.debug:
+                logging.warning(f"Нет текущей цены для тикера {symbol}. Пропускаем.")
             return None
 
         try:
@@ -99,7 +106,8 @@ class Strategy5_4:
         ema, atr = await self.interface.get_ema_atr(signal['symbol'], params['timeframe'])
 
         if ema is None or atr is None:
-            logging.warning(f"Недостаточно данных (EMA50 или ATR) для {signal['symbol']}.")
+            if self.debug:
+                logging.warning(f"Недостаточно данных (EMA50 или ATR) для {signal['symbol']}.")
             return False
 
         direction = signal['direction']
@@ -119,66 +127,73 @@ class Strategy5_4:
                 if not condition else "Шорт вход разрешен."
             )
         else:
-            logging.warning("Неизвестное направление сигнала.")
+            if self.debug:
+                logging.warning("Неизвестное направление сигнала.")
             return False
 
         if not condition:
-            logging.warning(message)
+            if self.debug:
+                logging.warning(message)
             return False
 
         # --- Проверка lr_angle ---
         lr = await self.interface.get_lr_params(signal['symbol'], params['timeframe'])
         if lr is None or lr.get("lr_trend") is None:
-            logging.warning(f"Не удалось получить lr_trend для {signal['symbol']}. Вход отменён.")
+            if self.debug:
+                logging.warning(f"Не удалось получить lr_trend для {signal['symbol']}. Вход отменён.")
             return False
 
         lr_angle = lr.get("lr_angle")
         if lr_angle is None:
-            logging.warning(f"Не удалось получить lr_angle для {signal['symbol']}. Вход отменён.")
+            if self.debug:
+                logging.warning(f"Не удалось получить lr_angle для {signal['symbol']}. Вход отменён.")
             return False
 
-        if direction == "long" and lr_angle <= Decimal("0.009"):
-            logging.warning(f"lr_angle = {lr_angle}, слишком плоский или нисходящий для LONG. Вход отменён.")
+        if direction == "long" and lr_angle <= Decimal("0.005"):
+            if self.debug:
+                logging.warning(f"lr_angle = {lr_angle}, слишком плоский или нисходящий для LONG. Вход отменён.")
             return False
 
-        if direction == "short" and lr_angle >= Decimal("-0.009"):
-            logging.warning(f"lr_angle = {lr_angle}, слишком плоский или восходящий для SHORT. Вход отменён.")
+        if direction == "short" and lr_angle >= Decimal("-0.005"):
+            if self.debug:
+                logging.warning(f"lr_angle = {lr_angle}, слишком плоский или восходящий для SHORT. Вход отменён.")
             return False
 
-        # --- Проверка позиции цены в пределах допустимой зоны у границы канала ---
-        lr_mid = lr.get("lr_mid")
-        lr_lower = lr.get("lr_lower")
-        lr_upper = lr.get("lr_upper")
+#         # --- Проверка позиции цены в пределах допустимой зоны у границы канала ---
+#         lr_mid = lr.get("lr_mid")
+#         lr_lower = lr.get("lr_lower")
+#         lr_upper = lr.get("lr_upper")
+# 
+#         if None in (lr_mid, lr_lower, lr_upper):
+#             logging.warning(f"Отсутствуют параметры регрессионного канала для {signal['symbol']}. Вход отменён.")
+#             return False
+# 
+#         if direction == "long":
+#             width = lr_mid - lr_lower
+#             zone_inside = width / Decimal("2")
+#             zone_outside = width / Decimal("4")
+# 
+#             lower_bound = lr_lower - zone_outside
+#             upper_bound = lr_lower + zone_inside
+# 
+#             if not (lower_bound <= current_price <= upper_bound):
+#                 logging.warning(f"Цена {current_price} вне допустимой зоны LONG: внутренняя +1/3, внешняя -1/4. Диапазон: [{lower_bound}, {upper_bound}]. Вход отменён.")
+#                 return False
+# 
+#         elif direction == "short":
+#             width = lr_upper - lr_mid
+#             zone_inside = width / Decimal("2")
+#             zone_outside = width / Decimal("4")
+# 
+#             lower_bound = lr_upper - zone_inside
+#             upper_bound = lr_upper + zone_outside
+# 
+#             if not (lower_bound <= current_price <= upper_bound):
+#                 logging.warning(f"Цена {current_price} вне допустимой зоны SHORT: внутренняя -1/3, внешняя +1/4. Диапазон: [{lower_bound}, {upper_bound}]. Вход отменён.")
+#                 return False
 
-        if None in (lr_mid, lr_lower, lr_upper):
-            logging.warning(f"Отсутствуют параметры регрессионного канала для {signal['symbol']}. Вход отменён.")
-            return False
-
-        if direction == "long":
-            width = lr_mid - lr_lower
-            zone_inside = width / Decimal("2")
-            zone_outside = width / Decimal("4")
-
-            lower_bound = lr_lower - zone_outside
-            upper_bound = lr_lower + zone_inside
-
-            if not (lower_bound <= current_price <= upper_bound):
-                logging.warning(f"Цена {current_price} вне допустимой зоны LONG: внутренняя +1/3, внешняя -1/4. Диапазон: [{lower_bound}, {upper_bound}]. Вход отменён.")
-                return False
-
-        elif direction == "short":
-            width = lr_upper - lr_mid
-            zone_inside = width / Decimal("2")
-            zone_outside = width / Decimal("4")
-
-            lower_bound = lr_upper - zone_inside
-            upper_bound = lr_upper + zone_outside
-
-            if not (lower_bound <= current_price <= upper_bound):
-                logging.warning(f"Цена {current_price} вне допустимой зоны SHORT: внутренняя -1/3, внешняя +1/4. Диапазон: [{lower_bound}, {upper_bound}]. Вход отменён.")
-                return False
-
-        logging.info("Специфичные проверки (EMA/ATR + lr_angle) пройдены успешно.")
+        if self.debug:
+            logging.info("Специфичные проверки (EMA/ATR + lr_angle) пройдены успешно.")
         return True
         
     # Метод открытия виртуальной позиции (с учётом комиссий)
@@ -187,7 +202,8 @@ class Strategy5_4:
         position_size = await self.interface.calculate_position_size(params, signal['symbol'], current_price)
 
         if not position_size:
-            logging.warning("Ошибка расчёта размера позиции.")
+            if self.debug:
+                logging.warning("Ошибка расчёта размера позиции.")
             await self.interface.log_strategy_action(
                 log_id=signal['log_id'],
                 strategy_id=params['id'],
@@ -196,10 +212,11 @@ class Strategy5_4:
             )
             return
 
-        logging.info(
-            f"Расчётный размер позиции для {signal['symbol']}: {position_size} по цене {current_price} USDT "
-            f"(общая сумма {Decimal(position_size) * Decimal(current_price)} USDT)"
-        )
+        if self.debug:
+            logging.info(
+                f"Расчётный размер позиции для {signal['symbol']}: {position_size} по цене {current_price} USDT "
+                f"(общая сумма {Decimal(position_size) * Decimal(current_price)} USDT)"
+            )
 
         position_id = await self.interface.open_virtual_position(
             strategy_id=params['id'],
@@ -213,7 +230,8 @@ class Strategy5_4:
         if position_id:
             entry_price = await self.interface.get_entry_price(position_id)
             
-            logging.info(f"Позиция успешно открыта с ID={position_id}")
+            if self.debug:
+                logging.info(f"Позиция успешно открыта с ID={position_id}")
 
             # Логируем успешное открытие позиции
             await self.interface.log_strategy_action(
@@ -271,8 +289,8 @@ class Strategy5_4:
 
         tp_levels = [
             {"level": 1, "multiplier": Decimal('2.0'), "quantity_pct": Decimal('0.5')},
-            {"level": 2, "multiplier": Decimal('3.0'), "quantity_pct": Decimal('0.3')},
-            {"level": 3, "multiplier": Decimal('4.0'), "quantity_pct": Decimal('0.2')},
+            {"level": 2, "multiplier": Decimal('3.0'), "quantity_pct": Decimal('0.5')},
+#           {"level": 3, "multiplier": Decimal('4.0'), "quantity_pct": Decimal('0.2')},
         ]
 
         targets = []
@@ -300,13 +318,41 @@ class Strategy5_4:
         })
 
         return targets
+#     # Универсальный метод определения SL после срабатывания TP уровня
+#     def get_sl_after_tp(self, level, entry_price, atr, direction):
+#         """
+#         Возвращает цену нового SL после срабатывания TP определённого уровня.
+#         - Если вернуть None — SL не будет создан.
+#         - Параметры:
+#             - level: уровень TP (1, 2, 3, ...)
+#             - entry_price: цена входа в позицию
+#             - atr: текущее значение ATR (или None)
+#             - direction: 'long' или 'short'
+#         """
+#         if level == 1:
+#             # После TP1: SL на entry_price
+#             return entry_price
+# 
+#         elif level == 2 and atr is not None:
+#             # После TP2: SL = entry ± 1 ATR
+#             if direction == "long":
+#                 return entry_price + atr
+#             else:
+#                 return entry_price - atr
+# 
+#         elif level == 3:
+#             # После TP3 — ничего не делать, позиция закроется полностью
+#             return None
+# 
+#         По умолчанию — не ставим SL
+#         return None        
     # Универсальный метод определения SL после срабатывания TP уровня
     def get_sl_after_tp(self, level, entry_price, atr, direction):
         """
         Возвращает цену нового SL после срабатывания TP определённого уровня.
         - Если вернуть None — SL не будет создан.
         - Параметры:
-            - level: уровень TP (1, 2, 3, ...)
+            - level: уровень TP (1, 2)
             - entry_price: цена входа в позицию
             - atr: текущее значение ATR (или None)
             - direction: 'long' или 'short'
@@ -315,16 +361,9 @@ class Strategy5_4:
             # После TP1: SL на entry_price
             return entry_price
 
-        elif level == 2 and atr is not None:
-            # После TP2: SL = entry ± 1 ATR
-            if direction == "long":
-                return entry_price + atr
-            else:
-                return entry_price - atr
-
-        elif level == 3:
-            # После TP3 — ничего не делать, позиция закроется полностью
+        elif level == 2:
+            # После TP2: позиция будет полностью закрыта — SL не нужен
             return None
 
         # По умолчанию — не ставим SL
-        return None        
+        return None
