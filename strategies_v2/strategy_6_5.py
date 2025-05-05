@@ -149,12 +149,12 @@ class Strategy6_5:
                 logging.warning(f"Не удалось получить lr_angle для {signal['symbol']}. Вход отменён.")
             return False
 
-        if direction == "long" and lr_angle <= Decimal("0.005"):
+        if direction == "long" and lr_angle <= Decimal("0.01"):
             if self.debug:
                 logging.warning(f"lr_angle = {lr_angle}, слишком плоский или нисходящий для LONG. Вход отменён.")
             return False
 
-        if direction == "short" and lr_angle >= Decimal("-0.005"):
+        if direction == "short" and lr_angle >= Decimal("-0.01"):
             if self.debug:
                 logging.warning(f"lr_angle = {lr_angle}, слишком плоский или восходящий для SHORT. Вход отменён.")
             return False

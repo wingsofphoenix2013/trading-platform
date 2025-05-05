@@ -40,15 +40,15 @@ strategies = {
     "test-5": Strategy5(strategy_interface, debug=debug),
     "test-5_1": Strategy5_1(strategy_interface, debug=debug),
     "test-5_2": Strategy5_2(strategy_interface, debug=debug),
-    "test-5_3": Strategy5_2(strategy_interface, debug=debug),
-    "test-5_4": Strategy5_2(strategy_interface, debug=debug),
-    "test-5_5": Strategy5_2(strategy_interface, debug=debug),
+    "test-5_3": Strategy5_3(strategy_interface, debug=debug),
+    "test-5_4": Strategy5_4(strategy_interface, debug=debug),
+    "test-5_5": Strategy5_5(strategy_interface, debug=debug),
     "test-6": Strategy6(strategy_interface, debug=debug),
     "test-6_1": Strategy6_1(strategy_interface, debug=debug),
     "test-6_2": Strategy6_2(strategy_interface, debug=debug),
-    "test-6_3": Strategy6_2(strategy_interface, debug=debug),
-    "test-6_4": Strategy6_2(strategy_interface, debug=debug),
-    "test-6_5": Strategy6_2(strategy_interface, debug=debug),
+    "test-6_3": Strategy6_3(strategy_interface, debug=debug),
+    "test-6_4": Strategy6_4(strategy_interface, debug=debug),
+    "test-6_5": Strategy6_5(strategy_interface, debug=debug),
 }
 
 # Настройка логирования с немедленным flush в stdout
