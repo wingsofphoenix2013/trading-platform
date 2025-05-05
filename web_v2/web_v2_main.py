@@ -5,6 +5,7 @@ from datetime import datetime
 import asyncpg
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 import redis.asyncio as redis
 
@@ -117,4 +118,60 @@ async def strategy_new(request: Request):
             "tickers": tickers
         })
     finally:
-        await conn.close()      
+        await conn.close()
+# 🔸 Обработка формы создания стратегии (POST /strategies/new)
+@app.post("/strategies/new")
+async def create_strategy(request: Request):
+    form = await request.form()
+    conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
+    try:
+        # 🔹 Парсинг основных полей
+        name = form.get("name")
+        description = form.get("description")
+        deposit = float(form.get("deposit") or 0)
+        position_limit = float(form.get("position_limit") or 0)
+        max_risk = int(form.get("max_risk") or 0)
+        leverage = float(form.get("leverage") or 1)
+        timeframe = form.get("timeframe")
+        use_stoploss = "use_stoploss" in form
+        sl_type = form.get("sl_type")
+        sl_value = float(form.get("sl_value") or 0)
+        reverse = "reverse" in form
+        use_all_tickers = "use_all_tickers" in form
+        action_signal_id = int(form.get("action_signal_id") or 0)
+
+        # 🔹 Вставка стратегии
+        result = await conn.fetchrow("""
+            INSERT INTO strategies_v2 (
+              name, description, deposit, position_limit, max_risk, leverage,
+              use_stoploss, sl_type, sl_value, reverse, use_all_tickers,
+              timeframe, allow_open, enabled, archived
+            )
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, true, false, false)
+            RETURNING id
+        """, name, description, deposit, position_limit, max_risk, leverage,
+             use_stoploss, sl_type, sl_value, reverse, use_all_tickers, timeframe)
+        strategy_id = result["id"]
+
+        # 🔹 Сохранение сигнала
+        if action_signal_id > 0:
+            await conn.execute("""
+                INSERT INTO strategy_signals_v2 (strategy_id, signal_id, role)
+                VALUES ($1, $2, 'action')
+            """, strategy_id, action_signal_id)
+
+        # 🔹 Привязка тикеров при use_all_tickers = false
+        if not use_all_tickers:
+            for key in form:
+                if key.startswith("ticker_") and form.get(key) == "on":
+                    symbol = key.replace("ticker_", "")
+                    ticker = await conn.fetchrow("SELECT id FROM tickers WHERE symbol = $1", symbol)
+                    if ticker:
+                        await conn.execute("""
+                            INSERT INTO strategy_tickers_v2 (strategy_id, ticker_id, enabled)
+                            VALUES ($1, $2, true)
+                        """, strategy_id, ticker["id"])
+
+        return RedirectResponse(url="/strategies", status_code=302)
+    finally:
+        await conn.close()              
