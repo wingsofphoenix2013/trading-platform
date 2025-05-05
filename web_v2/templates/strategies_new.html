@@ -7,55 +7,64 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://unpkg.com/lucide-static@latest/icons.css" rel="stylesheet">
     <script>
-      function generateTPRows() {
-        const count = parseInt(document.getElementById('tp_count').value);
-        const container = document.getElementById('tp_table');
-        container.innerHTML = '';
-        for (let i = 1; i <= count; i++) {
-          container.innerHTML += `
-            <tr class="border-t">
-              <td class="px-3 py-2">${i}</td>
-              <td><input type="number" name="volume_${i}" class="w-full px-2 py-1 border rounded" placeholder="%" /></td>
-              <td>
-                <select name="tp_type_${i}" class="w-full px-2 py-1 border rounded" onchange="toggleTPValueInput(${i}, this.value)">
-                  <option value="">Выбор...</option>
-                  <option value="percent">percent</option>
-                  <option value="atr">atr</option>
-                  <option value="fixed">fixed</option>
-                  <option value="external_signal">external_signal</option>
-                </select>
-              </td>
-              <td id="tp_value_cell_${i}"></td>
-            </tr>`;
-        }
-      }
+  function generateTPRows() {
+    const count = parseInt(document.getElementById('tp_count').value);
+    const container = document.getElementById('tp_table');
+    document.getElementById("tp_count_hidden").value = count;  // 🔹 фиксируем количество уровней
+    container.innerHTML = '';
+    for (let i = 1; i <= count; i++) {
+      container.innerHTML += `
+        <tr class="border-t">
+          <td class="px-3 py-2">${i}</td>
+          <td>
+            <input type="number" name="volume_${i}" class="w-full px-2 py-1 border rounded" placeholder="%" />
+          </td>
+          <td>
+            <select name="tp_type_${i}" class="w-full px-2 py-1 border rounded" onchange="toggleTPValueInput(${i}, this.value)">
+              <option value="">Выбор...</option>
+              <option value="percent">percent</option>
+              <option value="atr">atr</option>
+              <option value="fixed">fixed</option>
+              <option value="external_signal">external_signal</option>
+            </select>
+          </td>
+          <td id="tp_value_cell_${i}"></td>
+        </tr>`;
+    }
+  }
 
-      function toggleTPValueInput(level, type) {
-        const cell = document.getElementById(`tp_value_cell_${level}`);
-        if (type === 'external_signal') {
-          cell.innerHTML = `<select class='w-full px-2 py-1 border rounded'><option>Выбор...</option><option>RSI Exit [enabled]</option><option>Trend Reversal [disabled]</option></select>`;
-        } else if (['percent', 'atr', 'fixed'].includes(type)) {
-          cell.innerHTML = `<input type='number' class='w-full px-2 py-1 border rounded' placeholder='Значение' />`;
-        } else {
-          cell.innerHTML = '';
-        }
-      }
+  function toggleTPValueInput(level, type) {
+    const cell = document.getElementById(`tp_value_cell_${level}`);
+    if (type === 'external_signal') {
+      cell.innerHTML = `
+        <select name="tp_value_${level}" class="w-full px-2 py-1 border rounded">
+          <option>Выбор...</option>
+          <option>RSI Exit [enabled]</option>
+          <option>Trend Reversal [disabled]</option>
+        </select>`;
+    } else if (['percent', 'atr', 'fixed'].includes(type)) {
+      cell.innerHTML = `
+        <input name="tp_value_${level}" type="number" class="w-full px-2 py-1 border rounded" placeholder="Значение" />`;
+    } else {
+      cell.innerHTML = '';
+    }
+  }
 
-      function handleTickerToggle() {
-        const checkboxes = document.querySelectorAll('.ticker-checkbox');
-        const allTickersCheckbox = document.getElementById('use_all_tickers');
-        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-        allTickersCheckbox.disabled = !allChecked;
-        allTickersCheckbox.checked = allChecked;
-      }
+  function handleTickerToggle() {
+    const checkboxes = document.querySelectorAll('.ticker-checkbox');
+    const allTickersCheckbox = document.getElementById('use_all_tickers');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    allTickersCheckbox.disabled = !allChecked;
+    allTickersCheckbox.checked = allChecked;
+  }
 
-      function handleAllTickersToggle() {
-        const state = document.getElementById('use_all_tickers').checked;
-        const checkboxes = document.querySelectorAll('.ticker-checkbox');
-        checkboxes.forEach(cb => cb.checked = state);
-        document.getElementById('use_all_tickers').disabled = state;
-      }
-    </script>
+  function handleAllTickersToggle() {
+    const state = document.getElementById('use_all_tickers').checked;
+    const checkboxes = document.querySelectorAll('.ticker-checkbox');
+    checkboxes.forEach(cb => cb.checked = state);
+    document.getElementById('use_all_tickers').disabled = state;
+  }
+</script>
     <style>
       body {
         background: linear-gradient(to bottom right, #e0f2ff, #fde2e4);
@@ -164,6 +173,9 @@
         использовать все
       </label>
     </h3>
+
+    <!-- 🔹 Скрытое поле для количества TP -->
+    <input type="hidden" id="tp_count_hidden" name="tp_count" />
     <table class="w-full table-auto text-sm text-left border rounded">
       <thead class="bg-slate-100">
         <tr>
