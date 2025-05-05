@@ -219,3 +219,16 @@ async def create_strategy(request: Request):
         return RedirectResponse(url="/strategies", status_code=302)
     finally:
         await conn.close()
+# 🔸 Проверка уникальности названия стратегии
+@app.get("/strategies/check_name")
+async def check_strategy_name(name: str):
+    conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
+    try:
+        exists = await conn.fetchval("""
+            SELECT EXISTS (
+              SELECT 1 FROM strategies_v2 WHERE LOWER(name) = LOWER($1)
+            )
+        """, name)
+        return {"exists": exists}
+    finally:
+        await conn.close()        

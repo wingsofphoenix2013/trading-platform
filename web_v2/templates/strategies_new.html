@@ -225,139 +225,130 @@
     const form = document.querySelector("form");
 
     form.addEventListener("submit", function (e) {
-      // 🔹 Название
+      e.preventDefault(); // временно останавливаем отправку
+
+      // 🔹 Проверка названия
       const name = document.getElementById("strategy_name")?.value.trim();
       const nameRegex = /^[A-Za-z_]+$/;
       if (!name) {
-        e.preventDefault();
         alert("Поле 'Название' обязательно для заполнения.");
         return;
       }
       if (!nameRegex.test(name)) {
-        e.preventDefault();
         alert("Название может содержать только латинские буквы и символ подчёркивания (_).");
         return;
       }
 
-      // 🔹 Депозит
-      const deposit = document.getElementById("deposit")?.value.trim();
-      if (!deposit || !/^\d+$/.test(deposit)) {
-        e.preventDefault();
-        alert("Поле 'Депозит' обязательно и должно быть целым числом.");
-        return;
-      }
-
-      // 🔹 Макс. размер позиции
-      const positionLimit = document.getElementById("position_limit")?.value.trim();
-      if (!positionLimit || !/^\d+$/.test(positionLimit)) {
-        e.preventDefault();
-        alert("Поле 'Максимальный размер позиции' обязательно и должно быть целым числом.");
-        return;
-      }
-
-      // 🔹 Макс. риск
-      const maxRisk = document.getElementById("max_risk")?.value.trim();
-      if (!maxRisk || !/^\d+$/.test(maxRisk)) {
-        e.preventDefault();
-        alert("Поле 'Максимальный риск' обязательно и должно быть целым числом.");
-        return;
-      }
-      if (parseInt(maxRisk, 10) > 10) {
-        e.preventDefault();
-        alert("Максимальный риск не должен превышать 10%.");
-        return;
-      }
-
-      // 🔹 Плечо
-      const leverage = document.getElementById("leverage")?.value.trim();
-      if (!leverage || !/^\d+$/.test(leverage)) {
-        e.preventDefault();
-        alert("Поле 'Плечо' обязательно и должно быть целым числом.");
-        return;
-      }
-      if (parseInt(leverage, 10) > 50) {
-        e.preventDefault();
-        alert("Максимальное плечо не должно превышать 50.");
-        return;
-      }
-
-      // 🔹 Управляющий сигнал
-      const selectedSignal = document.getElementById("action_signal_id")?.value;
-      if (!selectedSignal) {
-        e.preventDefault();
-        alert("Необходимо выбрать управляющий сигнал.");
-        return;
-      }
-
-      // 🔹 Таймфрейм
-      const selectedTimeframe = document.getElementById("timeframe")?.value;
-      if (!selectedTimeframe) {
-        e.preventDefault();
-        alert("Необходимо выбрать таймфрейм.");
-        return;
-      }
-
-      // 🔹 Тип SL
-      const slType = document.getElementById("sl_type")?.value;
-      if (!slType) {
-        e.preventDefault();
-        alert("Необходимо выбрать тип SL.");
-        return;
-      }
-
-      // 🔹 Значение SL
-      const slValue = document.getElementById("sl_value")?.value.trim();
-      if (!slValue || !/^\d+(\.\d+)?$/.test(slValue)) {
-        e.preventDefault();
-        alert("Поле 'Значение SL' должно быть числом (например, 0.3).");
-        return;
-      }
-
-      // 🔹 TP уровни
-      const tpCount = parseInt(document.getElementById("tp_count_hidden")?.value || "0");
-      let totalVolume = 0;
-
-      for (let i = 1; i <= tpCount; i++) {
-        const tpType = document.querySelector(`[name="tp_type_${i}"]`)?.value;
-        const volumeStr = document.querySelector(`[name="volume_${i}"]`)?.value.trim();
-        const valueStr = document.querySelector(`[name="tp_value_${i}"]`)?.value.trim();
-
-        // 🔸 Проверка объёма
-        if (!volumeStr || !/^\d+(\.\d+)?$/.test(volumeStr)) {
-          e.preventDefault();
-          alert(`TP уровень ${i}: поле 'Объём' должно быть числом.`);
-          return;
-        }
-
-        totalVolume += parseFloat(volumeStr);
-
-        // 🔸 Проверка значения TP (если не external_signal)
-        if (tpType !== "external_signal") {
-          if (!valueStr || !/^\d+(\.\d+)?$/.test(valueStr)) {
-            e.preventDefault();
-            alert(`TP уровень ${i}: значение должно быть числом (например, 0.3).`);
+      // 🔹 Асинхронная проверка уникальности
+      fetch(`/strategies/check_name?name=${encodeURIComponent(name)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.exists) {
+            alert("Стратегия с таким названием уже существует.");
             return;
           }
-        }
-      }
 
-      if (Math.round(totalVolume) !== 100) {
-        e.preventDefault();
-        alert(`Сумма объёмов всех TP уровней должна равняться 100. Сейчас: ${totalVolume}`);
-        return;
-      }
+          // ✅ Все остальные проверки (как раньше)
+          const deposit = document.getElementById("deposit")?.value.trim();
+          if (!deposit || !/^\d+$/.test(deposit)) {
+            alert("Поле 'Депозит' обязательно и должно быть целым числом.");
+            return;
+          }
 
-      // 🔹 Тикеры
-      const useAllTickers = document.getElementById("use_all_tickers")?.checked;
-      if (!useAllTickers) {
-        const checkboxes = document.querySelectorAll(".ticker-checkbox");
-        const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
-        if (!anyChecked) {
-          e.preventDefault();
-          alert("Необходимо выбрать хотя бы один тикер.");
-          return;
-        }
-      }
+          const positionLimit = document.getElementById("position_limit")?.value.trim();
+          if (!positionLimit || !/^\d+$/.test(positionLimit)) {
+            alert("Поле 'Макс. размер позиции' обязательно и должно быть целым числом.");
+            return;
+          }
+
+          const maxRisk = document.getElementById("max_risk")?.value.trim();
+          if (!maxRisk || !/^\d+$/.test(maxRisk)) {
+            alert("Поле 'Максимальный риск' обязательно и должно быть целым числом.");
+            return;
+          }
+          if (parseInt(maxRisk, 10) > 10) {
+            alert("Максимальный риск не должен превышать 10%.");
+            return;
+          }
+
+          const leverage = document.getElementById("leverage")?.value.trim();
+          if (!leverage || !/^\d+$/.test(leverage)) {
+            alert("Поле 'Плечо' обязательно и должно быть целым числом.");
+            return;
+          }
+          if (parseInt(leverage, 10) > 50) {
+            alert("Максимальное плечо не должно превышать 50.");
+            return;
+          }
+
+          const selectedSignal = document.getElementById("action_signal_id")?.value;
+          if (!selectedSignal) {
+            alert("Необходимо выбрать управляющий сигнал.");
+            return;
+          }
+
+          const selectedTimeframe = document.getElementById("timeframe")?.value;
+          if (!selectedTimeframe) {
+            alert("Необходимо выбрать таймфрейм.");
+            return;
+          }
+
+          const slType = document.getElementById("sl_type")?.value;
+          if (!slType) {
+            alert("Необходимо выбрать тип SL.");
+            return;
+          }
+
+          const slValue = document.getElementById("sl_value")?.value.trim();
+          if (!slValue || !/^\d+(\.\d+)?$/.test(slValue)) {
+            alert("Поле 'Значение SL' должно быть числом (например, 0.3).");
+            return;
+          }
+
+          const tpCount = parseInt(document.getElementById("tp_count_hidden")?.value || "0");
+          let totalVolume = 0;
+
+          for (let i = 1; i <= tpCount; i++) {
+            const tpType = document.querySelector(`[name="tp_type_${i}"]`)?.value;
+            const volumeStr = document.querySelector(`[name="volume_${i}"]`)?.value.trim();
+            const valueStr = document.querySelector(`[name="tp_value_${i}"]`)?.value.trim();
+
+            if (!volumeStr || !/^\d+(\.\d+)?$/.test(volumeStr)) {
+              alert(`TP уровень ${i}: поле 'Объём' должно быть числом.`);
+              return;
+            }
+
+            totalVolume += parseFloat(volumeStr);
+
+            if (tpType !== "external_signal") {
+              if (!valueStr || !/^\d+(\.\d+)?$/.test(valueStr)) {
+                alert(`TP уровень ${i}: значение должно быть числом (например, 0.3).`);
+                return;
+              }
+            }
+          }
+
+          if (Math.round(totalVolume) !== 100) {
+            alert(`Сумма объёмов всех TP уровней должна равняться 100. Сейчас: ${totalVolume}`);
+            return;
+          }
+
+          const useAllTickers = document.getElementById("use_all_tickers")?.checked;
+          if (!useAllTickers) {
+            const checkboxes = document.querySelectorAll(".ticker-checkbox");
+            const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+            if (!anyChecked) {
+              alert("Необходимо выбрать хотя бы один тикер.");
+              return;
+            }
+          }
+
+          // ✅ Если всё прошло — отправляем форму
+          form.submit();
+        })
+        .catch(() => {
+          alert("Ошибка при проверке уникальности названия.");
+        });
     });
   });
 </script>
