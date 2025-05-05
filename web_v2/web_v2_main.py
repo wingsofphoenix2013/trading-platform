@@ -98,6 +98,7 @@ async def strategies(request: Request):
 async def strategy_new(request: Request):
     conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
     try:
+        # 🔹 Сигналы типа action — для управляющего сигнала
         signals = await conn.fetch("""
             SELECT id, name, signal_type, enabled
             FROM signals_v2
@@ -105,6 +106,15 @@ async def strategy_new(request: Request):
             ORDER BY name
         """)
 
+        # 🔹 Сигналы типа exit — для TP уровней
+        exit_signals = await conn.fetch("""
+            SELECT id, name, enabled
+            FROM signals_v2
+            WHERE signal_type = 'exit'
+            ORDER BY name
+        """)
+
+        # 🔹 Активные тикеры с разрешением на торговлю
         tickers = await conn.fetch("""
             SELECT symbol, status, tradepermission
             FROM tickers
@@ -115,7 +125,9 @@ async def strategy_new(request: Request):
         return templates.TemplateResponse("strategies_new.html", {
             "request": request,
             "signals": signals,
-            "tickers": tickers
+            "exit_signals": exit_signals,
+            "tickers": tickers,
+            "reverse": False  # reverse по умолчанию отключён
         })
     finally:
         await conn.close()
@@ -181,8 +193,15 @@ async def create_strategy(request: Request):
 
             # 🔸 Логика значения TP
             if tp_type == "external_signal":
-                tp_value = None
-                trigger_signal_id = int(tp_value_raw) if tp_value_raw else None
+                trigger_signal_raw = form.get(f"tp_value_{i}")
+                if trigger_signal_raw == "__USE_ACTION_SIGNAL__":
+                    if not reverse:
+                        raise HTTPException(status_code=400, detail="Reverse = false: управляющий сигнал нельзя использовать как TP.")
+                    trigger_signal_id = action_signal_id
+                    tp_value = None
+                else:
+                    trigger_signal_id = int(trigger_signal_raw) if trigger_signal_raw else None
+                    tp_value = None
                 tp_trigger_type = "signal"
             else:
                 tp_value = float(tp_value_raw) if tp_value_raw else None

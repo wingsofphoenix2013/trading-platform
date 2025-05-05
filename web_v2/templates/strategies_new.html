@@ -36,13 +36,24 @@
 function toggleTPValueInput(level, type) {
   const cell = document.getElementById(`tp_value_cell_${level}`);
   if (type === 'external_signal') {
+    const isReverse =
+      document.getElementById("reverse_flag")?.value === "true";
+
+    let options = '<option value="">Выбор...</option>';
+
+    if (isReverse) {
+      options += '<option value="__USE_ACTION_SIGNAL__">Управляющий сигнал</option>';
+    }
+
+    const template = document.getElementById("exit-signal-options");
+    if (template) {
+      options += template.innerHTML;
+    }
+
     cell.innerHTML = `
-const optionsTemplate = document.getElementById("exit-signal-options").innerHTML;
-cell.innerHTML = `
-  <select name="tp_value_${level}" class="w-full px-2 py-1 border rounded">
-    <option value="">Выбор...</option>
-    ${optionsTemplate}
-  </select>`;
+      <select name="tp_value_${level}" class="w-full px-2 py-1 border rounded">
+        ${options}
+      </select>`;
   } else if (['percent', 'atr', 'fixed'].includes(type)) {
     cell.innerHTML = `
       <input name="tp_value_${level}" type="number" step="any" class="w-full px-2 py-1 border rounded" placeholder="Значение" />`;
@@ -121,6 +132,7 @@ cell.innerHTML = `
       <input name="reverse" type="checkbox" />
       <span>Разрешить реверсы (reverse)</span>
     </label>
+    <input type="hidden" id="reverse_flag" value="{{ 'true' if reverse else 'false' }}">
   </section>
 </div>
 <br>
