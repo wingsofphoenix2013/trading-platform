@@ -287,12 +287,12 @@ class StrategyInterface:
                     await conn.execute("""
                         INSERT INTO position_targets (
                             position_id, type, level, price, quantity,
-                            hit, canceled, tp_trigger_type, trigger_signal_id
+                            hit, canceled
                         ) VALUES (
                             $1, 'tp', $2, $3, $4,
-                            false, false, $5, $6
+                            false, false
                         )
-                    """, position_id, level, tp_price, qty_tp, tp_trigger_type, trigger_signal_id)
+                    """, position_id, level, tp_price, qty_tp)
 
                 await conn.close()
                 logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
