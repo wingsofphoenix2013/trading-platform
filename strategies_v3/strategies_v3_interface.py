@@ -204,7 +204,7 @@ class StrategyInterface:
             "entry_price": entry_price,
             "stop_loss_price": stop_loss_price
         }
-    # 🔸 Открытие позиции в базе: запись в positions_v2
+    # 🔸 Открытие позиции в базе: запись в positions_v2 + генерация TP
     async def open_position(self, task: dict, position_data: dict) -> int | None:
         strategy_name = task.get("strategy")
         log_id = int(task.get("log_id"))
@@ -222,7 +222,7 @@ class StrategyInterface:
             notional = position_data["notional_value"]
             planned_risk = position_data["planned_risk"]
 
-            # Комиссия биржи 0.01% сразу как убыток
+            # Комиссия 0.1% сразу как убыток
             commission = (notional * Decimal("0.001")).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
             pnl = -commission
 
@@ -243,64 +243,66 @@ class StrategyInterface:
 
             position_id = row["id"]
             logging.info(f"📌 Позиция создана: ID={position_id}, {symbol}, {direction}, qty={quantity}, pnl={pnl}")
-            
-        # 🔹 Генерация TP-уровней из strategy["tp_levels"]
-        try:
-            strategy = self.strategies_cache[strategy_id]
-            tp_levels = strategy.get("tp_levels", [])
-            conn = await asyncpg.connect(self.database_url)
 
-            for tp in tp_levels:
-                level = tp["level"]
-                tp_type = tp["tp_type"]
-                tp_value = tp["tp_value"]
-                volume_percent = tp["volume_percent"]
-                tp_trigger_type = tp["tp_trigger_type"]
-                trigger_signal_id = tp.get("trigger_signal_id")
+            # 🔹 Генерация TP-уровней
+            try:
+                strategy = self.strategies_cache[strategy_id]
+                tp_levels = strategy.get("tp_levels", [])
+                ticker = self.tickers_storage.get(symbol)
+                conn = await asyncpg.connect(self.database_url)
 
-                if volume_percent <= 0:
-                    continue
+                for tp in tp_levels:
+                    level = tp["level"]
+                    tp_type = tp["tp_type"]
+                    tp_value = tp["tp_value"]
+                    volume_percent = tp["volume_percent"]
+                    tp_trigger_type = tp["tp_trigger_type"]
+                    trigger_signal_id = tp.get("trigger_signal_id")
 
-                # Расчёт количества на TP
-                qty_tp = (quantity * Decimal(volume_percent) / Decimal("100")).quantize(
-                    Decimal(f"1e-{ticker['precision_qty']}"), rounding=ROUND_DOWN
-                )
+                    if volume_percent <= 0:
+                        continue
 
-                # Расчёт цены TP
-                tp_price = None
-                if tp_type == "percent":
-                    multiplier = Decimal("1") + (tp_value / Decimal("100")) if direction == "long" else Decimal("1") - (tp_value / Decimal("100"))
-                    tp_price = (entry_price * multiplier).quantize(Decimal(f"1e-{ticker['precision_price']}"), rounding=ROUND_DOWN)
-                elif tp_type == "atr":
-                    atr = await self.get_indicator_value(symbol, strategy["timeframe"], "ATR", "atr")
-                    if atr is not None:
-                        delta = atr * tp_value
-                        tp_price = (entry_price + delta if direction == "long" else entry_price - delta).quantize(
-                            Decimal(f"1e-{ticker['precision_price']}"), rounding=ROUND_DOWN)
-                elif tp_type == "fixed":
-                    tp_price = Decimal(tp_value).quantize(Decimal(f"1e-{ticker['precision_price']}"), rounding=ROUND_DOWN)
-                elif tp_type == "external_signal":
-                    tp_price = None  # Оставляем NULL
-
-                # Вставка в position_targets
-                await conn.execute("""
-                    INSERT INTO position_targets (
-                        position_id, type, level, price, quantity,
-                        hit, canceled, tp_trigger_type, trigger_signal_id
-                    ) VALUES (
-                        $1, 'tp', $2, $3, $4,
-                        false, false, $5, $6
+                    # Расчёт объёма
+                    qty_tp = (quantity * Decimal(volume_percent) / Decimal("100")).quantize(
+                        Decimal(f"1e-{ticker['precision_qty']}"), rounding=ROUND_DOWN
                     )
-                """, position_id, level, tp_price, qty_tp, tp_trigger_type, trigger_signal_id)
 
-            await conn.close()
-            logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
+                    # Расчёт цены
+                    tp_price = None
+                    if tp_type == "percent":
+                        multiplier = Decimal("1") + (tp_value / Decimal("100")) if direction == "long" else Decimal("1") - (tp_value / Decimal("100"))
+                        tp_price = (entry_price * multiplier).quantize(Decimal(f"1e-{ticker['precision_price']}"), rounding=ROUND_DOWN)
+                    elif tp_type == "atr":
+                        atr = await self.get_indicator_value(symbol, strategy["timeframe"], "ATR", "atr")
+                        if atr is not None:
+                            delta = atr * tp_value
+                            tp_price = (entry_price + delta if direction == "long" else entry_price - delta).quantize(
+                                Decimal(f"1e-{ticker['precision_price']}"), rounding=ROUND_DOWN)
+                    elif tp_type == "fixed":
+                        tp_price = Decimal(tp_value).quantize(Decimal(f"1e-{ticker['precision_price']}"), rounding=ROUND_DOWN)
+                    elif tp_type == "external_signal":
+                        tp_price = None
 
-        except Exception as e:
-            logging.error(f"❌ Ошибка при генерации TP-уровней: {e}")            
-            
+                    # Вставка TP
+                    await conn.execute("""
+                        INSERT INTO position_targets (
+                            position_id, type, level, price, quantity,
+                            hit, canceled, tp_trigger_type, trigger_signal_id
+                        ) VALUES (
+                            $1, 'tp', $2, $3, $4,
+                            false, false, $5, $6
+                        )
+                    """, position_id, level, tp_price, qty_tp, tp_trigger_type, trigger_signal_id)
+
+                await conn.close()
+                logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
+
+            except Exception as e:
+                logging.error(f"❌ Ошибка при генерации TP-уровней: {e}")
+                return position_id  # Позиция уже создана
+
             return position_id
 
         except Exception as e:
             logging.error(f"❌ Ошибка при создании позиции: {e}")
-            return None        
+            return None
