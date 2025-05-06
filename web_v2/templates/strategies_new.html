@@ -32,11 +32,14 @@
           <td id="tp_value_cell_${i}"></td>
         </tr>`;
     }
+
+    generateSLRows(count);
   }
 
   function toggleTPValueInput(level, type) {
     const cell = document.getElementById(`tp_value_cell_${level}`);
-    
+    if (!cell) return;
+
     if (type === 'external_signal') {
       const isReverse = document.querySelector('input[name="reverse"]')?.checked === true;
       let options = '<option value="">Выбор...</option>';
@@ -54,11 +57,107 @@
         <select name="tp_value_${level}" class="w-full px-2 py-1 border rounded">
           ${options}
         </select>`;
-    } else if (['percent', 'atr', 'fixed'].includes(type)) {
+    } else if (["percent", "atr", "fixed"].includes(type)) {
       cell.innerHTML = `
         <input name="tp_value_${level}" type="number" step="any" class="w-full px-2 py-1 border rounded" placeholder="Значение" />`;
     } else {
       cell.innerHTML = '';
+    }
+  }
+
+  function generateSLRows(tpCount) {
+    const slBlock = document.getElementById("sl_levels_block");
+    slBlock.innerHTML = "";
+
+    if (tpCount < 2) return;
+
+    let table = `
+      <h4 class="text-lg font-semibold text-blue-800 mt-6">Поведение SL после срабатывания TP</h4>
+      <table class="w-full table-auto text-sm text-left border rounded mt-4">
+        <thead class="bg-slate-100">
+          <tr>
+            <th class="px-3 py-2">TP уровень</th>
+            <th class="px-3 py-2">Режим SL</th>
+            <th class="px-3 py-2">Значение SL</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+    for (let i = 1; i <= tpCount; i++) {
+      if (i === tpCount) {
+        table += `
+          <tr class="border-t">
+            <td class="px-3 py-2">${i}</td>
+            <td colspan="2" class="px-3 py-2 text-slate-500 italic">SL не меняется — позиция закрывается</td>
+          </tr>`;
+      } else {
+        table += `
+          <tr class="border-t">
+            <td class="px-3 py-2">${i}</td>
+            <td>
+              <select name="sl_mode_${i}" id="sl_mode_${i}" class="w-full px-2 py-1 border rounded" onchange="toggleSLValueInput(${i}, this.value)">
+                <option value="none">none</option>
+                <option value="entry">entry</option>
+                <option value="atr">atr</option>
+                <option value="percent">percent</option>
+              </select>
+            </td>
+            <td id="sl_value_cell_${i}"></td>
+          </tr>`;
+      }
+    }
+
+    table += "</tbody></table>";
+    slBlock.innerHTML = table;
+
+    enforceSLModeRules(tpCount);
+  }
+
+  function toggleSLValueInput(level, mode) {
+    const cell = document.getElementById(`sl_value_cell_${level}`);
+    if (!cell) return;
+
+    if (mode === 'atr' || mode === 'percent') {
+      cell.innerHTML = `
+        <input name="sl_value_${level}" type="number" step="any" class="w-full px-2 py-1 border rounded" placeholder="Значение SL" />`;
+    } else {
+      cell.innerHTML = '';
+    }
+
+    const tpCount = parseInt(document.getElementById('tp_count').value || "0");
+    enforceSLModeRules(tpCount);
+  }
+
+  function enforceSLModeRules(tpCount) {
+    let entrySelected = false;
+    let atrOrPercentSeen = false;
+
+    for (let i = 1; i < tpCount; i++) {
+      const select = document.querySelector(`select[name="sl_mode_${i}"]`);
+      const currentValue = select?.value;
+
+      Array.from(select.options).forEach(option => {
+        option.disabled = false;
+      });
+
+      if (currentValue === "entry") {
+        entrySelected = true;
+      }
+
+      if (currentValue === "atr" || currentValue === "percent") {
+        atrOrPercentSeen = true;
+      }
+
+      Array.from(select.options).forEach(option => {
+        if (option.value === "entry") {
+          if (entrySelected && currentValue !== "entry") {
+            option.disabled = true;
+          }
+          if (atrOrPercentSeen && currentValue !== "entry") {
+            option.disabled = true;
+          }
+        }
+      });
     }
   }
 
@@ -136,20 +235,7 @@
   </section>
 </div>
 <br>
-<!-- 🔹 Блок 2: SL -->
-<div class="max-w-4xl mx-auto px-6 py-8 bg-white/80 rounded-2xl shadow-xl space-y-10">
-  <section class="space-y-4">
-    <h3 class="text-xl font-semibold text-blue-800">Stop-Loss</h3>
-    <label><input name="use_stoploss" type="checkbox" checked /> Использовать SL</label>
-    <select name="sl_type" class="w-full px-3 py-2 border rounded" id="sl_type">
-      <option>Выбор типа SL...</option>
-      <option value="percent">percent</option>
-      <option value="atr">atr</option>
-    </select>
-    <input name="sl_value" id="sl_value" type="number" step="any" class="w-full px-3 py-2 border rounded" placeholder="Значение SL" />
-  </section>
-</div>
-<br>
+
       <!-- 🔹 Блок 3: TP -->
       <div class="max-w-4xl mx-auto px-6 py-8 bg-white/80 rounded-2xl shadow-xl space-y-10">
       <section class="space-y-4">
@@ -176,6 +262,27 @@
       </section>
       </div>
       <br>
+<!-- 🔹 Блок 2: SL -->
+<div class="max-w-4xl mx-auto px-6 py-8 bg-white/80 rounded-2xl shadow-xl space-y-10">
+  <section class="space-y-4">
+    <h3 class="text-xl font-semibold text-blue-800">Stop-Loss</h3>
+    
+    <label><input name="use_stoploss" type="checkbox" checked /> Использовать SL</label>
+    
+    <select name="sl_type" class="w-full px-3 py-2 border rounded" id="sl_type">
+      <option value="">Выбор типа SL...</option>
+      <option value="percent">percent</option>
+      <option value="atr">atr</option>
+    </select>
+    
+    <input name="sl_value" id="sl_value" type="number" step="any" class="w-full px-3 py-2 border rounded" placeholder="Значение SL" />
+
+    <!-- 🔹 Динамическая таблица SL-поведения после TP -->
+    <div id="sl_levels_block" class="pt-6"></div>
+
+  </section>
+</div>
+<br>
 <!-- 🔹 Блок 4: Тикеры -->
 <div class="max-w-4xl mx-auto px-6 py-8 bg-white/80 rounded-2xl shadow-xl space-y-10">
   <section class="space-y-4">
