@@ -204,3 +204,47 @@ class StrategyInterface:
             "entry_price": entry_price,
             "stop_loss_price": stop_loss_price
         }
+    # 🔸 Открытие позиции в базе: запись в positions_v2
+    async def open_position(self, task: dict, position_data: dict) -> int | None:
+        strategy_name = task.get("strategy")
+        log_id = int(task.get("log_id"))
+        symbol = task.get("symbol")
+        direction = task.get("direction")
+
+        strategy_id = await self.get_strategy_id_by_name(strategy_name)
+        if strategy_id is None:
+            logging.error("❌ Стратегия не найдена")
+            return None
+
+        try:
+            entry_price = position_data["entry_price"]
+            quantity = position_data["quantity"]
+            notional = position_data["notional_value"]
+            planned_risk = position_data["planned_risk"]
+
+            # Комиссия биржи 0.01% сразу как убыток
+            commission = (notional * Decimal("0.0001")).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
+            pnl = -commission
+
+            conn = await asyncpg.connect(self.database_url)
+            row = await conn.fetchrow("""
+                INSERT INTO positions_v2 (
+                    strategy_id, log_id, symbol, direction, entry_price,
+                    quantity, notional_value, quantity_left, status,
+                    close_reason, pnl, planned_risk, created_at
+                ) VALUES (
+                    $1, $2, $3, $4, $5,
+                    $6, $7, $6, 'open',
+                    'открыта', $8, $9, NOW()
+                ) RETURNING id
+            """, strategy_id, log_id, symbol, direction, entry_price,
+                 quantity, notional, pnl, planned_risk)
+            await conn.close()
+
+            position_id = row["id"]
+            logging.info(f"📌 Позиция создана: ID={position_id}, {symbol}, {direction}, qty={quantity}, pnl={pnl}")
+            return position_id
+
+        except Exception as e:
+            logging.error(f"❌ Ошибка при создании позиции: {e}")
+            return None        
