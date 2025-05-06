@@ -285,7 +285,7 @@ class StrategyInterface:
 
                     # Вставка TP
                     await conn.execute("""
-                        INSERT INTO position_targets (
+                        INSERT INTO position_targets_v2 (
                             position_id, type, level, price, quantity,
                             hit, canceled
                         ) VALUES (
