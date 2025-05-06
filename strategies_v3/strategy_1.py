@@ -51,3 +51,11 @@ class Strategy1:
                      f"qty={result['quantity']}, notional={result['notional_value']}, "
                      f"risk={result['planned_risk']}, margin={result['margin_used']}, "
                      f"sl={result['stop_loss_price']}")
+
+        # 🔹 Создание позиции в базе
+        position_id = await interface.open_position(task, result)
+
+        if position_id:
+            logging.info(f"✅ Позиция открыта strategy_1, ID={position_id}")
+        else:
+            logging.warning("⚠️ Позиция не была открыта")
