@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal, ROUND_DOWN
 
 # 🔸 Стратегия strategy_1 с проверкой EMA50 и ATR
 class Strategy1:
@@ -28,13 +29,13 @@ class Strategy1:
 
         # 🔹 Проверка условий входа
         if direction == "long":
-            threshold = ema_50 - (atr * 0.5)
+            threshold = ema_50 - (atr * Decimal("0.5"))
             if entry_price < threshold:
                 logging.info(f"⛔ Вход в long запрещён: цена {entry_price} < {threshold}")
                 return
 
         elif direction == "short":
-            threshold = ema_50 + (atr * 0.5)
+            threshold = ema_50 + (atr * Decimal("0.5"))
             if entry_price > threshold:
                 logging.info(f"⛔ Вход в short запрещён: цена {entry_price} > {threshold}")
                 return
