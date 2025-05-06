@@ -42,8 +42,6 @@ strategies = {
     "strategy_1": Strategy1(),
 }
 # 🔸 Загрузка тикеров из базы
-import asyncpg  # добавить в начало файла, если ещё нет
-
 async def load_tickers():
     global tickers_storage
 
@@ -93,9 +91,10 @@ async def load_strategy_tickers():
                 }
             else:
                 rows = await conn.fetch("""
-                    SELECT symbol
-                    FROM strategy_tickers_v2
-                    WHERE strategy_id = $1
+                    SELECT t.symbol
+                    FROM strategy_tickers_v2 st
+                    JOIN tickers t ON st.ticker_id = t.id
+                    WHERE st.strategy_id = $1 AND st.enabled = true
                 """, strategy_id)
                 allowed = {row["symbol"] for row in rows}
 
@@ -218,18 +217,51 @@ async def load_strategies():
 
     try:
         conn = await asyncpg.connect(DATABASE_URL)
+
+        # Загружаем стратегии
         rows = await conn.fetch("""
             SELECT *
             FROM strategies_v2
             WHERE enabled = true AND archived = false
         """)
+
+        # Загружаем TP-уровни всех стратегий
+        tp_levels = await conn.fetch("""
+            SELECT *
+            FROM strategy_tp_levels_v2
+        """)
+
+        # Группируем TP-уровни по strategy_id
+        tp_levels_by_strategy = {}
+        for row in tp_levels:
+            sid = row["strategy_id"]
+            tp_levels_by_strategy.setdefault(sid, []).append(dict(row))
+
+        # Загружаем SL-поведение после TP
+        tp_sl_rules = await conn.fetch("""
+            SELECT *
+            FROM strategy_tp_sl_v2
+        """)
+
+        # Группируем SL-настройки по strategy_id
+        tp_sl_by_strategy = {}
+        for row in tp_sl_rules:
+            sid = row["strategy_id"]
+            tp_sl_by_strategy.setdefault(sid, []).append(dict(row))
+
         await conn.close()
 
-        strategies_cache = {
-            row["id"]: dict(row) for row in rows
-        }
+        # Формируем strategies_cache
+        strategies_cache = {}
+        for row in rows:
+            sid = row["id"]
+            strategy_dict = dict(row)
+            strategy_dict["tp_levels"] = tp_levels_by_strategy.get(sid, [])
+            strategy_dict["tp_sl_rules"] = tp_sl_by_strategy.get(sid, [])
+            strategies_cache[sid] = strategy_dict
 
         logging.info(f"✅ Загружено стратегий: {len(strategies_cache)}")
+
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке стратегий: {e}")
 # 🔸 Загрузка открытых позиций из базы
