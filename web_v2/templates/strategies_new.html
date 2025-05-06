@@ -342,7 +342,7 @@
         return;
       }
       if (!nameRegex.test(name)) {
-        alert("Название может содержать только латинские буквы и символ подчёркивания (_).");
+        alert("Название может содержать только латинские буквы, цифры и символ подчёркивания (_).");
         return;
       }
 
@@ -355,7 +355,7 @@
             return;
           }
 
-          // ✅ Все остальные проверки (как раньше)
+          // ✅ Проверка числовых и обязательных полей
           const deposit = document.getElementById("deposit")?.value.trim();
           if (!deposit || !/^\d+$/.test(deposit)) {
             alert("Поле 'Депозит' обязательно и должно быть целым числом.");
@@ -412,6 +412,7 @@
             return;
           }
 
+          // 🔹 TP уровни
           const tpCount = parseInt(document.getElementById("tp_count_hidden")?.value || "0");
           let totalVolume = 0;
 
@@ -427,22 +428,22 @@
 
             totalVolume += parseFloat(volumeStr);
 
-if (!tpType) {
-  alert(`TP уровень ${i}: не выбран тип выхода (по сигналу или по значению).`);
-  return;
-}
+            if (!tpType) {
+              alert(`TP уровень ${i}: не выбран тип выхода (по сигналу или по значению).`);
+              return;
+            }
 
-if (tpType === "external_signal") {
-  if (!valueStr) {
-    alert(`TP уровень ${i}: необходимо выбрать сигнал выхода.`);
-    return;
-  }
-} else {
-  if (!valueStr || !/^\d+(\.\d+)?$/.test(valueStr)) {
-    alert(`TP уровень ${i}: значение должно быть числом (например, 0.3).`);
-    return;
-  }
-}
+            if (tpType === "external_signal") {
+              if (!valueStr) {
+                alert(`TP уровень ${i}: необходимо выбрать сигнал выхода.`);
+                return;
+              }
+            } else {
+              if (!valueStr || !/^\d+(\.\d+)?$/.test(valueStr)) {
+                alert(`TP уровень ${i}: значение должно быть числом (например, 0.3).`);
+                return;
+              }
+            }
           }
 
           if (Math.round(totalVolume) !== 100) {
@@ -450,6 +451,20 @@ if (tpType === "external_signal") {
             return;
           }
 
+          // 🔹 SL поведение по TP (atr / percent)
+          for (let i = 1; i < tpCount; i++) {
+            const slMode = document.querySelector(`select[name="sl_mode_${i}"]`)?.value;
+            const slVal = document.querySelector(`input[name="sl_value_${i}"]`)?.value?.trim();
+
+            if (slMode === "atr" || slMode === "percent") {
+              if (!slVal || !/^\d+(\.\d+)?$/.test(slVal)) {
+                alert(`SL уровень ${i}: значение обязательно и должно быть числом (например, 0.3).`);
+                return;
+              }
+            }
+          }
+
+          // 🔹 Тикеры
           const useAllTickers = document.getElementById("use_all_tickers")?.checked;
           if (!useAllTickers) {
             const checkboxes = document.querySelectorAll(".ticker-checkbox");
@@ -460,7 +475,7 @@ if (tpType === "external_signal") {
             }
           }
 
-          // ✅ Если всё прошло — отправляем форму
+          // ✅ Всё прошло — отправляем форму
           form.submit();
         })
         .catch(() => {
