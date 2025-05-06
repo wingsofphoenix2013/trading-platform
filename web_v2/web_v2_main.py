@@ -186,36 +186,70 @@ async def create_strategy(request: Request):
 
         # 🔹 Сохранение TP уровней (включая external_signal)
         tp_count = int(form.get("tp_count") or 0)
+        tp_level_ids = []
+
         for i in range(1, tp_count + 1):
-            tp_type = form.get(f"tp_type_{i}")
-            volume_percent = float(form.get(f"volume_{i}") or 0)
-            tp_value_raw = form.get(f"tp_value_{i}")
+                tp_type = form.get(f"tp_type_{i}")
+                volume_percent = float(form.get(f"volume_{i}") or 0)
+                tp_value_raw = form.get(f"tp_value_{i}")
 
-            # 🔸 Логика значения TP
-            if tp_type == "external_signal":
-                trigger_signal_raw = form.get(f"tp_value_{i}")
-                if trigger_signal_raw == "__USE_ACTION_SIGNAL__":
-                    if not reverse:
-                        raise HTTPException(status_code=400, detail="Reverse = false: управляющий сигнал нельзя использовать как TP.")
-                    trigger_signal_id = action_signal_id
-                    tp_value = None
+                # 🔸 Логика значения TP
+                if tp_type == "external_signal":
+                        trigger_signal_raw = form.get(f"tp_value_{i}")
+                        if trigger_signal_raw == "__USE_ACTION_SIGNAL__":
+                                if not reverse:
+                                        raise HTTPException(
+                                                status_code=400,
+                                                detail="Reverse = false: управляющий сигнал нельзя использовать как TP."
+                                        )
+                                trigger_signal_id = action_signal_id
+                                tp_value = None
+                        else:
+                                trigger_signal_id = int(trigger_signal_raw) if trigger_signal_raw else None
+                                tp_value = None
+                        tp_trigger_type = "signal"
                 else:
-                    trigger_signal_id = int(trigger_signal_raw) if trigger_signal_raw else None
-                    tp_value = None
-                tp_trigger_type = "signal"
-            else:
-                tp_value = float(tp_value_raw) if tp_value_raw else None
-                trigger_signal_id = None
-                tp_trigger_type = "price"
+                        tp_value = float(tp_value_raw) if tp_value_raw else None
+                        trigger_signal_id = None
+                        tp_trigger_type = "price"
 
-            await conn.execute("""
-                INSERT INTO strategy_tp_levels_v2 (
-                    strategy_id, level, tp_type, tp_value,
-                    volume_percent, tp_trigger_type, trigger_signal_id
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-            """, strategy_id, i, tp_type, tp_value, volume_percent, tp_trigger_type, trigger_signal_id)
+                result = await conn.fetchrow("""
+                        INSERT INTO strategy_tp_levels_v2 (
+                                strategy_id, level, tp_type, tp_value,
+                                volume_percent, tp_trigger_type, trigger_signal_id
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        RETURNING id
+                """, strategy_id, i, tp_type, tp_value, volume_percent, tp_trigger_type, trigger_signal_id)
 
+                tp_level_ids.append(result["id"])
+
+        # 🔹 Подготовка SL-настроек после TP
+        sl_behavior = []
+        for i in range(1, tp_count):
+                sl_mode = form.get(f"sl_mode_{i}")
+                sl_value_raw = form.get(f"sl_value_{i}")
+                sl_value = None
+
+                if sl_mode in ("atr", "percent"):
+                        sl_value = float(sl_value_raw) if sl_value_raw else None
+
+                sl_behavior.append((
+                        strategy_id,
+                        tp_level_ids[i - 1],
+                        sl_mode,
+                        sl_value
+                ))
+
+        # 🔹 Вставка SL-настроек
+        for strategy_id, tp_level_id, sl_mode, sl_value in sl_behavior:
+                await conn.execute("""
+                        INSERT INTO strategy_tp_sl_v2 (
+                                strategy_id, tp_level_id, sl_mode, sl_value
+                        )
+                        VALUES ($1, $2, $3, $4)
+                """, strategy_id, tp_level_id, sl_mode, sl_value)
+                
         return RedirectResponse(url="/strategies", status_code=302)
     finally:
         await conn.close()
