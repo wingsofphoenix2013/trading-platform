@@ -251,56 +251,65 @@ class StrategyInterface:
                 ticker = self.tickers_storage.get(symbol)
                 conn = await asyncpg.connect(self.database_url)
 
-                for tp in tp_levels:
+                total_tp = len(tp_levels)
+                allocated_qty = Decimal("0")
+                precision_qty = Decimal(f"1e-{ticker['precision_qty']}")
+                precision_price = Decimal(f"1e-{ticker['precision_price']}")
+
+                for i, tp in enumerate(tp_levels):
                     level = tp["level"]
                     tp_type = tp["tp_type"]
                     tp_value = tp["tp_value"]
                     volume_percent = tp["volume_percent"]
-                    tp_trigger_type = tp["tp_trigger_type"]
-                    trigger_signal_id = tp.get("trigger_signal_id")
 
                     if volume_percent <= 0:
                         continue
 
-                    # Расчёт объёма
-                    qty_tp = (quantity * Decimal(volume_percent) / Decimal("100")).quantize(
-                        Decimal(f"1e-{ticker['precision_qty']}"), rounding=ROUND_DOWN
-                    )
+                    # 🔹 Объём: последнему TP — остаток
+                    if i < total_tp - 1:
+                        qty_tp = (quantity * Decimal(volume_percent) / Decimal("100")).quantize(
+                            precision_qty, rounding=ROUND_DOWN)
+                        allocated_qty += qty_tp
+                    else:
+                        qty_tp = (quantity - allocated_qty).quantize(precision_qty, rounding=ROUND_DOWN)
 
-                    # Расчёт цены
+                    # 🔹 Расчёт цены TP
                     tp_price = None
                     if tp_type == "percent":
                         multiplier = Decimal("1") + (tp_value / Decimal("100")) if direction == "long" else Decimal("1") - (tp_value / Decimal("100"))
-                        tp_price = (entry_price * multiplier).quantize(Decimal(f"1e-{ticker['precision_price']}"), rounding=ROUND_DOWN)
+                        tp_price = (entry_price * multiplier).quantize(precision_price, rounding=ROUND_DOWN)
                     elif tp_type == "atr":
                         atr = await self.get_indicator_value(symbol, strategy["timeframe"], "ATR", "atr")
                         if atr is not None:
                             delta = atr * tp_value
                             tp_price = (entry_price + delta if direction == "long" else entry_price - delta).quantize(
-                                Decimal(f"1e-{ticker['precision_price']}"), rounding=ROUND_DOWN)
+                                precision_price, rounding=ROUND_DOWN)
                     elif tp_type == "fixed":
-                        tp_price = Decimal(tp_value).quantize(Decimal(f"1e-{ticker['precision_price']}"), rounding=ROUND_DOWN)
+                        tp_price = Decimal(tp_value).quantize(precision_price, rounding=ROUND_DOWN)
                     elif tp_type == "external_signal":
                         tp_price = None
 
-                    # Вставка TP
+                    # 🔹 Определение способа срабатывания TP
+                    tp_trigger_type = "signal" if tp_type == "external_signal" else "price"
+
+                    # 🔹 Вставка TP
                     await conn.execute("""
                         INSERT INTO position_targets_v2 (
                             position_id, type, level, price, quantity,
-                            hit, canceled
+                            hit, canceled, tp_trigger_type
                         ) VALUES (
                             $1, 'tp', $2, $3, $4,
-                            false, false
+                            false, false, $5
                         )
-                    """, position_id, level, tp_price, qty_tp)
+                    """, position_id, level, tp_price, qty_tp, tp_trigger_type)
 
                 await conn.close()
                 logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
 
             except Exception as e:
                 logging.error(f"❌ Ошибка при генерации TP-уровней: {e}")
-                return position_id  # Позиция уже создана
-
+                return position_id
+                
             return position_id
 
         except Exception as e:
