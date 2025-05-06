@@ -244,7 +244,7 @@ class StrategyInterface:
             position_id = row["id"]
             logging.info(f"📌 Позиция создана: ID={position_id}, {symbol}, {direction}, qty={quantity}, pnl={pnl}")
 
-            # 🔹 Генерация TP-уровней
+            # 🔹 Генерация TP и SL
             try:
                 strategy = self.strategies_cache[strategy_id]
                 tp_levels = strategy.get("tp_levels", [])
@@ -265,7 +265,7 @@ class StrategyInterface:
                     if volume_percent <= 0:
                         continue
 
-                    # 🔹 Объём: последнему TP — остаток
+                    # 🔹 Расчёт объёма
                     if i < total_tp - 1:
                         qty_tp = (quantity * Decimal(volume_percent) / Decimal("100")).quantize(
                             precision_qty, rounding=ROUND_DOWN)
@@ -289,7 +289,6 @@ class StrategyInterface:
                     elif tp_type == "external_signal":
                         tp_price = None
 
-                    # 🔹 Определение способа срабатывания TP
                     tp_trigger_type = "signal" if tp_type == "external_signal" else "price"
 
                     # 🔹 Вставка TP
@@ -303,47 +302,47 @@ class StrategyInterface:
                         )
                     """, position_id, level, tp_price, qty_tp, tp_trigger_type)
 
+                # 🔹 Генерация базового SL
+                if strategy.get("use_stoploss", False):
+                    sl_type = strategy["sl_type"]
+                    sl_value = Decimal(str(strategy["sl_value"]))
+                    sl_price = None
+
+                    if sl_type == "percent":
+                        delta = entry_price * (sl_value / Decimal("100"))
+                    elif sl_type == "atr":
+                        atr = await self.get_indicator_value(symbol, strategy["timeframe"], "ATR", "atr")
+                        if atr is None:
+                            logging.warning("⚠️ SL не установлен — не удалось получить ATR")
+                            delta = None
+                        else:
+                            delta = atr * sl_value
+                    else:
+                        delta = None
+
+                    if delta is not None:
+                        sl_price = (entry_price - delta if direction == "long" else entry_price + delta).quantize(
+                            precision_price, rounding=ROUND_DOWN)
+
+                        await conn.execute("""
+                            INSERT INTO position_targets_v2 (
+                                position_id, type, price, quantity,
+                                hit, canceled, tp_trigger_type
+                            ) VALUES (
+                                $1, 'sl', $2, $3,
+                                false, false, 'price'
+                            )
+                        """, position_id, sl_price, quantity)
+
+                        logging.info(f"📍 Установлен SL на уровне {sl_price}")
+
                 await conn.close()
                 logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
 
-            # 🔹 Генерация базового SL (если включён)
-            if strategy.get("use_stoploss", False):
-                sl_type = strategy["sl_type"]
-                sl_value = Decimal(str(strategy["sl_value"]))
-                sl_price = None
-
-                if sl_type == "percent":
-                    delta = entry_price * (sl_value / Decimal("100"))
-                elif sl_type == "atr":
-                    atr = await self.get_indicator_value(symbol, strategy["timeframe"], "ATR", "atr")
-                    if atr is None:
-                        logging.warning("⚠️ SL не установлен — не удалось получить ATR")
-                        delta = None
-                    else:
-                        delta = atr * sl_value
-                else:
-                    delta = None
-
-                if delta is not None:
-                    sl_price = (entry_price - delta if direction == "long" else entry_price + delta).quantize(
-                        Decimal(f"1e-{ticker['precision_price']}"), rounding=ROUND_DOWN)
-
-                    await conn.execute("""
-                        INSERT INTO position_targets_v2 (
-                            position_id, type, price, quantity,
-                            hit, canceled, tp_trigger_type
-                        ) VALUES (
-                            $1, 'sl', $2, $3,
-                            false, false, 'price'
-                        )
-                    """, position_id, sl_price, quantity)
-
-                    logging.info(f"📍 Установлен SL на уровне {sl_price}")
-
             except Exception as e:
-                logging.error(f"❌ Ошибка при генерации TP-уровней: {e}")
+                logging.error(f"❌ Ошибка при генерации TP/SL: {e}")
                 return position_id
-                
+                                
             return position_id
 
         except Exception as e:
