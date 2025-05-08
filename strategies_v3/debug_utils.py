@@ -1,5 +1,5 @@
 # 🔸 Флаг режима отладки
-DEBUG_MODE = True  # Включай True при разработке
+DEBUG_MODE = False  # Включай True при разработке
 
 def debug_log(message: str):
     if DEBUG_MODE:
