@@ -2,6 +2,7 @@ import asyncpg
 import logging
 import redis.asyncio as redis
 from decimal import Decimal, ROUND_DOWN
+from datetime import datetime
 from debug_utils import debug_log
 import os
 
@@ -325,6 +326,26 @@ class StrategyInterface:
 
                 logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
 
+            self.open_positions[position_id] = {
+                "id": position_id,
+                "strategy_id": strategy_id,
+                "log_id": log_id,
+                "symbol": symbol,
+                "direction": direction,
+                "entry_price": entry_price,
+                "quantity": quantity,
+                "notional_value": notional,
+                "quantity_left": quantity,
+                "status": "open",
+                "created_at": str(datetime.utcnow()),
+                "planned_risk": planned_risk
+            }
+
+            self.targets_by_position[position_id] = tp_levels + (
+                [{"type": "sl", "price": position_data["stop_loss_price"], "quantity": quantity}]
+                if position_data.get("stop_loss_price") else []
+            )            
+            
             return position_id
 
         except Exception as e:
