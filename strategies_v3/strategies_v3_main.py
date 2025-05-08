@@ -167,9 +167,14 @@ async def handle_task(task_data: dict, db_pool):
         )
         return
 
-    # 🔹 Вызов стратегии
+    # 🔹 Вызов стратегии с ограничением времени
     try:
-        await strategy.on_signal(task_data, interface)
+        await asyncio.wait_for(
+            strategy.on_signal(task_data, interface),
+            timeout=10  # ← ограничение в 10 секунд
+        )
+    except asyncio.TimeoutError:
+        logging.error(f"⏱️ Время выполнения стратегии '{strategy_name}' превышено (таймаут 10 сек)")
     except Exception as e:
         logging.error(f"❌ Ошибка при вызове стратегии {strategy_name}: {e}")
         
