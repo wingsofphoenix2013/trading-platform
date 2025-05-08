@@ -2,7 +2,7 @@ import asyncpg
 import logging
 import redis.asyncio as redis
 from decimal import Decimal, ROUND_DOWN
-from strategies_v3.debug_utils import debug_log
+from debug_utils import debug_log
 import os
 
 # 🔸 Универсальный интерфейс для стратегий v3
