@@ -311,7 +311,68 @@ async def load_position_targets(db_pool):
         logging.info(f"✅ Загружено целей: {total} для {len(targets_by_position)} позиций")
 
     except Exception as e:
-        logging.error(f"❌ Ошибка при загрузке целей позиции: {e}")                                  
+        logging.error(f"❌ Ошибка при загрузке целей позиции: {e}")
+# 🔸 Мониторинг открытых позиций на достижение TP/SL
+async def follow_positions():
+    for position_id, pos in open_positions.items():
+        symbol = pos["symbol"]
+        direction = pos["direction"]
+
+        latest_price = latest_prices.get(symbol)
+        if latest_price is None:
+            logging.warning(f"⚠️ Нет цены для {symbol}, позиция ID={position_id}")
+            continue
+
+        targets = targets_by_position.get(position_id, [])
+        if not targets:
+            logging.warning(f"⚠️ Позиция ID={position_id} не имеет целей")
+            continue
+
+        # 🔹 Текущая цена
+        logging.info(f"📡 Позиция ID={position_id}, {symbol}, {direction} — текущая цена: {latest_price}")
+
+        # 🔹 TP-контроль
+        tp_levels = [
+            t for t in targets
+            if t["type"] == "tp" and not t["hit"] and not t["canceled"]
+        ]
+        tp_levels.sort(key=lambda x: x["level"])
+
+        next_tp = None
+        for tp in tp_levels:
+            lvl = tp["level"]
+            blockers = [
+                b for b in tp_levels
+                if b["level"] < lvl and b["tp_trigger_type"] == "signal" and not b["hit"]
+            ]
+            if blockers:
+                continue
+            if tp["tp_trigger_type"] != "price":
+                continue
+            next_tp = tp
+            break
+
+        if next_tp:
+            tp_price = next_tp["price"]
+            level = next_tp["level"]
+            if direction == "long" and latest_price >= tp_price:
+                logging.info(f"💡 Цена достигла TP уровня #{level} для позиции ID={position_id} — {latest_price} ≥ {tp_price}")
+            elif direction == "short" and latest_price <= tp_price:
+                logging.info(f"💡 Цена достигла TP уровня #{level} для позиции ID={position_id} — {latest_price} ≤ {tp_price}")
+
+        # 🔹 SL-контроль
+        sl = next((t for t in targets if t["type"] == "sl" and not t["hit"] and not t["canceled"]), None)
+        if sl:
+            sl_price = sl["price"]
+            if direction == "long" and latest_price <= sl_price:
+                logging.info(f"⚠️ Цена достигла SL для позиции ID={position_id} — {latest_price} ≤ {sl_price}")
+            elif direction == "short" and latest_price >= sl_price:
+                logging.info(f"⚠️ Цена достигла SL для позиции ID={position_id} — {latest_price} ≥ {sl_price}")
+# 🔸 Цикл мониторинга открытых позиций
+async def follow_positions_loop():
+    while True:
+        await follow_positions()
+        await asyncio.sleep(1)                                                          
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
@@ -330,6 +391,7 @@ async def main():
     # 🔹 Фоновые обновления (можно оставить отключёнными)
     asyncio.create_task(refresh_all_periodically(db_pool))
     asyncio.create_task(monitor_prices())
+    asyncio.create_task(follow_positions_loop())
 
     # 🔹 Запуск слушателя задач (после полной инициализации)
     await listen_strategy_tasks(db_pool)
