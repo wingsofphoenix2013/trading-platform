@@ -424,6 +424,23 @@ async def position_close_loop(db_pool):
                     logging.warning(f"⚠️ Цель {target_id} не найдена в памяти позиции {position_id}")
                     await redis_client.xack(stream_name, group_name, msg_id)
                     continue
+
+                try:
+                    async with db_pool.acquire() as conn:
+                        await conn.execute("""
+                            UPDATE position_targets_v2
+                            SET hit = true, hit_at = NOW()
+                            WHERE id = $1
+                        """, target_id)
+                except Exception as e:
+                    logging.error(f"❌ Ошибка при обновлении цели {target_id} в БД: {e}")
+                    await redis_client.xack(stream_name, group_name, msg_id)
+                    continue
+
+                # Удаление цели из памяти
+                targets_by_position[position_id] = [
+                    t for t in targets if t.get("id") != target_id
+                ]
                     
                     await redis_client.xack(stream_name, group_name, msg_id)
 
