@@ -328,10 +328,47 @@ class StrategyInterface:
 
                 logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
 
-            tp_targets = [
-                {**tp, "type": "tp", "hit": False, "canceled": False}
-                for tp in tp_levels
-            ]
+            tp_targets = []
+            allocated_qty = Decimal("0")
+            for i, tp in enumerate(tp_levels):
+                level = tp["level"]
+                tp_type = tp["tp_type"]
+                tp_value = tp["tp_value"]
+                volume_percent = tp["volume_percent"]
+                tp_trigger_type = "signal" if tp_type == "external_signal" else "price"
+
+                if volume_percent <= 0:
+                    continue
+
+                if i < total_tp - 1:
+                    qty_tp = (quantity * Decimal(volume_percent) / Decimal("100")).quantize(
+                        precision_qty, rounding=ROUND_DOWN)
+                    allocated_qty += qty_tp
+                else:
+                    qty_tp = (quantity - allocated_qty).quantize(precision_qty, rounding=ROUND_DOWN)
+
+                tp_price = None
+                if tp_type == "percent":
+                    multiplier = Decimal("1") + (tp_value / Decimal("100")) if direction == "long" else Decimal("1") - (tp_value / Decimal("100"))
+                    tp_price = (entry_price * multiplier).quantize(precision_price, rounding=ROUND_DOWN)
+                elif tp_type == "atr":
+                    atr = await self.get_indicator_value(symbol, strategy["timeframe"], "ATR", "atr")
+                    if atr is not None:
+                        delta = atr * tp_value
+                        tp_price = (entry_price + delta if direction == "long" else entry_price - delta).quantize(precision_price, rounding=ROUND_DOWN)
+                elif tp_type == "fixed":
+                    tp_price = Decimal(tp_value).quantize(precision_price, rounding=ROUND_DOWN)
+
+                tp_targets.append({
+                    "type": "tp",
+                    "level": level,
+                    "tp_type": tp_type,
+                    "tp_trigger_type": tp_trigger_type,
+                    "price": tp_price,
+                    "quantity": qty_tp,
+                    "hit": False,
+                    "canceled": False
+                })
 
             sl_targets = []
             sl_price = position_data.get("stop_loss_price")
