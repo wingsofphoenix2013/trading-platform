@@ -103,13 +103,13 @@ async def load_strategy_tickers(db_pool):
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке strategy_tickers: {e}")
 # 🔸 Периодическое обновление всех данных (тикеры, стратегии, разрешения, позиции)
-async def refresh_all_periodically():
+async def refresh_all_periodically(db_pool):
     while True:
         logging.info("🔄 Обновление тикеров, стратегий и позиций...")
-        await load_tickers()
-        await load_strategies()
-        await load_strategy_tickers()
-        await load_open_positions()
+        await load_tickers(db_pool)
+        await load_strategies(db_pool)
+        await load_strategy_tickers(db_pool)
+        await load_open_positions(db_pool)
         await asyncio.sleep(60)
 # 🔸 Фоновая задача: обновление цен из Redis (ключи вида price:<symbol>)
 async def monitor_prices():
@@ -289,7 +289,7 @@ async def main():
     await load_open_positions(db_pool)
 
     # 🔹 Фоновые обновления (можно оставить отключёнными)
-    asyncio.create_task(refresh_all_periodically())
+    asyncio.create_task(refresh_all_periodically(db_pool))
     asyncio.create_task(monitor_prices())
 
     # 🔹 Запуск слушателя задач (после полной инициализации)
