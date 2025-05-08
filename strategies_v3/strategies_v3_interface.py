@@ -9,16 +9,16 @@ class StrategyInterface:
     def __init__(
         self,
         redis_client,
-        database_url,
+        db_pool,
         strategies_cache,
         strategy_allowed_tickers,
         open_positions,
         tickers_storage,
         latest_prices
     ):
-        # 🔸 Подключение к Redis и база данных
+        # 🔸 Подключение к Redis и пул БД
         self.redis = redis_client
-        self.database_url = database_url
+        self.db_pool = db_pool
 
         # 🔸 Хранилища в памяти
         self.strategies_cache = strategies_cache

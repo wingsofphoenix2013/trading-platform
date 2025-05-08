@@ -137,7 +137,7 @@ async def monitor_prices():
             logging.error(f"❌ Ошибка при чтении цен из Redis: {e}")
         await asyncio.sleep(1)                           
 # 🔸 Обработчик одной задачи
-async def handle_task(task_data: dict):
+async def handle_task(task_data: dict, db_pool):
     strategy_name = task_data.get("strategy")
     strategy = strategies.get(strategy_name)
 
@@ -147,7 +147,7 @@ async def handle_task(task_data: dict):
 
     interface = StrategyInterface(
         redis_client=redis_client,
-        database_url=DATABASE_URL,
+        db_pool=db_pool,
         strategies_cache=strategies_cache,
         strategy_allowed_tickers=strategy_allowed_tickers,
         open_positions=open_positions,
@@ -178,7 +178,7 @@ async def handle_task(task_data: dict):
         logging.error(f"❌ Ошибка при вызове стратегии {strategy_name}: {e}")
         
 # 🔸 Слушатель задач из Redis Stream
-async def listen_strategy_tasks():
+async def listen_strategy_tasks(db_pool):
     group_name = "strategy_group"
     consumer_name = "strategy_worker"
     stream_name = "strategy_tasks"
@@ -204,7 +204,7 @@ async def listen_strategy_tasks():
             for stream, messages in entries:
                 for msg_id, msg_data in messages:
                     logging.info(f"📥 Получена задача: {msg_data}")
-                    await handle_task(msg_data)
+                    await handle_task(msg_data, db_pool)
                     await redis_client.xack(stream_name, group_name, msg_id)
         except Exception as e:
             logging.error(f"❌ Ошибка при чтении из Redis Stream: {e}")
