@@ -382,7 +382,11 @@ class StrategyInterface:
                     "canceled": False
                 })
                 
-            logging.info(f"🧠 Цели позиции {position_id} в памяти: {json.dumps(self.targets_by_position[position_id], default=str)}")
+            try:
+                logging.info(f"🧠 Цели позиции {position_id} в памяти: {json.dumps(tp_targets + sl_targets, default=str)}")
+            except Exception as e:
+                logging.warning(f"⚠️ Ошибка логирования целей в памяти: {e}")
+
             self.targets_by_position[position_id] = tp_targets + sl_targets
 
             self.open_positions[position_id] = {
