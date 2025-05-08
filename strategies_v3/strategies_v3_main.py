@@ -8,6 +8,7 @@ from redis.exceptions import ResponseError
 import json
 import asyncpg
 from decimal import Decimal, ROUND_DOWN
+from datetime import datetime
 from debug_utils import debug_log
 from strategy_1 import Strategy1
 from strategies_v3_interface import StrategyInterface
@@ -151,7 +152,8 @@ async def handle_task(task_data: dict, db_pool):
         strategy_allowed_tickers=strategy_allowed_tickers,
         open_positions=open_positions,
         tickers_storage=tickers_storage,
-        latest_prices=latest_prices
+        latest_prices=latest_prices,
+        targets_by_position=targets_by_position
     )
 
     # 🔹 Выполнение базовых проверок

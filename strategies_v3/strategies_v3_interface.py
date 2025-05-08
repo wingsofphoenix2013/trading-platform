@@ -16,7 +16,8 @@ class StrategyInterface:
         strategy_allowed_tickers,
         open_positions,
         tickers_storage,
-        latest_prices
+        latest_prices,
+        targets_by_position
     ):
         # 🔸 Подключение к Redis и пул БД
         self.redis = redis_client
@@ -28,7 +29,8 @@ class StrategyInterface:
         self.open_positions = open_positions
         self.tickers_storage = tickers_storage
         self.latest_prices = latest_prices
-
+        self.targets_by_position = targets_by_position
+        
     # 🔸 Логирование действия стратегии в signal_log_entries_v2
     async def log_strategy_action(self, strategy_id: int, log_id: int, status: str, note: str, position_id: int = None):
         try:
