@@ -299,9 +299,10 @@ async def load_position_targets(db_pool):
             rows = await conn.fetch("""
                 SELECT *
                 FROM position_targets_v2
+                WHERE hit = false AND canceled = false
             """)
 
-        # Группируем по position_id
+        # Группировка по position_id
         grouped = {}
         for row in rows:
             pid = row["position_id"]
