@@ -236,12 +236,10 @@ class StrategyInterface:
             notional = position_data["notional_value"]
             planned_risk = position_data["planned_risk"]
 
-            # Комиссия 0.1% сразу как убыток
             commission = (notional * Decimal("0.001")).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
             pnl = -commission
 
             async with self.db_pool.acquire() as conn:
-                # 🔹 Запись позиции
                 row = await conn.fetchrow("""
                     INSERT INTO positions_v2 (
                         strategy_id, log_id, symbol, direction, entry_price,
@@ -258,7 +256,6 @@ class StrategyInterface:
                 position_id = row["id"]
                 logging.info(f"📌 Позиция создана: ID={position_id}, {symbol}, {direction}, qty={quantity}, pnl={pnl}")
 
-                # 🔹 Генерация TP-уровней
                 strategy = self.strategies_cache[strategy_id]
                 tp_levels = strategy.get("tp_levels", [])
                 ticker = self.tickers_storage.get(symbol)
@@ -268,6 +265,7 @@ class StrategyInterface:
                 precision_qty = Decimal(f"1e-{ticker['precision_qty']}")
                 precision_price = Decimal(f"1e-{ticker['precision_price']}")
 
+                tp_targets = []
                 for i, tp in enumerate(tp_levels):
                     level = tp["level"]
                     tp_type = tp["tp_type"]
@@ -277,7 +275,6 @@ class StrategyInterface:
                     if volume_percent <= 0:
                         continue
 
-                    # 🔹 Объём
                     if i < total_tp - 1:
                         qty_tp = (quantity * Decimal(volume_percent) / Decimal("100")).quantize(
                             precision_qty, rounding=ROUND_DOWN)
@@ -285,7 +282,6 @@ class StrategyInterface:
                     else:
                         qty_tp = (quantity - allocated_qty).quantize(precision_qty, rounding=ROUND_DOWN)
 
-                    # 🔹 Цена TP
                     tp_price = None
                     if tp_type == "percent":
                         multiplier = Decimal("1") + (tp_value / Decimal("100")) if direction == "long" else Decimal("1") - (tp_value / Decimal("100"))
@@ -300,88 +296,55 @@ class StrategyInterface:
 
                     tp_trigger_type = "signal" if tp_type == "external_signal" else "price"
 
-                    # 🔹 Вставка TP
-                    await conn.execute("""
+                    tp_row = await conn.fetchrow("""
                         INSERT INTO position_targets_v2 (
                             position_id, type, level, price, quantity,
                             hit, canceled, tp_trigger_type
                         ) VALUES (
                             $1, 'tp', $2, $3, $4,
                             false, false, $5
-                        )
+                        ) RETURNING id
                     """, position_id, level, tp_price, qty_tp, tp_trigger_type)
 
-                # 🔹 SL из position_data
+                    tp_targets.append({
+                        "id": tp_row["id"],
+                        "type": "tp",
+                        "level": level,
+                        "tp_type": tp_type,
+                        "tp_trigger_type": tp_trigger_type,
+                        "price": tp_price,
+                        "quantity": qty_tp,
+                        "hit": False,
+                        "canceled": False
+                    })
+
+                sl_targets = []
                 sl_price = position_data.get("stop_loss_price")
                 if sl_price is not None:
-                    await conn.execute("""
+                    sl_row = await conn.fetchrow("""
                         INSERT INTO position_targets_v2 (
                             position_id, type, price, quantity,
                             hit, canceled, tp_trigger_type
                         ) VALUES (
                             $1, 'sl', $2, $3,
                             false, false, 'price'
-                        )
+                        ) RETURNING id
                     """, position_id, sl_price, quantity)
+
+                    sl_targets.append({
+                        "id": sl_row["id"],
+                        "type": "sl",
+                        "price": sl_price,
+                        "quantity": quantity,
+                        "hit": False,
+                        "canceled": False
+                    })
                     logging.info(f"📍 Установлен SL на уровне {sl_price}")
                 else:
                     logging.warning("⚠️ SL не установлен — отсутствует stop_loss_price в position_data")
 
-                logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
+                logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_targets)}")
 
-            tp_targets = []
-            allocated_qty = Decimal("0")
-            for i, tp in enumerate(tp_levels):
-                level = tp["level"]
-                tp_type = tp["tp_type"]
-                tp_value = tp["tp_value"]
-                volume_percent = tp["volume_percent"]
-                tp_trigger_type = "signal" if tp_type == "external_signal" else "price"
-
-                if volume_percent <= 0:
-                    continue
-
-                if i < total_tp - 1:
-                    qty_tp = (quantity * Decimal(volume_percent) / Decimal("100")).quantize(
-                        precision_qty, rounding=ROUND_DOWN)
-                    allocated_qty += qty_tp
-                else:
-                    qty_tp = (quantity - allocated_qty).quantize(precision_qty, rounding=ROUND_DOWN)
-
-                tp_price = None
-                if tp_type == "percent":
-                    multiplier = Decimal("1") + (tp_value / Decimal("100")) if direction == "long" else Decimal("1") - (tp_value / Decimal("100"))
-                    tp_price = (entry_price * multiplier).quantize(precision_price, rounding=ROUND_DOWN)
-                elif tp_type == "atr":
-                    atr = await self.get_indicator_value(symbol, strategy["timeframe"], "ATR", "atr")
-                    if atr is not None:
-                        delta = atr * tp_value
-                        tp_price = (entry_price + delta if direction == "long" else entry_price - delta).quantize(precision_price, rounding=ROUND_DOWN)
-                elif tp_type == "fixed":
-                    tp_price = Decimal(tp_value).quantize(precision_price, rounding=ROUND_DOWN)
-
-                tp_targets.append({
-                    "type": "tp",
-                    "level": level,
-                    "tp_type": tp_type,
-                    "tp_trigger_type": tp_trigger_type,
-                    "price": tp_price,
-                    "quantity": qty_tp,
-                    "hit": False,
-                    "canceled": False
-                })
-
-            sl_targets = []
-            sl_price = position_data.get("stop_loss_price")
-            if sl_price is not None:
-                sl_targets.append({
-                    "type": "sl",
-                    "price": sl_price,
-                    "quantity": quantity,
-                    "hit": False,
-                    "canceled": False
-                })
-                
             try:
                 logging.info(f"🧠 Цели позиции {position_id} в памяти: {json.dumps(tp_targets + sl_targets, default=str)}")
             except Exception as e:
@@ -409,3 +372,4 @@ class StrategyInterface:
         except Exception as e:
             logging.error(f"❌ Ошибка при создании позиции: {e}")
             return None
+    
