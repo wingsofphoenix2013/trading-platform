@@ -35,25 +35,23 @@ open_positions = {}
 latest_prices = {}
 strategies_cache = {}
 strategy_allowed_tickers = {}
-open_positions = {}
 
 # 🔸 Хранилище стратегий (регистрируются вручную)
 strategies = {
     "strategy_1": Strategy1(),
 }
 # 🔸 Загрузка тикеров из базы
-async def load_tickers():
+async def load_tickers(db_pool):
     global tickers_storage
 
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        rows = await conn.fetch("""
-            SELECT symbol, precision_price, precision_qty, min_qty,
-                   status, tradepermission, is_active
-            FROM tickers
-            WHERE status = 'enabled'
-        """)
-        await conn.close()
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT symbol, precision_price, precision_qty, min_qty,
+                       status, tradepermission, is_active
+                FROM tickers
+                WHERE status = 'enabled'
+            """)
 
         tickers_storage = {
             row["symbol"]: {
@@ -288,13 +286,21 @@ async def load_open_positions():
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
-    await load_tickers()
-    await load_strategies()
-    await load_strategy_tickers()
-    await load_open_positions()
-    asyncio.create_task(refresh_all_periodically())
-    asyncio.create_task(monitor_prices())
-    await listen_strategy_tasks()
+
+    # 🔹 Создание пула PostgreSQL
+    db_pool = await asyncpg.create_pool(DATABASE_URL)
+    logging.info("✅ Пул подключений к PostgreSQL создан")
+
+    # 🔹 Тестовая загрузка тикеров (остальное пока закомментировано)
+    await load_tickers(db_pool)
+
+    # ❗ Пока отключено:
+    # await load_strategies()
+    # await load_strategy_tickers()
+    # await load_open_positions()
+    # asyncio.create_task(refresh_all_periodically())
+    # asyncio.create_task(monitor_prices())
+    # await listen_strategy_tasks()
     
 if __name__ == "__main__":
     asyncio.run(main())
