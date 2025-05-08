@@ -343,7 +343,9 @@ class StrategyInterface:
                 "planned_risk": planned_risk
             }
 
-            self.targets_by_position[position_id] = tp_levels + (
+            tp_targets = [{**tp, "type": "tp"} for tp in tp_levels]
+            
+            self.targets_by_position[position_id] = tp_targets + (
                 [{"type": "sl", "price": position_data["stop_loss_price"], "quantity": quantity}]
                 if position_data.get("stop_loss_price") else []
             )            
