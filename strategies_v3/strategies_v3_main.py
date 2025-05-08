@@ -11,6 +11,13 @@ from decimal import Decimal, ROUND_DOWN
 from strategy_1 import Strategy1
 from strategies_v3_interface import StrategyInterface
 
+# 🔸 Глобальный флаг отладки
+DEBUG_MODE = False  # ← меняй на True при разработке
+
+def debug_log(message: str):
+    if DEBUG_MODE:
+        logging.info(message)
+        
 # 🔸 Конфигурация логирования
 logging.basicConfig(level=logging.INFO)
 
