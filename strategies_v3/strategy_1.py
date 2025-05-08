@@ -1,5 +1,6 @@
 import logging
 from decimal import Decimal, ROUND_DOWN
+from strategies_v3.debug_utils import debug_log
 
 # 🔸 Стратегия strategy_1 с проверкой EMA50 и ATR
 class Strategy1:
