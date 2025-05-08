@@ -311,39 +311,22 @@ class StrategyInterface:
                         )
                     """, position_id, level, tp_price, qty_tp, tp_trigger_type)
 
-                # 🔹 Генерация базового SL
-                if strategy.get("use_stoploss", False):
-                    sl_type = strategy["sl_type"]
-                    sl_value = Decimal(str(strategy["sl_value"]))
-                    sl_price = None
+                # 🔹 Генерация базового SL из position_data
+                sl_price = position_data.get("stop_loss_price")
+                if sl_price is not None:
+                    await conn.execute("""
+                        INSERT INTO position_targets_v2 (
+                            position_id, type, price, quantity,
+                            hit, canceled, tp_trigger_type
+                        ) VALUES (
+                            $1, 'sl', $2, $3,
+                            false, false, 'price'
+                        )
+                    """, position_id, sl_price, quantity)
 
-                    if sl_type == "percent":
-                        delta = entry_price * (sl_value / Decimal("100"))
-                    elif sl_type == "atr":
-                        atr = await self.get_indicator_value(symbol, strategy["timeframe"], "ATR", "atr")
-                        if atr is None:
-                            logging.warning("⚠️ SL не установлен — не удалось получить ATR")
-                            delta = None
-                        else:
-                            delta = atr * sl_value
-                    else:
-                        delta = None
-
-                    if delta is not None:
-                        sl_price = (entry_price - delta if direction == "long" else entry_price + delta).quantize(
-                            precision_price, rounding=ROUND_DOWN)
-
-                        await conn.execute("""
-                            INSERT INTO position_targets_v2 (
-                                position_id, type, price, quantity,
-                                hit, canceled, tp_trigger_type
-                            ) VALUES (
-                                $1, 'sl', $2, $3,
-                                false, false, 'price'
-                            )
-                        """, position_id, sl_price, quantity)
-
-                        logging.info(f"📍 Установлен SL на уровне {sl_price}")
+                    logging.info(f"📍 Установлен SL на уровне {sl_price}")
+                else:
+                    logging.warning("⚠️ SL не установлен — отсутствует stop_loss_price в position_data")
 
                 await conn.close()
                 logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
