@@ -494,8 +494,11 @@ async def position_close_loop(db_pool):
                             if not (t["type"] == "sl" and not t["hit"] and not t["canceled"])
                         ]
 
-                        logging.info(f"🔁 Старый SL отменён — подготовка к пересчёту нового")
+                        # Обновляем переменную targets
+                        targets = targets_by_position[position_id]
 
+                        logging.info(f"🔁 Старый SL отменён — подготовка к пересчёту нового")
+                        
                     # 🔹 Расчёт нового SL
                     sl_mode = sl_rule["sl_mode"]
                     sl_value = Decimal(str(sl_rule["sl_value"])) if sl_mode in ("percent", "atr") else None
