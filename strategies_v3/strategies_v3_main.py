@@ -291,16 +291,18 @@ async def main():
     db_pool = await asyncpg.create_pool(DATABASE_URL)
     logging.info("✅ Пул подключений к PostgreSQL создан")
 
-    # 🔹 Тестовая загрузка тикеров (остальное пока закомментировано)
+    # 🔹 Загрузка тикеров (тестовая)
     await load_tickers(db_pool)
 
-    # ❗ Пока отключено:
+    # 🔹 Запуск слушателя задач
+    await listen_strategy_tasks(db_pool)
+
+    # ❗ Остальное пока отключено:
     # await load_strategies()
     # await load_strategy_tickers()
     # await load_open_positions()
     # asyncio.create_task(refresh_all_periodically())
     # asyncio.create_task(monitor_prices())
-    # await listen_strategy_tasks()
     
 if __name__ == "__main__":
     asyncio.run(main())
