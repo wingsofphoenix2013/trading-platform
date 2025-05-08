@@ -403,7 +403,28 @@ async def position_close_loop(db_pool):
             for stream, messages in entries:
                 for msg_id, data in messages:
                     logging.info(f"📥 Получена задача на закрытие позиции: {data}")
-                    # Здесь позже будет логика обработки
+                try:
+                    position_id = int(data["position_id"])
+                    target_id = int(data["target_id"])
+                except (KeyError, ValueError):
+                    logging.error("❌ Некорректные данные: отсутствует position_id или target_id")
+                    await redis_client.xack(stream_name, group_name, msg_id)
+                    continue
+
+                position = open_positions.get(position_id)
+                if not position:
+                    logging.warning(f"⚠️ Позиция {position_id} не найдена в памяти")
+                    await redis_client.xack(stream_name, group_name, msg_id)
+                    continue
+
+                targets = targets_by_position.get(position_id, [])
+                target = next((t for t in targets if t.get("id") == target_id), None)
+
+                if not target:
+                    logging.warning(f"⚠️ Цель {target_id} не найдена в памяти позиции {position_id}")
+                    await redis_client.xack(stream_name, group_name, msg_id)
+                    continue
+                    
                     await redis_client.xack(stream_name, group_name, msg_id)
 
         except Exception as e:
