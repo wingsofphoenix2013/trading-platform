@@ -419,6 +419,8 @@ async def position_close_loop(db_pool):
                     continue
 
                 targets = targets_by_position.get(position_id, [])
+                logging.info(f"🧪 Память целей позиции {position_id}: {json.dumps(targets, default=str)}")
+                logging.info(f"🧪 Ищем target_id = {target_id}")
                 target = next((t for t in targets if t.get("id") == target_id), None)
 
                 if not target:

@@ -380,7 +380,8 @@ class StrategyInterface:
                     "hit": False,
                     "canceled": False
                 })
-
+                
+            logging.info(f"🧠 Цели позиции {position_id} в памяти: {json.dumps(self.targets_by_position[position_id], default=str)}")
             self.targets_by_position[position_id] = tp_targets + sl_targets
 
             self.open_positions[position_id] = {
