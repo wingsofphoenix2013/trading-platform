@@ -69,38 +69,34 @@ async def load_tickers(db_pool):
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке тикеров: {e}")
 # 🔸 Загрузка разрешённых тикеров по стратегиям
-async def load_strategy_tickers():
+async def load_strategy_tickers(db_pool):
     global strategy_allowed_tickers
 
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        async with db_pool.acquire() as conn:
+            result = {}
 
-        result = {}
+            for strategy_id, strategy in strategies_cache.items():
+                use_all = strategy.get("use_all_tickers", False)
 
-        for strategy_id, strategy in strategies_cache.items():
-            use_all = strategy.get("use_all_tickers", False)
+                if use_all:
+                    # Все тикеры с разрешением
+                    allowed = {
+                        symbol for symbol, t in tickers_storage.items()
+                        if t["status"] == "enabled" and t["tradepermission"] == "enabled"
+                    }
+                else:
+                    rows = await conn.fetch("""
+                        SELECT t.symbol
+                        FROM strategy_tickers_v2 st
+                        JOIN tickers t ON st.ticker_id = t.id
+                        WHERE st.strategy_id = $1 AND st.enabled = true
+                    """, strategy_id)
+                    allowed = {row["symbol"] for row in rows}
 
-            if use_all:
-                # Все тикеры с разрешением (без учета is_active)
-                allowed = {
-                    symbol for symbol, t in tickers_storage.items()
-                    if t["status"] == "enabled" and
-                       t["tradepermission"] == "enabled"
-                }
-            else:
-                rows = await conn.fetch("""
-                    SELECT t.symbol
-                    FROM strategy_tickers_v2 st
-                    JOIN tickers t ON st.ticker_id = t.id
-                    WHERE st.strategy_id = $1 AND st.enabled = true
-                """, strategy_id)
-                allowed = {row["symbol"] for row in rows}
+                result[strategy_id] = allowed
 
-            result[strategy_id] = allowed
-
-        await conn.close()
         strategy_allowed_tickers = result
-
         total = sum(len(tickers) for tickers in result.values())
         logging.info(f"✅ Загружено разрешённых тикеров: {total} (для {len(result)} стратегий)")
 
@@ -210,44 +206,41 @@ async def listen_strategy_tasks(db_pool):
             logging.error(f"❌ Ошибка при чтении из Redis Stream: {e}")
             await asyncio.sleep(1)
 # 🔸 Загрузка стратегий из базы
-async def load_strategies():
+async def load_strategies(db_pool):
     global strategies_cache
 
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        async with db_pool.acquire() as conn:
+            # Загружаем стратегии
+            rows = await conn.fetch("""
+                SELECT *
+                FROM strategies_v2
+                WHERE enabled = true AND archived = false
+            """)
 
-        # Загружаем стратегии
-        rows = await conn.fetch("""
-            SELECT *
-            FROM strategies_v2
-            WHERE enabled = true AND archived = false
-        """)
+            # Загружаем TP-уровни всех стратегий
+            tp_levels = await conn.fetch("""
+                SELECT *
+                FROM strategy_tp_levels_v2
+            """)
 
-        # Загружаем TP-уровни всех стратегий
-        tp_levels = await conn.fetch("""
-            SELECT *
-            FROM strategy_tp_levels_v2
-        """)
+            # Группируем TP-уровни по strategy_id
+            tp_levels_by_strategy = {}
+            for row in tp_levels:
+                sid = row["strategy_id"]
+                tp_levels_by_strategy.setdefault(sid, []).append(dict(row))
 
-        # Группируем TP-уровни по strategy_id
-        tp_levels_by_strategy = {}
-        for row in tp_levels:
-            sid = row["strategy_id"]
-            tp_levels_by_strategy.setdefault(sid, []).append(dict(row))
+            # Загружаем SL-поведение после TP
+            tp_sl_rules = await conn.fetch("""
+                SELECT *
+                FROM strategy_tp_sl_v2
+            """)
 
-        # Загружаем SL-поведение после TP
-        tp_sl_rules = await conn.fetch("""
-            SELECT *
-            FROM strategy_tp_sl_v2
-        """)
-
-        # Группируем SL-настройки по strategy_id
-        tp_sl_by_strategy = {}
-        for row in tp_sl_rules:
-            sid = row["strategy_id"]
-            tp_sl_by_strategy.setdefault(sid, []).append(dict(row))
-
-        await conn.close()
+            # Группируем SL-настройки по strategy_id
+            tp_sl_by_strategy = {}
+            for row in tp_sl_rules:
+                sid = row["strategy_id"]
+                tp_sl_by_strategy.setdefault(sid, []).append(dict(row))
 
         # Формируем strategies_cache
         strategies_cache = {}
@@ -263,17 +256,16 @@ async def load_strategies():
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке стратегий: {e}")
 # 🔸 Загрузка открытых позиций из базы
-async def load_open_positions():
+async def load_open_positions(db_pool):
     global open_positions
 
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        rows = await conn.fetch("""
-            SELECT *
-            FROM positions_v2
-            WHERE status = 'open'
-        """)
-        await conn.close()
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT *
+                FROM positions_v2
+                WHERE status = 'open'
+            """)
 
         open_positions = {
             row["id"]: dict(row) for row in rows
@@ -281,8 +273,7 @@ async def load_open_positions():
 
         logging.info(f"✅ Загружено открытых позиций: {len(open_positions)}")
     except Exception as e:
-        logging.error(f"❌ Ошибка при загрузке открытых позиций: {e}")  
-                          
+        logging.error(f"❌ Ошибка при загрузке открытых позиций: {e}")                          
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
@@ -290,19 +281,13 @@ async def main():
     # 🔹 Создание пула PostgreSQL
     db_pool = await asyncpg.create_pool(DATABASE_URL)
     logging.info("✅ Пул подключений к PostgreSQL создан")
-
-    # 🔹 Загрузка тикеров (тестовая)
     await load_tickers(db_pool)
-
-    # 🔹 Запуск слушателя задач
     await listen_strategy_tasks(db_pool)
-
-    # ❗ Остальное пока отключено:
-    # await load_strategies()
-    # await load_strategy_tickers()
-    # await load_open_positions()
-    # asyncio.create_task(refresh_all_periodically())
-    # asyncio.create_task(monitor_prices())
+    await load_strategies(db_pool)
+    await load_strategy_tickers(db_pool)
+    await load_open_positions(db_pool)
+    asyncio.create_task(refresh_all_periodically())
+    asyncio.create_task(monitor_prices())
     
 if __name__ == "__main__":
     asyncio.run(main())
