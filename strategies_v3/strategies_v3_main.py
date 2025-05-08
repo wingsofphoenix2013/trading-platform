@@ -200,8 +200,14 @@ async def listen_strategy_tasks(db_pool):
             for stream, messages in entries:
                 for msg_id, msg_data in messages:
                     logging.info(f"📥 Получена задача: {msg_data}")
-                    await handle_task(msg_data, db_pool)
-                    await redis_client.xack(stream_name, group_name, msg_id)
+
+                    try:
+                        await handle_task(msg_data, db_pool)
+                    except Exception as e:
+                        logging.error(f"❌ Ошибка при обработке задачи: {e}")
+                    finally:
+                        await redis_client.xack(stream_name, group_name, msg_id)
+
         except Exception as e:
             logging.error(f"❌ Ошибка при чтении из Redis Stream: {e}")
             await asyncio.sleep(1)
