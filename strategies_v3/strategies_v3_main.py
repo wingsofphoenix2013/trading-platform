@@ -442,7 +442,7 @@ async def position_close_loop(db_pool):
                     t for t in targets if t.get("id") != target_id
                 ]
                     
-                    await redis_client.xack(stream_name, group_name, msg_id)
+                await redis_client.xack(stream_name, group_name, msg_id)
 
         except Exception as e:
             logging.error(f"❌ Ошибка в position_close_loop: {e}")
