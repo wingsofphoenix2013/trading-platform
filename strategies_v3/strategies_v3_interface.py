@@ -328,6 +328,24 @@ class StrategyInterface:
 
                 logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
 
+            tp_targets = [
+                {**tp, "type": "tp", "hit": False, "canceled": False}
+                for tp in tp_levels
+            ]
+
+            sl_targets = []
+            sl_price = position_data.get("stop_loss_price")
+            if sl_price is not None:
+                sl_targets.append({
+                    "type": "sl",
+                    "price": sl_price,
+                    "quantity": quantity,
+                    "hit": False,
+                    "canceled": False
+                })
+
+            self.targets_by_position[position_id] = tp_targets + sl_targets
+
             self.open_positions[position_id] = {
                 "id": position_id,
                 "strategy_id": strategy_id,
@@ -343,15 +361,8 @@ class StrategyInterface:
                 "planned_risk": planned_risk
             }
 
-            tp_targets = [{**tp, "type": "tp"} for tp in tp_levels]
-            
-            self.targets_by_position[position_id] = tp_targets + (
-                [{"type": "sl", "price": position_data["stop_loss_price"], "quantity": quantity}]
-                if position_data.get("stop_loss_price") else []
-            )            
-            
             return position_id
-
+            
         except Exception as e:
             logging.error(f"❌ Ошибка при создании позиции: {e}")
             return None
