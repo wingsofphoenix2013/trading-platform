@@ -374,7 +374,41 @@ async def follow_positions():
 async def follow_positions_loop():
     while True:
         await follow_positions()
-        await asyncio.sleep(1)                                                          
+        await asyncio.sleep(1)
+# 🔸 Обработка задач на закрытие позиции
+async def position_close_loop(db_pool):
+    stream_name = "position:close"
+    group_name = "position_closer"
+    consumer_name = "position_closer_worker"
+
+    try:
+        await redis_client.xgroup_create(name=stream_name, groupname=group_name, id="0", mkstream=True)
+        logging.info("✅ Группа position_closer создана")
+    except ResponseError as e:
+        if "BUSYGROUP" in str(e):
+            logging.info("ℹ️ Группа position_closer уже существует")
+        else:
+            raise
+
+    while True:
+        try:
+            entries = await redis_client.xreadgroup(
+                groupname=group_name,
+                consumername=consumer_name,
+                streams={stream_name: ">"},
+                count=10,
+                block=1000
+            )
+
+            for stream, messages in entries:
+                for msg_id, data in messages:
+                    logging.info(f"📥 Получена задача на закрытие позиции: {data}")
+                    # Здесь позже будет логика обработки
+                    await redis_client.xack(stream_name, group_name, msg_id)
+
+        except Exception as e:
+            logging.error(f"❌ Ошибка в position_close_loop: {e}")
+            await asyncio.sleep(1)                                                                  
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
@@ -394,6 +428,7 @@ async def main():
     asyncio.create_task(refresh_all_periodically(db_pool))
     asyncio.create_task(monitor_prices())
     asyncio.create_task(follow_positions_loop())
+    asyncio.create_task(position_close_loop(db_pool))
 
     # 🔹 Запуск слушателя задач (после полной инициализации)
     await listen_strategy_tasks(db_pool)
