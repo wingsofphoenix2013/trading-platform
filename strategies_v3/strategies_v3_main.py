@@ -331,7 +331,7 @@ async def follow_positions():
             continue
 
         # 🔹 Текущая цена
-        logging.info(f"📡 Позиция ID={position_id}, {symbol}, {direction} — текущая цена: {latest_price}")
+        debug_log(f"📡 Позиция ID={position_id}, {symbol}, {direction} — текущая цена: {latest_price}")
 
         # 🔹 TP-контроль
         tp_levels = [
@@ -358,18 +358,18 @@ async def follow_positions():
             tp_price = next_tp["price"]
             level = next_tp["level"]
             if direction == "long" and latest_price >= tp_price:
-                logging.info(f"💡 Цена достигла TP уровня #{level} для позиции ID={position_id} — {latest_price} ≥ {tp_price}")
+                debug_log(f"💡 Цена достигла TP уровня #{level} для позиции ID={position_id} — {latest_price} ≥ {tp_price}")
             elif direction == "short" and latest_price <= tp_price:
-                logging.info(f"💡 Цена достигла TP уровня #{level} для позиции ID={position_id} — {latest_price} ≤ {tp_price}")
+                debug_log(f"💡 Цена достигла TP уровня #{level} для позиции ID={position_id} — {latest_price} ≤ {tp_price}")
 
         # 🔹 SL-контроль
         sl = next((t for t in targets if t["type"] == "sl" and not t["hit"] and not t["canceled"]), None)
         if sl:
             sl_price = sl["price"]
             if direction == "long" and latest_price <= sl_price:
-                logging.info(f"⚠️ Цена достигла SL для позиции ID={position_id} — {latest_price} ≤ {sl_price}")
+                debug_log(f"⚠️ Цена достигла SL для позиции ID={position_id} — {latest_price} ≤ {sl_price}")
             elif direction == "short" and latest_price >= sl_price:
-                logging.info(f"⚠️ Цена достигла SL для позиции ID={position_id} — {latest_price} ≥ {sl_price}")
+                debug_log(f"⚠️ Цена достигла SL для позиции ID={position_id} — {latest_price} ≥ {sl_price}")
 # 🔸 Цикл мониторинга открытых позиций
 async def follow_positions_loop():
     while True:
