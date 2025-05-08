@@ -33,6 +33,7 @@ redis_client = redis.Redis(
 # 🔸 Хранилища в памяти
 tickers_storage = {}
 open_positions = {}
+targets_by_position = {}
 latest_prices = {}
 strategies_cache = {}
 strategy_allowed_tickers = {}
@@ -111,6 +112,7 @@ async def refresh_all_periodically(db_pool):
         await load_strategies(db_pool)
         await load_strategy_tickers(db_pool)
         await load_open_positions(db_pool)
+        await load_position_targets(db_pool)
         await asyncio.sleep(60)
 # 🔸 Фоновая задача: обновление цен из Redis (ключи вида price:<symbol>)
 async def monitor_prices():
@@ -285,7 +287,31 @@ async def load_open_positions(db_pool):
 
         debug_log(f"✅ Загружено открытых позиций: {len(open_positions)}")
     except Exception as e:
-        logging.error(f"❌ Ошибка при загрузке открытых позиций: {e}")                          
+        logging.error(f"❌ Ошибка при загрузке открытых позиций: {e}")
+# 🔸 Загрузка целей по позициям из базы
+async def load_position_targets(db_pool):
+    global targets_by_position
+
+    try:
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT *
+                FROM position_targets_v2
+            """)
+
+        # Группируем по position_id
+        grouped = {}
+        for row in rows:
+            pid = row["position_id"]
+            grouped.setdefault(pid, []).append(dict(row))
+
+        targets_by_position = grouped
+
+        total = sum(len(t) for t in grouped.values())
+        logging.info(f"✅ Загружено целей: {total} для {len(targets_by_position)} позиций")
+
+    except Exception as e:
+        logging.error(f"❌ Ошибка при загрузке целей позиции: {e}")                                  
 # 🔸 Главная точка запуска
 async def main():
     logging.info("🚀 Strategy Worker (v3) запущен.")
@@ -299,6 +325,7 @@ async def main():
     await load_strategies(db_pool)
     await load_strategy_tickers(db_pool)
     await load_open_positions(db_pool)
+    await load_position_targets(db_pool)
 
     # 🔹 Фоновые обновления (можно оставить отключёнными)
     asyncio.create_task(refresh_all_periodically(db_pool))
