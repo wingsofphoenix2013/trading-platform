@@ -464,7 +464,87 @@ async def position_close_loop(db_pool):
                     logging.error(f"❌ Ошибка при обновлении quantity_left: {e}")
                     await redis_client.xack(stream_name, group_name, msg_id)
                     continue
-                    
+
+                strategy_id = position["strategy_id"]
+                strategy = strategies_cache.get(strategy_id)
+                tp_sl_rules = strategy.get("tp_sl_rules", [])
+
+                sl_rule = next((r for r in tp_sl_rules if r["tp_level_id"] == target_id), None)
+
+                if not sl_rule or sl_rule["sl_mode"] == "none":
+                    logging.info(f"ℹ️ Для TP {target_id} политика SL не требует перестановки")
+                else:
+                    # 🔸 Найдём текущий SL в памяти
+                    current_sl = next((t for t in targets_by_position.get(position_id, []) if t["type"] == "sl" and not t["hit"] and not t["canceled"]), None)
+
+                    if not current_sl:
+                        logging.warning(f"⚠️ Текущий SL не найден, невозможно переставить")
+                    else:
+                        # 🔹 Отменить старый SL в БД
+                        async with db_pool.acquire() as conn:
+                            await conn.execute("""
+                                UPDATE position_targets_v2
+                                SET canceled = true
+                                WHERE position_id = $1 AND type = 'sl' AND hit = false AND canceled = false
+                            """, position_id)
+
+                        # 🔹 Удалить старый SL из памяти
+                        targets_by_position[position_id] = [
+                            t for t in targets_by_position[position_id]
+                            if not (t["type"] == "sl" and not t["hit"] and not t["canceled"])
+                        ]
+
+                        logging.info(f"🔁 Старый SL отменён — подготовка к пересчёту нового")
+
+                    # 🔹 Расчёт нового SL
+                    sl_mode = sl_rule["sl_mode"]
+                    sl_value = Decimal(str(sl_rule["sl_value"])) if sl_mode in ("percent", "atr") else None
+                    entry_price = Decimal(position["entry_price"])
+                    direction = position["direction"]
+
+                    sl_price = None
+
+                    if sl_mode == "entry":
+                        sl_price = entry_price
+
+                    elif sl_mode == "percent":
+                        delta = entry_price * (sl_value / Decimal("100"))
+                        sl_price = (entry_price - delta if direction == "long" else entry_price + delta)
+
+                    elif sl_mode == "atr":
+                        atr = await get_indicator_value(symbol, strategy["timeframe"], "ATR", "atr")
+                        if atr is not None:
+                            sl_price = (entry_price - atr * sl_value if direction == "long" else entry_price + atr * sl_value)
+
+                    if sl_price is None:
+                        logging.warning("⚠️ Не удалось рассчитать SL — пропуск перестановки")
+                    else:
+                        precision_price = Decimal(f"1e-{tickers_storage[symbol]['precision_price']}")
+                        sl_price = sl_price.quantize(precision_price, rounding=ROUND_DOWN)
+
+                        quantity = Decimal(position["quantity_left"])
+
+                        async with db_pool.acquire() as conn:
+                            await conn.execute("""
+                                INSERT INTO position_targets_v2 (
+                                    position_id, type, price, quantity,
+                                    hit, canceled, tp_trigger_type
+                                ) VALUES (
+                                    $1, 'sl', $2, $3,
+                                    false, false, 'price'
+                                )
+                            """, position_id, sl_price, quantity)
+
+                        targets_by_position[position_id].append({
+                            "type": "sl",
+                            "price": sl_price,
+                            "quantity": quantity,
+                            "hit": False,
+                            "canceled": False
+                        })
+
+                        logging.info(f"📌 SL переставлен после TP {target_id}: новый уровень = {sl_price}")
+                                            
                 await redis_client.xack(stream_name, group_name, msg_id)
 
         except Exception as e:
