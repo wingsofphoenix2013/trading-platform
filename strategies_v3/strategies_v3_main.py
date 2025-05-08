@@ -441,6 +441,29 @@ async def position_close_loop(db_pool):
                 targets_by_position[position_id] = [
                     t for t in targets if t.get("id") != target_id
                 ]
+
+                try:
+                    symbol = position["symbol"]
+                    precision_qty = Decimal(f"1e-{tickers_storage[symbol]['precision_qty']}")
+                    qty_left_before = Decimal(position["quantity_left"])
+                    qty_hit = Decimal(target["quantity"])
+                    new_quantity_left = (qty_left_before - qty_hit).quantize(precision_qty, rounding=ROUND_DOWN)
+
+                    async with db_pool.acquire() as conn:
+                        await conn.execute("""
+                            UPDATE positions_v2
+                            SET quantity_left = $1
+                            WHERE id = $2
+                        """, new_quantity_left, position_id)
+
+                    position["quantity_left"] = new_quantity_left  # обновить in-memory
+
+                    logging.info(f"📉 Обновлено quantity_left: {qty_left_before} → {new_quantity_left} для позиции ID={position_id}")
+
+                except Exception as e:
+                    logging.error(f"❌ Ошибка при обновлении quantity_left: {e}")
+                    await redis_client.xack(stream_name, group_name, msg_id)
+                    continue
                     
                 await redis_client.xack(stream_name, group_name, msg_id)
 
