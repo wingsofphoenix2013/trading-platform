@@ -235,30 +235,28 @@ class StrategyInterface:
             commission = (notional * Decimal("0.001")).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
             pnl = -commission
 
-            conn = await asyncpg.connect(self.database_url)
-            row = await conn.fetchrow("""
-                INSERT INTO positions_v2 (
-                    strategy_id, log_id, symbol, direction, entry_price,
-                    quantity, notional_value, quantity_left, status,
-                    close_reason, pnl, planned_risk, created_at
-                ) VALUES (
-                    $1, $2, $3, $4, $5,
-                    $6, $7, $6, 'open',
-                    'открыта', $8, $9, NOW()
-                ) RETURNING id
-            """, strategy_id, log_id, symbol, direction, entry_price,
-                 quantity, notional, pnl, planned_risk)
-            await conn.close()
+            async with self.db_pool.acquire() as conn:
+                # 🔹 Запись позиции
+                row = await conn.fetchrow("""
+                    INSERT INTO positions_v2 (
+                        strategy_id, log_id, symbol, direction, entry_price,
+                        quantity, notional_value, quantity_left, status,
+                        close_reason, pnl, planned_risk, created_at
+                    ) VALUES (
+                        $1, $2, $3, $4, $5,
+                        $6, $7, $6, 'open',
+                        'открыта', $8, $9, NOW()
+                    ) RETURNING id
+                """, strategy_id, log_id, symbol, direction, entry_price,
+                     quantity, notional, pnl, planned_risk)
 
-            position_id = row["id"]
-            logging.info(f"📌 Позиция создана: ID={position_id}, {symbol}, {direction}, qty={quantity}, pnl={pnl}")
+                position_id = row["id"]
+                logging.info(f"📌 Позиция создана: ID={position_id}, {symbol}, {direction}, qty={quantity}, pnl={pnl}")
 
-            # 🔹 Генерация TP и SL
-            try:
+                # 🔹 Генерация TP-уровней
                 strategy = self.strategies_cache[strategy_id]
                 tp_levels = strategy.get("tp_levels", [])
                 ticker = self.tickers_storage.get(symbol)
-                conn = await asyncpg.connect(self.database_url)
 
                 total_tp = len(tp_levels)
                 allocated_qty = Decimal("0")
@@ -274,7 +272,7 @@ class StrategyInterface:
                     if volume_percent <= 0:
                         continue
 
-                    # 🔹 Расчёт объёма
+                    # 🔹 Объём
                     if i < total_tp - 1:
                         qty_tp = (quantity * Decimal(volume_percent) / Decimal("100")).quantize(
                             precision_qty, rounding=ROUND_DOWN)
@@ -282,7 +280,7 @@ class StrategyInterface:
                     else:
                         qty_tp = (quantity - allocated_qty).quantize(precision_qty, rounding=ROUND_DOWN)
 
-                    # 🔹 Расчёт цены TP
+                    # 🔹 Цена TP
                     tp_price = None
                     if tp_type == "percent":
                         multiplier = Decimal("1") + (tp_value / Decimal("100")) if direction == "long" else Decimal("1") - (tp_value / Decimal("100"))
@@ -291,12 +289,9 @@ class StrategyInterface:
                         atr = await self.get_indicator_value(symbol, strategy["timeframe"], "ATR", "atr")
                         if atr is not None:
                             delta = atr * tp_value
-                            tp_price = (entry_price + delta if direction == "long" else entry_price - delta).quantize(
-                                precision_price, rounding=ROUND_DOWN)
+                            tp_price = (entry_price + delta if direction == "long" else entry_price - delta).quantize(precision_price, rounding=ROUND_DOWN)
                     elif tp_type == "fixed":
                         tp_price = Decimal(tp_value).quantize(precision_price, rounding=ROUND_DOWN)
-                    elif tp_type == "external_signal":
-                        tp_price = None
 
                     tp_trigger_type = "signal" if tp_type == "external_signal" else "price"
 
@@ -311,7 +306,7 @@ class StrategyInterface:
                         )
                     """, position_id, level, tp_price, qty_tp, tp_trigger_type)
 
-                # 🔹 Генерация базового SL из position_data
+                # 🔹 SL из position_data
                 sl_price = position_data.get("stop_loss_price")
                 if sl_price is not None:
                     await conn.execute("""
@@ -323,18 +318,12 @@ class StrategyInterface:
                             false, false, 'price'
                         )
                     """, position_id, sl_price, quantity)
-
                     logging.info(f"📍 Установлен SL на уровне {sl_price}")
                 else:
                     logging.warning("⚠️ SL не установлен — отсутствует stop_loss_price в position_data")
 
-                await conn.close()
                 logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_levels)}")
 
-            except Exception as e:
-                logging.error(f"❌ Ошибка при генерации TP/SL: {e}")
-                return position_id
-                                
             return position_id
 
         except Exception as e:
