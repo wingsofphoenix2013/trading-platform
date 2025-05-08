@@ -76,11 +76,21 @@ class StrategyInterface:
         return True, "Базовые проверки пройдены"
 
     # 🔸 Поиск ID стратегии по имени
-    async def get_strategy_id_by_name(self, strategy_name: str) -> int:
-        for sid, data in self.strategies_cache.items():
-            if data["name"] == strategy_name:
-                return sid
-        return None
+    async def get_strategy_id_by_name(self, strategy_name: str) -> int | None:
+        try:
+            async with self.db_pool.acquire() as conn:
+                row = await conn.fetchrow("""
+                    SELECT id FROM strategies_v2 WHERE name = $1
+                """, strategy_name)
+
+            if row:
+                return row["id"]
+            else:
+                logging.warning(f"⚠️ Стратегия '{strategy_name}' не найдена в базе данных.")
+                return None
+        except Exception as e:
+            logging.error(f"❌ Ошибка при получении strategy_id по имени '{strategy_name}': {e}")
+            return None
     # 🔸 Получение значения индикатора из Redis по ключу
     async def get_indicator_value(self, symbol: str, timeframe: str, *path_parts: str) -> Decimal | None:
         try:
