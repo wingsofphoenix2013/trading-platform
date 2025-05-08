@@ -30,12 +30,11 @@ class StrategyInterface:
     # 🔸 Логирование действия стратегии в signal_log_entries_v2
     async def log_strategy_action(self, strategy_id: int, log_id: int, status: str, note: str, position_id: int = None):
         try:
-            conn = await asyncpg.connect(self.database_url)
-            await conn.execute("""
-                INSERT INTO signal_log_entries_v2 (strategy_id, log_id, status, note, position_id, logged_at)
-                VALUES ($1, $2, $3, $4, $5, NOW())
-            """, strategy_id, log_id, status, note, position_id)
-            await conn.close()
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO signal_log_entries_v2 (strategy_id, log_id, status, note, position_id, logged_at)
+                    VALUES ($1, $2, $3, $4, $5, NOW())
+                """, strategy_id, log_id, status, note, position_id)
 
             logging.info(f"📝 Запись в лог: strategy_id={strategy_id}, log_id={log_id}, status={status}")
         except Exception as e:
