@@ -36,7 +36,7 @@ class StrategyInterface:
                     VALUES ($1, $2, $3, $4, $5, NOW())
                 """, strategy_id, log_id, status, note, position_id)
 
-            logging.info(f"📝 Запись в лог: strategy_id={strategy_id}, log_id={log_id}, status={status}")
+            debug_log(f"📝 Запись в лог: strategy_id={strategy_id}, log_id={log_id}, status={status}")
         except Exception as e:
             logging.error(f"❌ Ошибка при записи в signal_log_entries_v2: {e}")
 
@@ -201,7 +201,7 @@ class StrategyInterface:
         sl_percent_log = f"{sl_value}%" if sl_type == "percent" else "N/A"
         atr_log = f"{atr}" if sl_type == "atr" else "N/A"
         
-        logging.info(f"📊 Расчёт позиции: qty={quantity}, notional={notional_value}, "
+        debug_log(f"📊 Расчёт позиции: qty={quantity}, notional={notional_value}, "
                      f"risk={planned_risk}, margin={margin_used}, sl={stop_loss_price}, "
                      f"entry={entry_price}, leverage={leverage}, SL%={sl_percent_log}, ATR={atr_log}")
 

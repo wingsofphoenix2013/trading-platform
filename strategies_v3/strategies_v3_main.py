@@ -72,7 +72,7 @@ async def load_tickers(db_pool):
             for row in rows
         }
 
-        logging.info(f"✅ Загружено тикеров: {len(tickers_storage)}")
+        debug_log(f"✅ Загружено тикеров: {len(tickers_storage)}")
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке тикеров: {e}")
 # 🔸 Загрузка разрешённых тикеров по стратегиям
@@ -105,14 +105,14 @@ async def load_strategy_tickers(db_pool):
 
         strategy_allowed_tickers = result
         total = sum(len(tickers) for tickers in result.values())
-        logging.info(f"✅ Загружено разрешённых тикеров: {total} (для {len(result)} стратегий)")
+        debug_log(f"✅ Загружено разрешённых тикеров: {total} (для {len(result)} стратегий)")
 
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке strategy_tickers: {e}")
 # 🔸 Периодическое обновление всех данных (тикеры, стратегии, разрешения, позиции)
 async def refresh_all_periodically(db_pool):
     while True:
-        logging.info("🔄 Обновление тикеров, стратегий и позиций...")
+        debug_log("🔄 Обновление тикеров, стратегий и позиций...")
         await load_tickers(db_pool)
         await load_strategies(db_pool)
         await load_strategy_tickers(db_pool)
@@ -160,7 +160,7 @@ async def handle_task(task_data: dict, db_pool):
 
     # 🔹 Выполнение базовых проверок
     ok, note = await interface.run_basic_checks(task_data)
-    logging.info(f"✅ Проверка: {ok}, Причина: {note}")
+    debug_log(f"✅ Проверка: {ok}, Причина: {note}")
 
     if not ok:
         strategy_id = await interface.get_strategy_id_by_name(strategy_name)
@@ -193,10 +193,10 @@ async def listen_strategy_tasks(db_pool):
 
     try:
         await redis_client.xgroup_create(name=stream_name, groupname=group_name, id="0", mkstream=True)
-        logging.info("✅ Группа создана.")
+        debug_log("✅ Группа создана.")
     except ResponseError as e:
         if "BUSYGROUP" in str(e):
-            logging.info("ℹ️ Группа уже существует.")
+            debug_log("ℹ️ Группа уже существует.")
         else:
             raise
 
@@ -211,7 +211,7 @@ async def listen_strategy_tasks(db_pool):
             )
             for stream, messages in entries:
                 for msg_id, msg_data in messages:
-                    logging.info(f"📥 Получена задача: {msg_data}")
+                    debug_log(f"📥 Получена задача: {msg_data}")
 
                     try:
                         await handle_task(msg_data, db_pool)
@@ -269,7 +269,7 @@ async def load_strategies(db_pool):
             strategy_dict["tp_sl_rules"] = tp_sl_by_strategy.get(sid, [])
             strategies_cache[sid] = strategy_dict
 
-        logging.info(f"✅ Загружено стратегий: {len(strategies_cache)}")
+        debug_log(f"✅ Загружено стратегий: {len(strategies_cache)}")
 
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке стратегий: {e}")
@@ -289,7 +289,7 @@ async def load_open_positions(db_pool):
             row["id"]: dict(row) for row in rows
         }
 
-        logging.info(f"✅ Загружено открытых позиций: {len(open_positions)}")
+        debug_log(f"✅ Загружено открытых позиций: {len(open_positions)}")
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке открытых позиций: {e}")                          
 # 🔸 Главная точка запуска
