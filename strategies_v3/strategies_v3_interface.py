@@ -5,6 +5,7 @@ from decimal import Decimal, ROUND_DOWN
 from datetime import datetime
 from debug_utils import debug_log
 import os
+import json
 
 # 🔸 Универсальный интерфейс для стратегий v3
 class StrategyInterface:
