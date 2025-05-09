@@ -433,8 +433,36 @@ async def position_close_loop(db_pool):
                             """, target_id)
 
                         logging.info(f"✅ SL цель ID={target_id} помечена как hit")
-                        await redis_client.xack(stream_name, group_name, msg_id)
-                        continue
+                        try:
+                            symbol = position["symbol"]
+                            sl_price_str = latest_prices.get(symbol)
+                            if sl_price_str is None:
+                                raise ValueError(f"Цена не найдена в latest_prices для {symbol}")
+
+                            sl_price = Decimal(sl_price_str)
+
+                            async with db_pool.acquire() as conn:
+                                await conn.execute("""
+                                    UPDATE positions_v2
+                                    SET status = 'closed',
+                                        planned_risk = 0,
+                                        exit_price = $1,
+                                        closed_at = NOW(),
+                                        close_reason = $2
+                                    WHERE id = $3
+                                """, sl_price, "sl", position_id)
+
+                            position["status"] = "closed"
+                            position["planned_risk"] = Decimal("0")
+                            position["exit_price"] = sl_price
+                            position["close_reason"] = "sl"
+
+                            logging.info(f"🛑 Позиция ID={position_id} закрыта по SL на уровне {sl_price}")
+
+                        except Exception as e:
+                            logging.error(f"❌ Ошибка при закрытии позиции по SL: {e}")
+                            await redis_client.xack(stream_name, group_name, msg_id)
+                            continue
 
                     except Exception as e:
                         logging.error(f"❌ Ошибка при обновлении SL цели {target_id}: {e}")
