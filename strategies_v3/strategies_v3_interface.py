@@ -346,7 +346,7 @@ class StrategyInterface:
                 logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_targets)}")
 
             try:
-                logging.info(f"🧠 Цели позиции {position_id} в памяти: {json.dumps(tp_targets + sl_targets, default=str)}")
+                debug_log(f"🧠 Цели позиции {position_id} в памяти: {json.dumps(tp_targets + sl_targets, default=str)}")
             except Exception as e:
                 logging.warning(f"⚠️ Ошибка логирования целей в памяти: {e}")
 

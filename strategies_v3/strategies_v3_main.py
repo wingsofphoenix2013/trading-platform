@@ -209,7 +209,7 @@ async def listen_strategy_tasks(db_pool):
             )
             for stream, messages in entries:
                 for msg_id, msg_data in messages:
-                    debug_log(f"📥 Получена задача: {msg_data}")
+                    logging.info(f"📥 Получена задача: {msg_data}")
 
                     try:
                         await handle_task(msg_data, db_pool)
@@ -311,7 +311,7 @@ async def load_position_targets(db_pool):
         targets_by_position = grouped
 
         total = sum(len(t) for t in grouped.values())
-        logging.info(f"✅ Загружено целей: {total} для {len(targets_by_position)} позиций")
+        debug_log(f"✅ Загружено целей: {total} для {len(targets_by_position)} позиций")
 
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке целей позиции: {e}")
@@ -384,10 +384,10 @@ async def position_close_loop(db_pool):
 
     try:
         await redis_client.xgroup_create(name=stream_name, groupname=group_name, id="0", mkstream=True)
-        logging.info("✅ Группа position_closer создана")
+        debug_log("✅ Группа position_closer создана")
     except ResponseError as e:
         if "BUSYGROUP" in str(e):
-            logging.info("ℹ️ Группа position_closer уже существует")
+            debug_log("ℹ️ Группа position_closer уже существует")
         else:
             raise
 
@@ -419,8 +419,8 @@ async def position_close_loop(db_pool):
                     continue
 
                 targets = targets_by_position.get(position_id, [])
-                logging.info(f"🧪 Память целей позиции {position_id}: {json.dumps(targets, default=str)}")
-                logging.info(f"🧪 Ищем target_id = {target_id}")
+                debug_log(f"🧪 Память целей позиции {position_id}: {json.dumps(targets, default=str)}")
+                debug_log(f"🧪 Ищем target_id = {target_id}")
                 target = next((t for t in targets if t.get("id") == target_id), None)
 
                 if not target:
@@ -461,7 +461,7 @@ async def position_close_loop(db_pool):
 
                     position["quantity_left"] = new_quantity_left  # обновить in-memory
 
-                    logging.info(f"📉 Обновлено quantity_left: {qty_left_before} → {new_quantity_left} для позиции ID={position_id}")
+                    debug_log(f"📉 Обновлено quantity_left: {qty_left_before} → {new_quantity_left} для позиции ID={position_id}")
 
                 except Exception as e:
                     logging.error(f"❌ Ошибка при обновлении quantity_left: {e}")
@@ -475,7 +475,7 @@ async def position_close_loop(db_pool):
                 sl_rule = next((r for r in tp_sl_rules if r["tp_level_id"] == target_id), None)
 
                 if not sl_rule or sl_rule["sl_mode"] == "none":
-                    logging.info(f"ℹ️ Для TP {target_id} политика SL не требует перестановки")
+                    debug_log(f"ℹ️ Для TP {target_id} политика SL не требует перестановки")
                 else:
                     # 🔸 Найдём текущий SL в памяти
                     current_sl = next((t for t in targets_by_position.get(position_id, []) if t["type"] == "sl" and not t["hit"] and not t["canceled"]), None)
@@ -500,7 +500,7 @@ async def position_close_loop(db_pool):
                         # Обновляем переменную targets
                         targets = targets_by_position[position_id]
 
-                        logging.info(f"🔁 Старый SL отменён — подготовка к пересчёту нового")
+                        debug_log(f"🔁 Старый SL отменён — подготовка к пересчёту нового")
                         
                     # 🔹 Расчёт нового SL
                     sl_mode = sl_rule["sl_mode"]
@@ -549,8 +549,38 @@ async def position_close_loop(db_pool):
                             "canceled": False
                         })
 
-                        logging.info(f"📌 SL переставлен после TP {target_id}: новый уровень = {sl_price}")
-                                            
+                        debug_log(f"📌 SL переставлен после TP {target_id}: новый уровень = {sl_price}")
+                # 🔹 Пересчёт planned_risk
+                try:
+                    entry_price = Decimal(position["entry_price"])
+                    quantity_left = Decimal(position["quantity_left"])
+
+                    # Найдём актуальный SL
+                    sl = next((t for t in targets_by_position.get(position_id, [])
+                               if t["type"] == "sl" and not t["hit"] and not t["canceled"]), None)
+
+                    if not sl:
+                        logging.warning(f"⚠️ SL не найден для пересчёта planned_risk (позиция {position_id})")
+                    else:
+                        sl_price = Decimal(sl["price"])
+                        risk = abs(entry_price - sl_price) * quantity_left
+                        risk = risk.quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
+
+                        async with db_pool.acquire() as conn:
+                            await conn.execute("""
+                                UPDATE positions_v2
+                                SET planned_risk = $1
+                                WHERE id = $2
+                            """, risk, position_id)
+
+                        position["planned_risk"] = risk
+                        logging.info(f"📐 Пересчитан planned_risk: {risk} для позиции ID={position_id}")
+
+                except Exception as e:
+                    logging.error(f"❌ Ошибка при пересчёте planned_risk: {e}")
+                    await redis_client.xack(stream_name, group_name, msg_id)
+                    continue
+                                                                
                 await redis_client.xack(stream_name, group_name, msg_id)
 
         except Exception as e:
