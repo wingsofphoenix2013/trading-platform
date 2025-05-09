@@ -623,14 +623,35 @@ async def position_close_loop(db_pool):
                             WHERE id = $2
                         """, reason, position_id)
 
-                    position["close_reason"] = reason
-                    logging.info(f"📝 Установлен close_reason: {reason} для позиции ID={position_id}")
+                        position["close_reason"] = reason
+                        logging.info(f"📝 Установлен close_reason: {reason} для позиции ID={position_id}")
+
+                        # 🔹 Логирование в system_logs
+                        tp_price = str(target.get("price"))
+                        qty_for_log = str(target.get("quantity"))
+
+                        log_details = json.dumps({
+                            "position_id": position_id,
+                            "target_id": target_id,
+                            "tp_price": tp_price,
+                            "quantity": qty_for_log
+                        })
+
+                        await conn.execute("""
+                            INSERT INTO system_logs (
+                                level, message, source, details, action_flag
+                            ) VALUES (
+                                'INFO', $1, 'position_close_worker', $2, 'ignore'
+                            )
+                        """, f"Сработал TP уровень {level}", log_details)
+
+                        logging.info(f"🧾 Запись в system_logs: TP {level} для позиции ID={position_id}")
 
                 except Exception as e:
-                    logging.error(f"❌ Ошибка при обновлении close_reason: {e}")
+                    logging.error(f"❌ Ошибка при обновлении close_reason или записи в system_logs: {e}")
                     await redis_client.xack(stream_name, group_name, msg_id)
                     continue
-                                                                                                        
+                                                                                                                            
                 await redis_client.xack(stream_name, group_name, msg_id)
 
         except Exception as e:
