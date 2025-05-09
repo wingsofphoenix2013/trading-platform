@@ -351,7 +351,9 @@ class StrategyInterface:
                 logging.warning(f"⚠️ Ошибка логирования целей в памяти: {e}")
 
             self.targets_by_position[position_id] = tp_targets + sl_targets
-
+            
+            commission = (notional * Decimal("0.001")).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
+            
             self.open_positions[position_id] = {
                 "id": position_id,
                 "strategy_id": strategy_id,
@@ -365,7 +367,7 @@ class StrategyInterface:
                 "status": "open",
                 "created_at": str(datetime.utcnow()),
                 "planned_risk": planned_risk,
-                "pnl": Decimal("0")
+                "pnl": -commission
             }
 
             return position_id
