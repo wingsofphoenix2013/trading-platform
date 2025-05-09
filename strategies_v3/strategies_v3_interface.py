@@ -364,7 +364,8 @@ class StrategyInterface:
                 "quantity_left": quantity,
                 "status": "open",
                 "created_at": str(datetime.utcnow()),
-                "planned_risk": planned_risk
+                "planned_risk": planned_risk,
+                "pnl": Decimal("0")
             }
 
             return position_id
