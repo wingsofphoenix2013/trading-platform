@@ -651,6 +651,34 @@ async def position_close_loop(db_pool):
                     logging.error(f"❌ Ошибка при обновлении close_reason или записи в system_logs: {e}")
                     await redis_client.xack(stream_name, group_name, msg_id)
                     continue
+                    
+                # 🔸 Проверка на полное закрытие позиции
+                if position["quantity_left"] == 0:
+                    try:
+                        tp_price = Decimal(target["price"])
+
+                        async with db_pool.acquire() as conn:
+                            await conn.execute("""
+                                UPDATE positions_v2
+                                SET status = 'closed',
+                                    planned_risk = 0,
+                                    exit_price = $1,
+                                    closed_at = NOW(),
+                                    close_reason = 'tp-full-hit'
+                                WHERE id = $2
+                            """, tp_price, position_id)
+
+                        position["status"] = "closed"
+                        position["close_reason"] = "tp-full-hit"
+                        position["planned_risk"] = Decimal("0")
+                        position["exit_price"] = tp_price
+
+                        logging.info(f"🚫 Позиция ID={position_id} полностью закрыта по TP (tp-full-hit)")
+
+                    except Exception as e:
+                        logging.error(f"❌ Ошибка при полном закрытии позиции ID={position_id}: {e}")
+                        await redis_client.xack(stream_name, group_name, msg_id)
+                        continue                    
                                                                                                                             
                 await redis_client.xack(stream_name, group_name, msg_id)
 
