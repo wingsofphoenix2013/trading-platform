@@ -423,22 +423,22 @@ async def position_close_loop(db_pool):
                 debug_log(f"🧪 Ищем target_id = {target_id}")
                 target = next((t for t in targets if t.get("id") == target_id), None)
                 
-                    if data.get("type") == "sl":
-                        try:
-                            async with db_pool.acquire() as conn:
-                                await conn.execute("""
-                                    UPDATE position_targets_v2
-                                    SET hit = true, hit_at = NOW()
-                                    WHERE id = $1
-                                """, target_id)
+                if data.get("type") == "sl":
+                    try:
+                        async with db_pool.acquire() as conn:
+                            await conn.execute("""
+                                UPDATE position_targets_v2
+                                SET hit = true, hit_at = NOW()
+                                WHERE id = $1
+                            """, target_id)
 
-                            logging.info(f"✅ SL цель ID={target_id} помечена как hit")
+                        logging.info(f"✅ SL цель ID={target_id} помечена как hit")
 
-                        except Exception as e:
-                            logging.error(f"❌ Ошибка при обновлении SL цели {target_id}: {e}")
-                            await redis_client.xack(stream_name, group_name, msg_id)
-                            continue
-                            
+                    except Exception as e:
+                        logging.error(f"❌ Ошибка при обновлении SL цели {target_id}: {e}")
+                        await redis_client.xack(stream_name, group_name, msg_id)
+                        continue
+                
                 if not target:
                     logging.warning(f"⚠️ Цель {target_id} не найдена в памяти позиции {position_id}")
                     await redis_client.xack(stream_name, group_name, msg_id)
