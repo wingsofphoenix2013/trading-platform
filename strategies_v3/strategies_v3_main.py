@@ -423,7 +423,7 @@ async def position_close_loop(db_pool):
                 debug_log(f"🧪 Ищем target_id = {target_id}")
                 target = next((t for t in targets if t.get("id") == target_id), None)
                 
-                if data.get("type") == "sl":
+	                if data.get("type") == "sl":
                     try:
                         async with db_pool.acquire() as conn:
                             await conn.execute("""
@@ -458,11 +458,11 @@ async def position_close_loop(db_pool):
                             position["close_reason"] = "sl"
 
                             logging.info(f"🛑 Позиция ID={position_id} закрыта по SL на уровне {sl_price}")
+                            await redis_client.xack(stream_name, group_name, msg_id)
+                            continue
 
                         except Exception as e:
                             logging.error(f"❌ Ошибка при закрытии позиции по SL: {e}")
-                            await redis_client.xack(stream_name, group_name, msg_id)
-                            continue
 
                     except Exception as e:
                         logging.error(f"❌ Ошибка при обновлении SL цели {target_id}: {e}")
