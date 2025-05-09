@@ -433,11 +433,13 @@ async def position_close_loop(db_pool):
                             """, target_id)
 
                         logging.info(f"✅ SL цель ID={target_id} помечена как hit")
+                        await redis_client.xack(stream_name, group_name, msg_id)
+                        continue
 
                     except Exception as e:
                         logging.error(f"❌ Ошибка при обновлении SL цели {target_id}: {e}")
                         await redis_client.xack(stream_name, group_name, msg_id)
-                        continue
+                        continue                
                 
                 if not target:
                     logging.warning(f"⚠️ Цель {target_id} не найдена в памяти позиции {position_id}")
