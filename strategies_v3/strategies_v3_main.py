@@ -672,9 +672,46 @@ async def position_close_loop(db_pool):
                         position["close_reason"] = "tp-full-hit"
                         position["planned_risk"] = Decimal("0")
                         position["exit_price"] = tp_price
+                        
+                        # 🔹 Отметить оставшиеся цели как canceled
+                        async with db_pool.acquire() as conn:
+                            await conn.execute("""
+                                UPDATE position_targets_v2
+                                SET canceled = true
+                                WHERE position_id = $1 AND hit = false
+                            """, position_id)
 
+                        logging.info(f"🚫 Цели позиции ID={position_id} помечены как canceled")                        
+                        # 🔹 Удаление позиции и целей из памяти
+                        open_positions.pop(position_id, None)
+                        targets_by_position.pop(position_id, None)
+                        
+                        logging.info(f"🧹 Позиция ID={position_id} и её цели удалены из памяти")
+                        
                         logging.info(f"🚫 Позиция ID={position_id} полностью закрыта по TP (tp-full-hit)")
+                        # 🔹 Лог в system_logs: tp-full-hit
+                        try:
+                            log_details = json.dumps({
+                                "position_id": position_id,
+                                "tp_price": str(tp_price),
+                                "pnl": str(position["pnl"]),
+                                "quantity": str(position["quantity"])
+                            })
 
+                            async with db_pool.acquire() as conn:
+                                await conn.execute("""
+                                    INSERT INTO system_logs (
+                                        level, message, source, details, action_flag
+                                    ) VALUES (
+                                        'INFO', $1, 'position_close_worker', $2, 'audit'
+                                    )
+                                """, "Позиция закрыта по TP (полностью)", log_details)
+
+                            logging.info(f"🧾 Запись в system_logs: TP-full-hit для позиции ID={position_id}")
+
+                        except Exception as e:
+                            logging.warning(f"⚠️ Не удалось записать system_log для tp-full-hit: {e}")
+                            
                     except Exception as e:
                         logging.error(f"❌ Ошибка при полном закрытии позиции ID={position_id}: {e}")
                         await redis_client.xack(stream_name, group_name, msg_id)
