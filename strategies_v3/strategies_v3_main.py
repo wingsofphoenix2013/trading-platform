@@ -549,7 +549,7 @@ async def position_close_loop(db_pool):
                             "canceled": False
                         })
 
-                        debug_log(f"📌 SL переставлен после TP {target_id}: новый уровень = {sl_price}")
+                        logging.info(f"📌 SL переставлен после TP {target_id}: новый уровень = {sl_price}")
                 # 🔹 Пересчёт planned_risk
                 try:
                     entry_price = Decimal(position["entry_price"])
@@ -580,7 +580,38 @@ async def position_close_loop(db_pool):
                     logging.error(f"❌ Ошибка при пересчёте planned_risk: {e}")
                     await redis_client.xack(stream_name, group_name, msg_id)
                     continue
-                                                                
+                # 🔹 Пересчёт pnl
+                try:
+                    entry_price = Decimal(position["entry_price"])
+                    tp_price = Decimal(target["price"])
+                    qty = Decimal(target["quantity"])
+                    direction = position["direction"]
+                    precision = Decimal("1e-8")
+
+                    if direction == "long":
+                        delta = tp_price - entry_price
+                    else:
+                        delta = entry_price - tp_price
+
+                    pnl_increment = delta * qty
+                    current_pnl = Decimal(position["pnl"])
+                    new_pnl = (current_pnl + pnl_increment).quantize(precision, rounding=ROUND_DOWN)
+
+                    async with db_pool.acquire() as conn:
+                        await conn.execute("""
+                            UPDATE positions_v2
+                            SET pnl = $1
+                            WHERE id = $2
+                        """, new_pnl, position_id)
+
+                    position["pnl"] = new_pnl
+                    logging.info(f"💰 Обновлён pnl: {current_pnl} → {new_pnl} (TP по {qty} @ {tp_price})")
+
+                except Exception as e:
+                    logging.error(f"❌ Ошибка при пересчёте pnl: {e}")
+                    await redis_client.xack(stream_name, group_name, msg_id)
+                    continue
+                                                                                    
                 await redis_client.xack(stream_name, group_name, msg_id)
 
         except Exception as e:
