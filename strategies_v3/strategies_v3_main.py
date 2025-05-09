@@ -421,9 +421,10 @@ async def position_close_loop(db_pool):
                 targets = targets_by_position.get(position_id, [])
                 debug_log(f"🧪 Память целей позиции {position_id}: {json.dumps(targets, default=str)}")
                 debug_log(f"🧪 Ищем target_id = {target_id}")
+                
                 target = next((t for t in targets if t.get("id") == target_id), None)
                 
-	                if data.get("type") == "sl":
+                    if data.get("type") == "sl":
                     try:
                         async with db_pool.acquire() as conn:
                             await conn.execute("""
