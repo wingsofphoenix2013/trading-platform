@@ -611,7 +611,26 @@ async def position_close_loop(db_pool):
                     logging.error(f"❌ Ошибка при пересчёте pnl: {e}")
                     await redis_client.xack(stream_name, group_name, msg_id)
                     continue
-                                                                                    
+                # 🔹 Обновление close_reason
+                try:
+                    level = target.get("level")
+                    reason = f"tp-{level}-hit"
+
+                    async with db_pool.acquire() as conn:
+                        await conn.execute("""
+                            UPDATE positions_v2
+                            SET close_reason = $1
+                            WHERE id = $2
+                        """, reason, position_id)
+
+                    position["close_reason"] = reason
+                    logging.info(f"📝 Установлен close_reason: {reason} для позиции ID={position_id}")
+
+                except Exception as e:
+                    logging.error(f"❌ Ошибка при обновлении close_reason: {e}")
+                    await redis_client.xack(stream_name, group_name, msg_id)
+                    continue
+                                                                                                        
                 await redis_client.xack(stream_name, group_name, msg_id)
 
         except Exception as e:
