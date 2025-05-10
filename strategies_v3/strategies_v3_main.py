@@ -482,6 +482,9 @@ async def position_close_loop(db_pool):
                                 position["pnl"] = new_pnl
                                 logging.info(f"💰 Обновлён pnl: {current_pnl} → {new_pnl} (SL по {qty} @ {sl_price})")
 
+                                open_positions.pop(position_id, None)
+                                targets_by_position.pop(position_id, None)
+
                             except Exception as e:
                                 logging.error(f"❌ Ошибка при пересчёте pnl по SL: {e}")
                                 await redis_client.xack(stream_name, group_name, msg_id)
