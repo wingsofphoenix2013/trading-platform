@@ -434,6 +434,7 @@ async def position_close_loop(db_pool):
                             """, target_id)
 
                         logging.info(f"✅ SL цель ID={target_id} помечена как hit")
+
                         try:
                             sl_price = Decimal(target["price"])
 
@@ -454,22 +455,50 @@ async def position_close_loop(db_pool):
                             position["close_reason"] = "sl"
 
                             logging.info(f"🛑 Позиция ID={position_id} закрыта по SL на уровне {sl_price}")
+
+                            # 🔹 Пересчёт pnl при закрытии по SL
+                            try:
+                                entry_price = Decimal(position["entry_price"])
+                                qty = Decimal(position["quantity_left"])
+                                direction = position["direction"]
+                                precision = Decimal("1e-8")
+
+                                if direction == "long":
+                                    delta = sl_price - entry_price
+                                else:
+                                    delta = entry_price - sl_price
+
+                                pnl_increment = delta * qty
+                                current_pnl = Decimal(position["pnl"])
+                                new_pnl = (current_pnl + pnl_increment).quantize(precision, rounding=ROUND_DOWN)
+
+                                async with db_pool.acquire() as conn:
+                                    await conn.execute("""
+                                        UPDATE positions_v2
+                                        SET pnl = $1
+                                        WHERE id = $2
+                                    """, new_pnl, position_id)
+
+                                position["pnl"] = new_pnl
+                                logging.info(f"💰 Обновлён pnl: {current_pnl} → {new_pnl} (SL по {qty} @ {sl_price})")
+
+                            except Exception as e:
+                                logging.error(f"❌ Ошибка при пересчёте pnl по SL: {e}")
+                                await redis_client.xack(stream_name, group_name, msg_id)
+                                continue
+
                             await redis_client.xack(stream_name, group_name, msg_id)
                             continue
 
                         except Exception as e:
                             logging.error(f"❌ Ошибка при закрытии позиции по SL: {e}")
+                            await redis_client.xack(stream_name, group_name, msg_id)
+                            continue
 
                     except Exception as e:
                         logging.error(f"❌ Ошибка при обновлении SL цели {target_id}: {e}")
                         await redis_client.xack(stream_name, group_name, msg_id)
                         continue
-                
-                if not target:
-                    logging.warning(f"⚠️ Цель {target_id} не найдена в памяти позиции {position_id}")
-                    await redis_client.xack(stream_name, group_name, msg_id)
-                    continue
-
                 try:
                     async with db_pool.acquire() as conn:
                         await conn.execute("""
