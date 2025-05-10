@@ -482,11 +482,27 @@ async def position_close_loop(db_pool):
                                 position["pnl"] = new_pnl
                                 logging.info(f"💰 Обновлён pnl: {current_pnl} → {new_pnl} (SL по {qty} @ {sl_price})")
 
+                            except Exception as e:
+                                logging.error(f"❌ Ошибка при пересчёте pnl по SL: {e}")
+                                await redis_client.xack(stream_name, group_name, msg_id)
+                                continue
+
+                            # 🔸 Удаление из памяти и отмена оставшихся целей
+                            try:
                                 open_positions.pop(position_id, None)
                                 targets_by_position.pop(position_id, None)
 
+                                async with db_pool.acquire() as conn:
+                                    await conn.execute("""
+                                        UPDATE position_targets_v2
+                                        SET canceled = true
+                                        WHERE position_id = $1 AND hit = false
+                                    """, position_id)
+
+                                logging.info(f"🚫 Цели позиции ID={position_id} помечены как canceled (SL)")
+
                             except Exception as e:
-                                logging.error(f"❌ Ошибка при пересчёте pnl по SL: {e}")
+                                logging.error(f"❌ Ошибка при отмене целей позиции {position_id}: {e}")
                                 await redis_client.xack(stream_name, group_name, msg_id)
                                 continue
 
@@ -502,18 +518,7 @@ async def position_close_loop(db_pool):
                         logging.error(f"❌ Ошибка при обновлении SL цели {target_id}: {e}")
                         await redis_client.xack(stream_name, group_name, msg_id)
                         continue
-                try:
-                    async with db_pool.acquire() as conn:
-                        await conn.execute("""
-                            UPDATE position_targets_v2
-                            SET hit = true, hit_at = NOW()
-                            WHERE id = $1
-                        """, target_id)
-                except Exception as e:
-                    logging.error(f"❌ Ошибка при обновлении цели {target_id} в БД: {e}")
-                    await redis_client.xack(stream_name, group_name, msg_id)
-                    continue
-
+                        
                 # Удаление цели из памяти
                 targets_by_position[position_id] = [
                     t for t in targets if t.get("id") != target_id
