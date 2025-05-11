@@ -623,7 +623,8 @@ async def position_close_loop(db_pool):
                 strategy = strategies_cache.get(strategy_id)
                 tp_sl_rules = strategy.get("tp_sl_rules", [])
 
-                sl_rule = next((r for r in tp_sl_rules if r["tp_level_id"] == target_id), None)
+                tp_level = target.get("level")
+                sl_rule = next((r for r in tp_sl_rules if r["tp_level_id"] == tp_level), None)
 
                 if not sl_rule or sl_rule["sl_mode"] == "none":
                     debug_log(f"ℹ️ Для TP {target_id} политика SL не требует перестановки")
