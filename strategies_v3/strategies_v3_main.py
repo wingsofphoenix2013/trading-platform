@@ -500,7 +500,28 @@ async def position_close_loop(db_pool):
                                     """, position_id)
 
                                 logging.info(f"🚫 Цели позиции ID={position_id} помечены как canceled (SL)")
+                                
+                                try:
+                                    log_details = json.dumps({
+                                        "position_id": position_id,
+                                        "sl_price": str(sl_price),
+                                        "pnl": str(position["pnl"]),
+                                        "quantity": str(position["quantity"])
+                                    })
 
+                                    async with db_pool.acquire() as conn:
+                                        await conn.execute("""
+                                            INSERT INTO system_logs (
+                                                level, message, source, details, action_flag
+                                            ) VALUES (
+                                                'INFO', $1, 'position_close_worker', $2, 'ignore'
+                                            )
+                                        """, "Позиция закрыта по SL", log_details)
+
+                                    logging.info(f"🧾 Запись в system_logs: Позиция ID={position_id} закрыта по SL")
+
+                                except Exception as e:
+                                    logging.warning(f"⚠️ Не удалось записать system_log для позиции {position_id}: {e}")
                             except Exception as e:
                                 logging.error(f"❌ Ошибка при отмене целей позиции {position_id}: {e}")
                                 await redis_client.xack(stream_name, group_name, msg_id)
