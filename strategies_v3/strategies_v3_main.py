@@ -438,6 +438,22 @@ async def position_close_loop(db_pool):
                         try:
                             sl_price = Decimal(target["price"])
 
+                            # 🔸 Определение типа SL: первичный или переставленный
+                            try:
+                                async with db_pool.acquire() as conn:
+                                    is_replaced_sl = await conn.fetchval("""
+                                        SELECT EXISTS (
+                                            SELECT 1 FROM position_targets_v2
+                                            WHERE position_id = $1 AND type = 'sl' AND canceled = true
+                                        )
+                                    """, position_id)
+                            except Exception as e:
+                                logging.warning(f"⚠️ Не удалось проверить тип SL для позиции {position_id}: {e}")
+                                is_replaced_sl = False
+
+                            close_reason = "sl-tp-hit" if is_replaced_sl else "sl"
+                            sl_log_message = "Сработал переставленный SL" if is_replaced_sl else "Позиция закрыта по SL"
+
                             async with db_pool.acquire() as conn:
                                 await conn.execute("""
                                     UPDATE positions_v2
@@ -447,15 +463,15 @@ async def position_close_loop(db_pool):
                                         closed_at = NOW(),
                                         close_reason = $2
                                     WHERE id = $3
-                                """, sl_price, "sl", position_id)
+                                """, sl_price, close_reason, position_id)
 
                             position["status"] = "closed"
                             position["planned_risk"] = Decimal("0")
                             position["exit_price"] = sl_price
-                            position["close_reason"] = "sl"
+                            position["close_reason"] = close_reason
 
                             logging.info(f"🛑 Позиция ID={position_id} закрыта по SL на уровне {sl_price}")
-
+                            
                             # 🔹 Пересчёт pnl при закрытии по SL
                             try:
                                 entry_price = Decimal(position["entry_price"])
