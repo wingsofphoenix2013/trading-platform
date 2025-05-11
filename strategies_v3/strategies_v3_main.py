@@ -532,7 +532,7 @@ async def position_close_loop(db_pool):
                                             ) VALUES (
                                                 'INFO', $1, 'position_close_worker', $2, 'ignore'
                                             )
-                                        """, "Позиция закрыта по SL", log_details)
+                                        """, sl_log_message, log_details)
 
                                     logging.info(f"🧾 Запись в system_logs: Позиция ID={position_id} закрыта по SL")
 
