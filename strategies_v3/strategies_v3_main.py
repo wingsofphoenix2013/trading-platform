@@ -332,7 +332,7 @@ async def follow_positions():
             continue
 
         # 🔹 Текущая цена
-        debug_log(f"📡 Позиция ID={position_id}, {symbol}, {direction} — текущая цена: {latest_price}")
+        logging.info(f"📡 Позиция ID={position_id}, {symbol}, {direction} — текущая цена: {latest_price}")
 
         # 🔹 TP-контроль
         tp_levels = [
@@ -358,19 +358,42 @@ async def follow_positions():
         if next_tp:
             tp_price = next_tp["price"]
             level = next_tp["level"]
-            if direction == "long" and latest_price >= tp_price:
-                debug_log(f"💡 Цена достигла TP уровня #{level} для позиции ID={position_id} — {latest_price} ≥ {tp_price}")
-            elif direction == "short" and latest_price <= tp_price:
-                debug_log(f"💡 Цена достигла TP уровня #{level} для позиции ID={position_id} — {latest_price} ≤ {tp_price}")
+            condition_hit = (
+                (direction == "long" and latest_price >= tp_price) or
+                (direction == "short" and latest_price <= tp_price)
+            )
+            if condition_hit:
+                logging.info(f"💡 Цена достигла TP уровня #{level} для позиции ID={position_id} — {latest_price} {'≥' if direction == 'long' else '≤'} {tp_price}")
+                try:
+                    await redis_client.xadd("position:close", {
+                        "position_id": str(position_id),
+                        "target_id": str(next_tp["id"]),
+                        "type": "tp",
+                        "level": str(level),
+                        "trigger": "price"
+                    })
+                except Exception as e:
+                    logging.error(f"❌ Ошибка при отправке TP в position:close: {e}")
 
         # 🔹 SL-контроль
         sl = next((t for t in targets if t["type"] == "sl" and not t["hit"] and not t["canceled"]), None)
         if sl:
             sl_price = sl["price"]
-            if direction == "long" and latest_price <= sl_price:
-                debug_log(f"⚠️ Цена достигла SL для позиции ID={position_id} — {latest_price} ≤ {sl_price}")
-            elif direction == "short" and latest_price >= sl_price:
-                debug_log(f"⚠️ Цена достигла SL для позиции ID={position_id} — {latest_price} ≥ {sl_price}")
+            condition_hit = (
+                (direction == "long" and latest_price <= sl_price) or
+                (direction == "short" and latest_price >= sl_price)
+            )
+            if condition_hit:
+                logging.info(f"⚠️ Цена достигла SL для позиции ID={position_id} — {latest_price} {'≤' if direction == 'long' else '≥'} {sl_price}")
+                try:
+                    await redis_client.xadd("position:close", {
+                        "position_id": str(position_id),
+                        "target_id": str(sl["id"]),
+                        "type": "sl",
+                        "trigger": "price"
+                    })
+                except Exception as e:
+                    logging.error(f"❌ Ошибка при отправке SL в position:close: {e}")
 # 🔸 Цикл мониторинга открытых позиций
 async def follow_positions_loop():
     while True:
@@ -433,7 +456,7 @@ async def position_close_loop(db_pool):
                                 WHERE id = $1
                             """, target_id)
 
-                        logging.info(f"✅ SL цель ID={target_id} помечена как hit")
+                        debug_log(f"✅ SL цель ID={target_id} помечена как hit")
 
                         try:
                             sl_price = Decimal(target["price"])
@@ -470,7 +493,7 @@ async def position_close_loop(db_pool):
                             position["exit_price"] = sl_price
                             position["close_reason"] = close_reason
 
-                            logging.info(f"🛑 Позиция ID={position_id} закрыта по SL на уровне {sl_price}")
+                            debug_log(f"🛑 Позиция ID={position_id} закрыта по SL на уровне {sl_price}")
                             
                             # 🔹 Пересчёт pnl при закрытии по SL
                             try:
@@ -496,7 +519,7 @@ async def position_close_loop(db_pool):
                                     """, new_pnl, position_id)
 
                                 position["pnl"] = new_pnl
-                                logging.info(f"💰 Обновлён pnl: {current_pnl} → {new_pnl} (SL по {qty} @ {sl_price})")
+                                debug_log(f"💰 Обновлён pnl: {current_pnl} → {new_pnl} (SL по {qty} @ {sl_price})")
 
                             except Exception as e:
                                 logging.error(f"❌ Ошибка при пересчёте pnl по SL: {e}")
@@ -515,7 +538,7 @@ async def position_close_loop(db_pool):
                                         WHERE position_id = $1 AND hit = false
                                     """, position_id)
 
-                                logging.info(f"🚫 Цели позиции ID={position_id} помечены как canceled (SL)")
+                                debug_log(f"🚫 Цели позиции ID={position_id} помечены как canceled (SL)")
                                 
                                 try:
                                     log_details = json.dumps({
@@ -534,7 +557,7 @@ async def position_close_loop(db_pool):
                                             )
                                         """, sl_log_message, log_details)
 
-                                    logging.info(f"🧾 Запись в system_logs: Позиция ID={position_id} закрыта по SL")
+                                    debug_log(f"🧾 Запись в system_logs: Позиция ID={position_id} закрыта по SL")
 
                                 except Exception as e:
                                     logging.warning(f"⚠️ Не удалось записать system_log для позиции {position_id}: {e}")
@@ -665,7 +688,7 @@ async def position_close_loop(db_pool):
                             "canceled": False
                         })
 
-                        logging.info(f"📌 SL переставлен после TP {target_id}: новый уровень = {sl_price}")
+                        debug_log(f"📌 SL переставлен после TP {target_id}: новый уровень = {sl_price}")
                 # 🔹 Пересчёт planned_risk
                 try:
                     entry_price = Decimal(position["entry_price"])
@@ -690,7 +713,7 @@ async def position_close_loop(db_pool):
                             """, risk, position_id)
 
                         position["planned_risk"] = risk
-                        logging.info(f"📐 Пересчитан planned_risk: {risk} для позиции ID={position_id}")
+                        debug_log(f"📐 Пересчитан planned_risk: {risk} для позиции ID={position_id}")
 
                 except Exception as e:
                     logging.error(f"❌ Ошибка при пересчёте planned_risk: {e}")
@@ -721,7 +744,7 @@ async def position_close_loop(db_pool):
                         """, new_pnl, position_id)
 
                     position["pnl"] = new_pnl
-                    logging.info(f"💰 Обновлён pnl: {current_pnl} → {new_pnl} (TP по {qty} @ {tp_price})")
+                    debug_log(f"💰 Обновлён pnl: {current_pnl} → {new_pnl} (TP по {qty} @ {tp_price})")
 
                 except Exception as e:
                     logging.error(f"❌ Ошибка при пересчёте pnl: {e}")
@@ -740,7 +763,7 @@ async def position_close_loop(db_pool):
                         """, reason, position_id)
 
                         position["close_reason"] = reason
-                        logging.info(f"📝 Установлен close_reason: {reason} для позиции ID={position_id}")
+                        debug_log(f"📝 Установлен close_reason: {reason} для позиции ID={position_id}")
 
                         # 🔹 Логирование в system_logs
                         tp_price = str(target.get("price"))
@@ -761,7 +784,7 @@ async def position_close_loop(db_pool):
                             )
                         """, f"Сработал TP уровень {level}", log_details)
 
-                        logging.info(f"🧾 Запись в system_logs: TP {level} для позиции ID={position_id}")
+                        debug_log(f"🧾 Запись в system_logs: TP {level} для позиции ID={position_id}")
 
                 except Exception as e:
                     logging.error(f"❌ Ошибка при обновлении close_reason или записи в system_logs: {e}")
@@ -797,14 +820,14 @@ async def position_close_loop(db_pool):
                                 WHERE position_id = $1 AND hit = false
                             """, position_id)
 
-                        logging.info(f"🚫 Цели позиции ID={position_id} помечены как canceled")                        
+                        debug_log(f"🚫 Цели позиции ID={position_id} помечены как canceled")                        
                         # 🔹 Удаление позиции и целей из памяти
                         open_positions.pop(position_id, None)
                         targets_by_position.pop(position_id, None)
                         
-                        logging.info(f"🧹 Позиция ID={position_id} и её цели удалены из памяти")
+                        debug_log(f"🧹 Позиция ID={position_id} и её цели удалены из памяти")
                         
-                        logging.info(f"🚫 Позиция ID={position_id} полностью закрыта по TP (tp-full-hit)")
+                        debug_log(f"🚫 Позиция ID={position_id} полностью закрыта по TP (tp-full-hit)")
                         # 🔹 Лог в system_logs: tp-full-hit
                         try:
                             log_details = json.dumps({
@@ -823,7 +846,7 @@ async def position_close_loop(db_pool):
                                     )
                                 """, "Позиция закрыта по TP (полностью)", log_details)
 
-                            logging.info(f"🧾 Запись в system_logs: TP-full-hit для позиции ID={position_id}")
+                            debug_log(f"🧾 Запись в system_logs: TP-full-hit для позиции ID={position_id}")
 
                         except Exception as e:
                             logging.warning(f"⚠️ Не удалось записать system_log для tp-full-hit: {e}")
