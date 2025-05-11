@@ -584,6 +584,18 @@ async def position_close_loop(db_pool):
                     t for t in targets if t.get("id") != target_id
                 ]
 
+                # Обновление цели TP в БД — помечаем как hit
+                try:
+                    async with db_pool.acquire() as conn:
+                        await conn.execute("""
+                            UPDATE position_targets_v2
+                            SET hit = true, hit_at = NOW()
+                            WHERE id = $1
+                        """, target_id)
+                    debug_log(f"✅ Цель TP ID={target_id} помечена как hit")
+                except Exception as e:
+                    logging.warning(f"⚠️ Не удалось обновить цель TP {target_id} как hit: {e}")
+
                 try:
                     symbol = position["symbol"]
                     precision_qty = Decimal(f"1e-{tickers_storage[symbol]['precision_qty']}")
