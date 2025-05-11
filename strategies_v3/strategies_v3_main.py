@@ -332,7 +332,7 @@ async def follow_positions():
             continue
 
         # 🔹 Текущая цена
-        logging.info(f"📡 Позиция ID={position_id}, {symbol}, {direction} — текущая цена: {latest_price}")
+        debug_log(f"📡 Позиция ID={position_id}, {symbol}, {direction} — текущая цена: {latest_price}")
 
         # 🔹 TP-контроль
         tp_levels = [
