@@ -209,8 +209,24 @@ async def listen_strategy_tasks(db_pool):
             )
             for stream, messages in entries:
                 for msg_id, msg_data in messages:
+                    msg_data["received_at"] = datetime.utcnow().isoformat()
+                
                     logging.info(f"📥 Получена задача: {msg_data}")
-
+                    try:
+                        log_details = json.dumps({
+                            "task": msg_data
+                        })
+                        async with db_pool.acquire() as conn:
+                            await conn.execute("""
+                                INSERT INTO system_logs (
+                                    level, message, source, details, action_flag
+                                ) VALUES (
+                                    'INFO', 'Получен сигнал из Redis', 'strategy_task_listener', $1, 'trace'
+                                )
+                            """, log_details)
+                    except Exception as e:
+                        logging.warning(f"⚠️ Не удалось логировать получение сигнала: {e}")
+                        
                     try:
                         await handle_task(msg_data, db_pool)
                     except Exception as e:

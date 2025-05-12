@@ -255,7 +255,42 @@ class StrategyInterface:
 
                 position_id = row["id"]
                 logging.info(f"📌 Позиция создана: ID={position_id}, {symbol}, {direction}, qty={quantity}, pnl={pnl}")
+                
+                try:
+                    received_at_str = task.get("received_at")
+                    opened_at = datetime.utcnow()
 
+                    latency_ms = None
+                    if received_at_str:
+                        received_at = datetime.fromisoformat(received_at_str)
+                        latency = opened_at - received_at
+                        latency_ms = int(latency.total_seconds() * 1000)
+
+                    log_details = json.dumps({
+                        "position_id": position_id,
+                        "symbol": symbol,
+                        "direction": direction,
+                        "entry_price": str(entry_price),
+                        "quantity": str(quantity),
+                        "strategy": strategy_name,
+                        "latency_ms": latency_ms,
+                        "task": task  # можно оставить, если хочешь логировать весь task
+                    })
+
+                    async with self.db_pool.acquire() as conn:
+                        await conn.execute("""
+                            INSERT INTO system_logs (
+                                level, message, source, details, action_flag
+                            ) VALUES (
+                                'INFO', 'Позиция открыта', 'position_open_worker', $1, 'audit'
+                            )
+                        """, log_details)
+
+                    debug_log(f"🧾 Запись в system_logs: позиция ID={position_id} открыта за {latency_ms} мс")
+
+                except Exception as e:
+                    logging.warning(f"⚠️ Не удалось записать system_log об открытии позиции: {e}")
+                    
                 strategy = self.strategies_cache[strategy_id]
                 tp_levels = strategy.get("tp_levels", [])
                 ticker = self.tickers_storage.get(symbol)
