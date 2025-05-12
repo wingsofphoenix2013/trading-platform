@@ -255,7 +255,17 @@ class StrategyInterface:
 
                 position_id = row["id"]
                 logging.info(f"📌 Позиция создана: ID={position_id}, {symbol}, {direction}, qty={quantity}, pnl={pnl}")
-                
+
+                # 🟢 Лог в signal_log_entries_v2
+                await self.log_strategy_action(
+                    strategy_id=strategy_id,
+                    log_id=log_id,
+                    status="position_opened",
+                    note="Позиция успешно открыта",
+                    position_id=position_id
+                )
+
+                # 🟢 Лог в system_logs с latency_ms
                 try:
                     received_at_str = task.get("received_at")
                     opened_at = datetime.utcnow()
@@ -290,7 +300,7 @@ class StrategyInterface:
 
                 except Exception as e:
                     logging.warning(f"⚠️ Не удалось записать system_log об открытии позиции: {e}")
-                    
+                                        
                 strategy = self.strategies_cache[strategy_id]
                 tp_levels = strategy.get("tp_levels", [])
                 ticker = self.tickers_storage.get(symbol)
