@@ -460,7 +460,6 @@ async def position_close_loop(db_pool):
 
                         try:
                             sl_price = Decimal(target["price"])
-
                             # 🔸 Определение типа SL: первичный или переставленный
                             try:
                                 async with db_pool.acquire() as conn:
@@ -477,30 +476,10 @@ async def position_close_loop(db_pool):
                             close_reason = "sl-tp-hit" if is_replaced_sl else "sl"
                             sl_log_message = "Сработал переставленный SL" if is_replaced_sl else "Позиция закрыта по SL"
 
-                            async with db_pool.acquire() as conn:
-                                await conn.execute("""
-                                    UPDATE positions_v2
-                                    SET status = 'closed',
-                                        planned_risk = 0,
-                                        quantity_left = 0,
-                                        exit_price = $1,
-                                        closed_at = NOW(),
-                                        close_reason = $2
-                                    WHERE id = $3
-                                """, sl_price, close_reason, position_id)
-
-                            position["status"] = "closed"
-                            position["planned_risk"] = Decimal("0")
-                            position["exit_price"] = sl_price
-                            position["close_reason"] = close_reason
-                            position["quantity_left"] = Decimal("0")
-
-                            debug_log(f"🛑 Позиция ID={position_id} закрыта по SL на уровне {sl_price}")
-                                                        
                             # 🔹 Пересчёт pnl при закрытии по SL
                             try:
                                 entry_price = Decimal(position["entry_price"])
-                                qty = Decimal(position["quantity_left"])
+                                qty = Decimal(position["quantity_left"])  # сохранить ДО обнуления
                                 direction = position["direction"]
                                 precision = Decimal("1e-8")
 
@@ -528,6 +507,26 @@ async def position_close_loop(db_pool):
                                 await redis_client.xack(stream_name, group_name, msg_id)
                                 continue
 
+                            # 🔸 Закрытие позиции
+                            async with db_pool.acquire() as conn:
+                                await conn.execute("""
+                                    UPDATE positions_v2
+                                    SET status = 'closed',
+                                        planned_risk = 0,
+                                        quantity_left = 0,
+                                        exit_price = $1,
+                                        closed_at = NOW(),
+                                        close_reason = $2
+                                    WHERE id = $3
+                                """, sl_price, close_reason, position_id)
+
+                            position["status"] = "closed"
+                            position["planned_risk"] = Decimal("0")
+                            position["exit_price"] = sl_price
+                            position["close_reason"] = close_reason
+                            position["quantity_left"] = Decimal("0")
+
+                            debug_log(f"🛑 Позиция ID={position_id} закрыта по SL на уровне {sl_price}")
                             # 🔸 Удаление из памяти и отмена оставшихся целей
                             try:
                                 open_positions.pop(position_id, None)
