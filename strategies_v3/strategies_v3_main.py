@@ -482,6 +482,7 @@ async def position_close_loop(db_pool):
                                     UPDATE positions_v2
                                     SET status = 'closed',
                                         planned_risk = 0,
+                                        quantity_left = 0,
                                         exit_price = $1,
                                         closed_at = NOW(),
                                         close_reason = $2
@@ -492,9 +493,10 @@ async def position_close_loop(db_pool):
                             position["planned_risk"] = Decimal("0")
                             position["exit_price"] = sl_price
                             position["close_reason"] = close_reason
+                            position["quantity_left"] = Decimal("0")
 
                             debug_log(f"🛑 Позиция ID={position_id} закрыта по SL на уровне {sl_price}")
-                            
+                                                        
                             # 🔹 Пересчёт pnl при закрытии по SL
                             try:
                                 entry_price = Decimal(position["entry_price"])
