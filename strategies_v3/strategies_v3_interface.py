@@ -274,11 +274,11 @@ class StrategyInterface:
                         "quantity": str(quantity),
                         "strategy": strategy_name,
                         "latency_ms": latency_ms,
-                        "task": task  # можно оставить, если хочешь логировать весь task
+                        "task": task
                     })
 
-                    async with self.db_pool.acquire() as conn:
-                        await conn.execute("""
+                    async with self.db_pool.acquire() as conn_log:
+                        await conn_log.execute("""
                             INSERT INTO system_logs (
                                 level, message, source, details, action_flag
                             ) VALUES (
