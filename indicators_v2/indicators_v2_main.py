@@ -89,6 +89,38 @@ async def load_indicator_config(pg_pool) -> Dict[int, Dict[str, Any]]:
 
     debug_log(f"📦 Загружено конфигураций индикаторов: {len(config)}")
     return config
+# 🔸 Подписка на события Pub/Sub от агрегаторов
+async def subscribe_to_ohlcv(redis):
+    pubsub = redis.pubsub()
+    await pubsub.subscribe("ohlcv_m1_ready", "ohlcv_m5_ready", "ohlcv_m15_ready")
+    logging.info("📡 Подписка на каналы ohlcv_m1_ready, ohlcv_m5_ready, ohlcv_m15_ready активна.")
+
+    async for message in pubsub.listen():
+        if message["type"] != "message":
+            continue
+
+        try:
+            data = json.loads(message["data"].decode())
+            channel = message["channel"].decode()
+
+            if channel == "ohlcv_m1_ready" and data.get("action") == "m1_ready":
+                symbol = data["symbol"]
+                tf = "M1"
+                open_time = data["open_time"]
+
+            elif channel in ("ohlcv_m5_ready", "ohlcv_m15_ready") and data.get("action") == "aggregate_ready":
+                symbol = data["symbol"]
+                tf = data["interval"].upper()  # "M5", "M15"
+                open_time = data["open_time"]
+
+            else:
+                continue  # неизвестный формат — пропускаем
+
+            debug_log(f"📥 Получено событие: {symbol} / {tf} / {open_time}")
+            # 🔜 Здесь будет логика обработки и расчёта
+
+        except Exception as e:
+            logging.error(f"❌ Ошибка при обработке события PubSub: {e}")    
 # 🔸 Главная точка входа
 async def main():
     logging.info("🚀 indicators_v2_main.py запущен.")
@@ -103,6 +135,8 @@ async def main():
     global indicator_configs
     indicator_configs = await load_indicator_config(pg_pool)
     logging.info(f"📥 Конфигураций расчёта: {len(indicator_configs)}")
+    
+    asyncio.create_task(subscribe_to_ohlcv(redis))
 
     # Заглушка: основной цикл
     while True:
