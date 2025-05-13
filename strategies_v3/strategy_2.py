@@ -41,25 +41,25 @@ class Strategy2:
         if direction == "long":
             threshold = ema_50 - (atr * Decimal("0.5"))
             if entry_price < threshold:
-                debug_log(f"⛔ Вход в long запрещён: цена {entry_price} < {threshold}")
+                logging.info(f"⛔ Вход в long запрещён: цена {entry_price} < {threshold}")
                 return
             if lr_angle_m1 <= Decimal("0.07") or lr_angle_m5 <= Decimal("0.035"):
-                debug_log(f"⛔ Вход в long запрещён: угол регрессии слишком мал (M1={lr_angle_m1}, M5={lr_angle_m5})")
+                logging.info(f"⛔ Вход в long запрещён: угол регрессии слишком мал (M1={lr_angle_m1}, M5={lr_angle_m5})")
                 return
             if rsi_14 >= Decimal("50"):
-                debug_log(f"⛔ Вход в long запрещён: RSI {rsi_14} >= 50")
+                logging.info(f"⛔ Вход в long запрещён: RSI {rsi_14} >= 50")
                 return
 
         elif direction == "short":
             threshold = ema_50 + (atr * Decimal("0.5"))
             if entry_price > threshold:
-                debug_log(f"⛔ Вход в short запрещён: цена {entry_price} > {threshold}")
+                logging.info(f"⛔ Вход в short запрещён: цена {entry_price} > {threshold}")
                 return
             if lr_angle_m1 >= Decimal("0.07") or lr_angle_m5 >= Decimal("0.035"):
-                debug_log(f"⛔ Вход в short запрещён: угол регрессии слишком велик (M1={lr_angle_m1}, M5={lr_angle_m5})")
+                logging.info(f"⛔ Вход в short запрещён: угол регрессии слишком велик (M1={lr_angle_m1}, M5={lr_angle_m5})")
                 return
             if rsi_14 <= Decimal("50"):
-                debug_log(f"⛔ Вход в short запрещён: RSI {rsi_14} <= 50")
+                logging.info(f"⛔ Вход в short запрещён: RSI {rsi_14} <= 50")
                 return
 
         # 🔹 Расчёт параметров позиции
