@@ -121,6 +121,53 @@ async def subscribe_to_ohlcv(redis):
 
         except Exception as e:
             logging.error(f"❌ Ошибка при обработке события PubSub: {e}")
+# 🔸 Получение и кэширование свечей
+async def get_latest_ohlcv(symbol: str, tf: str, open_time: str, pg_pool) -> pd.DataFrame:
+    from datetime import datetime
+
+    cache_key = f"{symbol}:{tf}"
+    incoming_time = datetime.fromisoformat(open_time)
+
+    # Проверка кэша
+    cached = ohlcv_cache.get(cache_key)
+    if cached:
+        cached_time = cached["open_time"]
+        if incoming_time < cached_time:
+            logging.warning(f"⚠️ Получено событие с устаревшим open_time: {symbol} / {tf} / {open_time}")
+            return cached["candles"]
+        if incoming_time == cached_time:
+            debug_log(f"🧠 Используем кэшированные свечи для {symbol} / {tf}")
+            return cached["candles"]
+
+    # Загрузка новых свечей из базы
+    table_name = f"ohlcv2_{tf.lower()}"
+    async with pg_pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"""
+            SELECT open_time, high, low, close
+            FROM {table_name}
+            WHERE symbol = $1
+            ORDER BY open_time DESC
+            LIMIT 250
+            """,
+            symbol
+        )
+
+    if not rows or len(rows) < 10:
+        logging.warning(f"⚠️ Недостаточно данных OHLCV для {symbol} / {tf}")
+        return pd.DataFrame()  # Пустой результат
+
+    df = pd.DataFrame(rows, columns=["open_time", "high", "low", "close"])
+    df = df[::-1]  # Сортировка по возрастанию времени
+
+    # Обновление кэша
+    ohlcv_cache[cache_key] = {
+        "open_time": incoming_time,
+        "candles": df
+    }
+
+    debug_log(f"📊 Загружены свечи для {symbol} / {tf} / {open_time}")
+    return df            
 # 🔄 Периодическое обновление тикеров и конфигураций
 async def refresh_all_periodically(pg_pool):
     while True:
