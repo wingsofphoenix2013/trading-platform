@@ -1,6 +1,8 @@
 import logging
 import pandas as pd
+import json
 from datetime import datetime
+from debug_utils import debug_log
 
 # 🔸 Очистка старых значений EMA (оставляем только 100 последних)
 async def cleanup_old_values(db, instance_id, symbol, param_name):
@@ -24,12 +26,11 @@ async def cleanup_old_values(db, instance_id, symbol, param_name):
                 """,
                 instance_id, symbol, param_name
             )
-        # debug_log(f"🧹 Очистка значений EMA {param_name} для {symbol} завершена")
     except Exception as e:
         logging.error(f"❌ Ошибка при очистке EMA {param_name} для {symbol}: {e}")
 
-# 🔸 Расчёт EMA и сохранение в Redis + БД
-async def process_ema(instance_id, symbol, tf, open_time, params, candles, redis, db, precision_price):
+# 🔸 Расчёт EMA и сохранение в Redis + БД + Stream (если требуется)
+async def process_ema(instance_id, symbol, tf, open_time, params, candles, redis, db, precision_price, stream_publish):
     try:
         length = int(params.get("length", 9))
 
@@ -60,7 +61,24 @@ async def process_ema(instance_id, symbol, tf, open_time, params, candles, redis
 
         await cleanup_old_values(db, instance_id, symbol, param_name)
 
-        logging.info(f"✅ EMA{length} для {symbol} / {tf} = {ema_value}")
+        debug_log(f"✅ EMA{length} для {symbol} / {tf} = {ema_value}")
+
+        # 🔸 Публикация в Redis Stream
+        if stream_publish:
+            try:
+                await redis.xadd(
+                    "indicators_ready_stream",
+                    {
+                        "symbol": symbol,
+                        "timeframe": tf,
+                        "indicator": "EMA",
+                        "params": json.dumps({"length": str(length)}),
+                        "calculated_at": open_time
+                    }
+                )
+                logging.info(f"📤 Stream: EMA{length} опубликован для {symbol} / {tf}")
+            except Exception as e:
+                logging.error(f"❌ Ошибка публикации в Redis Stream: {e}")
 
     except Exception as e:
         logging.error(f"❌ Ошибка расчёта EMA {symbol} / {tf}: {e}")

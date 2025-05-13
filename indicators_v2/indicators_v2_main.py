@@ -11,18 +11,11 @@ import ta
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime
 from typing import Dict, Any
+from debug_utils import debug_log
 # 🔸 Импорты файлов индикаторов
 from ema import process_ema
 # 🔸 Конфигурация логирования
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
-
-# 🔸 Флаг режима отладки
-DEBUG_MODE = False  # Включай True при разработке
-
-def debug_log(message: str):
-    if DEBUG_MODE:
-        logging.info(message)
-
 # 🔸 Переменные окружения
 DATABASE_URL = os.getenv("DATABASE_URL")
 REDIS_HOST = os.getenv("REDIS_HOST")
@@ -142,7 +135,8 @@ async def subscribe_to_ohlcv(redis, pg_pool):
                     candles=candles,
                     redis=redis,
                     db=pg_pool,
-                    precision_price=tickers_storage[symbol]["precision_price"]
+                    precision_price=tickers_storage[symbol]["precision_price"],
+                    stream_publish=cfg["stream_publish"]
                 )
 
         except Exception as e:
