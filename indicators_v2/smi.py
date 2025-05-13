@@ -15,9 +15,9 @@ async def process_smi(instance_id, symbol, tf, open_time, params, candles, redis
             logging.warning(f"⚠️ Нет high/low/close в свечах {symbol} / {tf}")
             return
 
-        high = candles["high"]
-        low = candles["low"]
-        close = candles["close"]
+        high = candles["high"].astype(float)
+        low = candles["low"].astype(float)
+        close = candles["close"].astype(float)
 
         if len(close) < k + d + s + 5:
             logging.warning(f"⚠️ Недостаточно данных для SMI {symbol} / {tf}")
