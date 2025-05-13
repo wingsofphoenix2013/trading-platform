@@ -14,6 +14,7 @@ from typing import Dict, Any
 from debug_utils import debug_log
 # 🔸 Импорты файлов индикаторов
 from ema import process_ema
+from atr import process_atr
 # 🔸 Конфигурация логирования
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 # 🔸 Переменные окружения
@@ -138,7 +139,27 @@ async def subscribe_to_ohlcv(redis, pg_pool):
                     precision_price=tickers_storage[symbol]["precision_price"],
                     stream_publish=cfg["stream_publish"]
                 )
+            # 🔹 Найти ATR-инстансы для данного timeframe
+            atr_instances = [
+                (instance_id, cfg)
+                for instance_id, cfg in indicator_configs.items()
+                if cfg["indicator"].upper() == "ATR" and cfg["timeframe"].upper() == tf
+            ]
 
+            # 🔹 Выполнить расчёт ATR
+            for instance_id, cfg in atr_instances:
+                await process_atr(
+                    instance_id=instance_id,
+                    symbol=symbol,
+                    tf=tf,
+                    open_time=open_time,
+                    params=cfg["params"],
+                    candles=candles,
+                    redis=redis,
+                    db=pg_pool,
+                    precision_price=tickers_storage[symbol]["precision_price"],
+                    stream_publish=cfg["stream_publish"]
+                )
         except Exception as e:
             logging.error(f"❌ Ошибка при обработке события PubSub: {e}")
 # 🔸 Получение и кэширование свечей
