@@ -46,7 +46,7 @@ class Strategy2:
             if lr_angle_m1 <= Decimal("0.005") or lr_angle_m5 <= Decimal("0.005"):
                 logging.info(f"⛔ Вход в long запрещён: угол регрессии слишком мал (M1={lr_angle_m1}, M5={lr_angle_m5})")
                 return
-            if rsi_14 >= Decimal("50"):
+            if rsi_14 <= Decimal("55"):
                 logging.info(f"⛔ Вход в long запрещён: RSI {rsi_14} <= 55")
                 return
 
@@ -58,7 +58,7 @@ class Strategy2:
             if lr_angle_m1 >= Decimal("0.005") or lr_angle_m5 >= Decimal("0.005"):
                 logging.info(f"⛔ Вход в short запрещён: угол регрессии слишком велик (M1={lr_angle_m1}, M5={lr_angle_m5})")
                 return
-            if rsi_14 <= Decimal("50"):
+            if rsi_14 >= Decimal("45"):
                 logging.info(f"⛔ Вход в short запрещён: RSI {rsi_14} >= 45")
                 return
 
