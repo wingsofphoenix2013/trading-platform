@@ -16,6 +16,7 @@ from debug_utils import debug_log
 from ema import process_ema
 from atr import process_atr
 from lr import process_lr
+from rsi import process_rsi
 # 🔸 Конфигурация логирования
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 # 🔸 Переменные окружения
@@ -181,7 +182,28 @@ async def subscribe_to_ohlcv(redis, pg_pool):
                     db=pg_pool,
                     precision_price=tickers_storage[symbol]["precision_price"],
                     stream_publish=cfg["stream_publish"]
-                )                
+                )   
+            # 🔹 Найти RSI-инстансы для данного timeframe
+            rsi_instances = [
+                (instance_id, cfg)
+                for instance_id, cfg in indicator_configs.items()
+                if cfg["indicator"].upper() == "RSI" and cfg["timeframe"].upper() == tf
+            ]
+
+            # 🔹 Выполнить расчёт RSI
+            for instance_id, cfg in rsi_instances:
+                await process_rsi(
+                    instance_id=instance_id,
+                    symbol=symbol,
+                    tf=tf,
+                    open_time=open_time,
+                    params=cfg["params"],
+                    candles=candles,
+                    redis=redis,
+                    db=pg_pool,
+                    precision_price=tickers_storage[symbol]["precision_price"],
+                    stream_publish=cfg["stream_publish"]
+                )                             
         except Exception as e:
             logging.error(f"❌ Ошибка при обработке события PubSub: {e}")
 # 🔸 Получение и кэширование свечей
