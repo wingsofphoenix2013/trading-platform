@@ -57,7 +57,7 @@ async def load_tickers(pg_pool) -> Dict[str, Dict[str, int]]:
                 "precision_price": row["precision_price"]
             } for row in rows
         }
-        debug_log(f"🔹 Загружено тикеров: {json.dumps(result, indent=2)}")
+        debug_log(f"🔹 Загружено тикеров: {len(result)}")
         return result
 # 🔸 Загрузка конфигураций расчётных индикаторов
 async def load_indicator_config(pg_pool) -> Dict[int, Dict[str, Any]]:
@@ -87,7 +87,7 @@ async def load_indicator_config(pg_pool) -> Dict[int, Dict[str, Any]]:
     for param in params:
         config[param["instance_id"]]["params"][param["param"]] = param["value"]
 
-    debug_log(f"📦 Загружено конфигураций индикаторов: {json.dumps(config, indent=2)}")
+    debug_log(f"📦 Загружено конфигураций индикаторов: {len(config)}")
     return config
 # 🔸 Главная точка входа
 async def main():
