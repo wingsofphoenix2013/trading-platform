@@ -2,51 +2,51 @@ import logging
 import pandas as pd
 import json
 from datetime import datetime
-from ta.momentum import StochasticMomentumIndexIndicator
 
-# 🔸 Расчёт SMI и сигнальной линии через ta-lib
+# 🔸 Расчёт SMI по альтернативной формуле (Surjith v2.1)
 async def process_smi(instance_id, symbol, tf, open_time, params, candles, redis, db, precision_price, stream_publish):
     try:
-        # 🔹 Параметры SMI
-        k = int(params.get("k", 13))
-        d = int(params.get("d", 5))
-        s = int(params.get("s", 3))  # сигнальная линия
+        k = int(params.get("k", 10))   # Percent K Length (range window)
+        d = int(params.get("d", 3))    # Percent D Length (EMA smoothing)
+        s = int(params.get("s", 10))   # EMA Signal Length
+        smooth = int(params.get("smooth", 5))  # Smoothing Period (SMA)
 
-        # 🔹 Приведение колонок к float (во избежание Decimal)
+        if not all(col in candles.columns for col in ("high", "low", "close")):
+            logging.warning(f"⚠️ Нет high/low/close в свечах {symbol} / {tf}")
+            return
+
         high = candles["high"].astype(float)
         low = candles["low"].astype(float)
         close = candles["close"].astype(float)
 
-        # 🔹 Проверка достаточности данных
-        min_len = max(k, d * 2, s * 2) + 10
-        if len(close) < min_len:
-            logging.warning(f"⚠️ Недостаточно данных для SMI {symbol} / {tf}")
+        if len(close) < k + d + s + smooth + 5:
+            logging.warning(f"⚠️ Недостаточно данных для расчёта SMI {symbol} / {tf}")
             return
 
-        # 🔹 Создание индикатора
-        indicator = StochasticMomentumIndexIndicator(
-            close=close,
-            high=high,
-            low=low,
-            window=k,
-            smooth_window=d,
-            smooth_window2=s
-        )
+        hh = high.rolling(window=k).max()
+        ll = low.rolling(window=k).min()
+        diff = hh - ll
+        rdiff = close - (hh + ll) / 2
 
-        smi_value = round(float(indicator.stoch_momentum().iloc[-1]), 2)
-        signal_value = round(float(indicator.stoch_momentum_signal().iloc[-1]), 2)
+        avgrel = rdiff.ewm(span=d, adjust=False).mean()
+        avgdiff = diff.ewm(span=d, adjust=False).mean()
 
-        # 🔹 Ключи Redis
-        redis_key_main = f"{symbol}:{tf}:SMI:{k}_{d}"
-        redis_key_signal = f"{symbol}:{tf}:SMI_SIGNAL:{k}_{d}_{s}"
+        smi_raw = 100 * (avgrel / (avgdiff / 2))
+        smi_smoothed = smi_raw.rolling(window=smooth).mean()
+        signal_line = smi_smoothed.ewm(span=s, adjust=False).mean()
 
-        await redis.set(redis_key_main, smi_value)
-        await redis.set(redis_key_signal, signal_value)
+        smi_val = round(float(smi_smoothed.iloc[-1]), 2)
+        signal_val = round(float(signal_line.iloc[-1]), 2)
 
-        # 🔹 Подготовка к записи
+        redis_key_main = f"{symbol}:{tf}:SMI_ALT:{k}_{d}_{smooth}"
+        redis_key_signal = f"{symbol}:{tf}:SMI_ALT_SIGNAL:{k}_{d}_{smooth}_{s}"
+
+        await redis.set(redis_key_main, smi_val)
+        await redis.set(redis_key_signal, signal_val)
+
         open_dt = datetime.fromisoformat(open_time)
-        param_main = f"smi{k}_{d}"
-        param_signal = f"smi_signal{k}_{d}_{s}"
+        param_main = f"smi_alt{k}_{d}_{smooth}"
+        param_signal = f"smi_alt_signal{k}_{d}_{smooth}_{s}"
 
         async with db.acquire() as conn:
             await conn.executemany(
@@ -57,10 +57,10 @@ async def process_smi(instance_id, symbol, tf, open_time, params, candles, redis
                        ($1, $2, $3, $6, $7)
                 ON CONFLICT DO NOTHING
                 """,
-                [(instance_id, symbol, open_dt, param_main, smi_value, param_signal, signal_value)]
+                [(instance_id, symbol, open_dt, param_main, smi_val, param_signal, signal_val)]
             )
 
-        logging.info(f"✅ SMI{k}_{d}_{s} для {symbol} / {tf} = {smi_value} / {signal_value}")
+        logging.info(f"✅ SMI_ALT {k}_{d}_{smooth}_{s} для {symbol} / {tf} = {smi_val} / {signal_val}")
 
         if stream_publish:
             try:
@@ -69,14 +69,14 @@ async def process_smi(instance_id, symbol, tf, open_time, params, candles, redis
                     {
                         "symbol": symbol,
                         "timeframe": tf,
-                        "indicator": "SMI",
-                        "params": json.dumps({"k": k, "d": d, "s": s}),
+                        "indicator": "SMI_ALT",
+                        "params": json.dumps({"k": k, "d": d, "smooth": smooth, "s": s}),
                         "calculated_at": open_time
                     }
                 )
-                logging.info(f"📤 Stream: SMI{k}_{d}_{s} опубликован для {symbol} / {tf}")
+                logging.info(f"📤 Stream: SMI_ALT {k}_{d}_{smooth}_{s} опубликован для {symbol} / {tf}")
             except Exception as e:
-                logging.error(f"❌ Ошибка публикации SMI в Redis Stream: {e}")
+                logging.error(f"❌ Ошибка публикации SMI_ALT в Redis Stream: {e}")
 
     except Exception as e:
-        logging.error(f"❌ Ошибка расчёта SMI {symbol} / {tf}: {e}")
+        logging.error(f"❌ Ошибка расчёта SMI_ALT {symbol} / {tf}: {e}")
