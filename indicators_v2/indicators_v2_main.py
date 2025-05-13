@@ -120,7 +120,19 @@ async def subscribe_to_ohlcv(redis):
             # 🔜 Здесь будет логика обработки и расчёта
 
         except Exception as e:
-            logging.error(f"❌ Ошибка при обработке события PubSub: {e}")    
+            logging.error(f"❌ Ошибка при обработке события PubSub: {e}")
+# 🔄 Периодическое обновление тикеров и конфигураций
+async def refresh_all_periodically(pg_pool):
+    while True:
+        await asyncio.sleep(300)  # каждые 5 минут
+        try:
+            global tickers_storage
+            global indicator_configs
+            tickers_storage = await load_tickers(pg_pool)
+            indicator_configs = await load_indicator_config(pg_pool)
+            logging.info("🔄 Обновлены тикеры и конфигурации индикаторов")
+        except Exception as e:
+            logging.error(f"❌ Ошибка при обновлении тикеров/конфигураций: {e}")                
 # 🔸 Главная точка входа
 async def main():
     logging.info("🚀 indicators_v2_main.py запущен.")
@@ -137,6 +149,7 @@ async def main():
     logging.info(f"📥 Конфигураций расчёта: {len(indicator_configs)}")
     
     asyncio.create_task(subscribe_to_ohlcv(redis))
+    asyncio.create_task(refresh_all_periodically(pg_pool))
 
     # Заглушка: основной цикл
     while True:
