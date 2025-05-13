@@ -28,6 +28,10 @@ REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
+# 🔸 In-memory хранилища
+tickers_storage: Dict[str, Dict[str, int]] = {}
+ohlcv_cache: Dict[str, Dict[str, Any]] = {}
+
 # 🔸 Подключение к PostgreSQL (асинхронный пул)
 async def init_pg_pool():
     return await asyncpg.create_pool(DATABASE_URL)
@@ -45,12 +49,11 @@ def init_redis_client():
 async def load_tickers(pg_pool) -> Dict[str, Dict[str, int]]:
     async with pg_pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT symbol, precision_price, precision_qty FROM tickers WHERE status = 'enabled';"
+            "SELECT symbol, precision_price FROM tickers WHERE status = 'enabled';"
         )
         result = {
             row["symbol"]: {
-                "precision_price": row["precision_price"],
-                "precision_qty": row["precision_qty"]
+                "precision_price": row["precision_price"]
             } for row in rows
         }
         debug_log(f"🔹 Загружено тикеров: {json.dumps(result, indent=2)}")
@@ -63,8 +66,9 @@ async def main():
     pg_pool = await init_pg_pool()
     redis = init_redis_client()
 
-    tickers = await load_tickers(pg_pool)
-    logging.info(f"✅ Загружено тикеров: {len(tickers)}")
+    global tickers_storage
+    tickers_storage = await load_tickers(pg_pool)
+    logging.info(f"✅ Загружено тикеров: {len(tickers_storage)}")
 
     # Заглушка: основной цикл
     while True:
