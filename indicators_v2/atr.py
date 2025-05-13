@@ -2,6 +2,7 @@ import logging
 import pandas as pd
 import json
 from datetime import datetime
+from debug_utils import debug_log
 
 # 🔸 Расчёт ATR по формуле Уайлдера (Wilder’s Smoothing)
 async def process_atr(instance_id, symbol, tf, open_time, params, candles, redis, db, precision_price, stream_publish):
@@ -44,7 +45,7 @@ async def process_atr(instance_id, symbol, tf, open_time, params, candles, redis
                 instance_id, symbol, open_dt, param_name, atr_value
             )
 
-        logging.info(f"✅ ATR{length} для {symbol} / {tf} = {atr_value}")
+        debug_log(f"✅ ATR{length} для {symbol} / {tf} = {atr_value}")
 
         if stream_publish:
             try:
