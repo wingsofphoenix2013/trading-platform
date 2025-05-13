@@ -1,52 +1,49 @@
 import logging
 import pandas as pd
-import numpy as np
 import json
 from datetime import datetime
+from ta.momentum import StochasticMomentumIndexIndicator
 
-# 🔸 Расчёт Stochastic Momentum Index и сигнальной EMA
+# 🔸 Расчёт SMI и сигнальной линии через ta-lib
 async def process_smi(instance_id, symbol, tf, open_time, params, candles, redis, db, precision_price, stream_publish):
     try:
+        # 🔹 Параметры SMI
         k = int(params.get("k", 13))
         d = int(params.get("d", 5))
-        s = int(params.get("s", 3))  # сглаживание сигнальной линии
+        s = int(params.get("s", 3))  # сигнальная линия
 
-        if not all(col in candles.columns for col in ("high", "low", "close")):
-            logging.warning(f"⚠️ Нет high/low/close в свечах {symbol} / {tf}")
-            return
-
+        # 🔹 Приведение колонок к float (во избежание Decimal)
         high = candles["high"].astype(float)
         low = candles["low"].astype(float)
         close = candles["close"].astype(float)
 
-        if len(close) < k + d + s + 5:
+        # 🔹 Проверка достаточности данных
+        min_len = max(k, d * 2, s * 2) + 10
+        if len(close) < min_len:
             logging.warning(f"⚠️ Недостаточно данных для SMI {symbol} / {tf}")
             return
 
-        hh = high.rolling(k).max()
-        ll = low.rolling(k).min()
-        mid = (hh + ll) / 2
-        range_ = hh - ll
-        rel = close - mid
+        # 🔹 Создание индикатора
+        indicator = StochasticMomentumIndexIndicator(
+            close=close,
+            high=high,
+            low=low,
+            window=k,
+            smooth_window=d,
+            smooth_window2=s
+        )
 
-        # Двойное EMA (Wilder-style)
-        rel_ema = rel.ewm(alpha=1/d, adjust=False).mean().ewm(alpha=1/d, adjust=False).mean()
-        range_ema = range_.ewm(alpha=1/d, adjust=False).mean().ewm(alpha=1/d, adjust=False).mean()
+        smi_value = round(float(indicator.stoch_momentum().iloc[-1]), 2)
+        signal_value = round(float(indicator.stoch_momentum_signal().iloc[-1]), 2)
 
-        smi = 200 * (rel_ema / range_ema)
-        smi_value = round(float(smi.iloc[-1]), 2)
-
-        # Сигнальная EMA
-        smi_signal = smi.ewm(span=s, adjust=False).mean()
-        signal_value = round(float(smi_signal.iloc[-1]), 2)
-
-        # Ключи
+        # 🔹 Ключи Redis
         redis_key_main = f"{symbol}:{tf}:SMI:{k}_{d}"
         redis_key_signal = f"{symbol}:{tf}:SMI_SIGNAL:{k}_{d}_{s}"
 
         await redis.set(redis_key_main, smi_value)
         await redis.set(redis_key_signal, signal_value)
 
+        # 🔹 Подготовка к записи
         open_dt = datetime.fromisoformat(open_time)
         param_main = f"smi{k}_{d}"
         param_signal = f"smi_signal{k}_{d}_{s}"
