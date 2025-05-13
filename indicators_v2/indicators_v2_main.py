@@ -10,7 +10,7 @@ import pandas_ta as pta
 import ta
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Any
 
 # 🔸 Конфигурация логирования
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
