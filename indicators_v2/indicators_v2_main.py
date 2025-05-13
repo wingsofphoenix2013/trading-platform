@@ -11,7 +11,8 @@ import ta
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime
 from typing import Dict, Any
-
+# 🔸 Импорты файлов индикаторов
+from ema import process_ema
 # 🔸 Конфигурация логирования
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
@@ -110,17 +111,39 @@ async def subscribe_to_ohlcv(redis, pg_pool):
 
             elif channel in ("ohlcv_m5_ready", "ohlcv_m15_ready") and data.get("action") == "aggregate_ready":
                 symbol = data["symbol"]
-                tf = data["interval"].upper()  # "M5", "M15"
+                tf = data["interval"].upper()
                 open_time = data["open_time"]
 
             else:
                 continue  # неизвестный формат — пропускаем
 
             debug_log(f"📥 Получено событие: {symbol} / {tf} / {open_time}")
+
             candles = await get_latest_ohlcv(symbol, tf, open_time, pg_pool)
             if candles.empty:
                 logging.warning(f"⚠️ Расчёт прерван: нет свечей для {symbol} / {tf} / {open_time}")
                 continue
+
+            # 🔹 Найти EMA-инстансы для данного timeframe
+            ema_instances = [
+                (instance_id, cfg)
+                for instance_id, cfg in indicator_configs.items()
+                if cfg["indicator"].upper() == "EMA" and cfg["timeframe"].upper() == tf
+            ]
+
+            # 🔹 Выполнить расчёт EMA
+            for instance_id, cfg in ema_instances:
+                await process_ema(
+                    instance_id=instance_id,
+                    symbol=symbol,
+                    tf=tf,
+                    open_time=open_time,
+                    params=cfg["params"],
+                    candles=candles,
+                    redis=redis,
+                    db=pg_pool,
+                    precision_price=tickers_storage[symbol]["precision_price"]
+                )
 
         except Exception as e:
             logging.error(f"❌ Ошибка при обработке события PubSub: {e}")
@@ -176,7 +199,7 @@ async def get_latest_ohlcv(symbol: str, tf: str, open_time: str, pg_pool) -> pd.
         "candles": df
     }
 
-    logging.info(f"📊 Загружены {len(df)} свечей для {symbol} / {tf} / {open_time}")
+    debug_log(f"📊 Загружены {len(df)} свечей для {symbol} / {tf} / {open_time}")
     return df
 # 🔄 Периодическое обновление тикеров и конфигураций
 async def refresh_all_periodically(pg_pool):
