@@ -16,7 +16,7 @@ from typing import Dict, Any
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 # 🔸 Флаг режима отладки
-DEBUG_MODE = True  # Включай True при разработке
+DEBUG_MODE = False  # Включай True при разработке
 
 def debug_log(message: str):
     if DEBUG_MODE:
@@ -117,7 +117,10 @@ async def subscribe_to_ohlcv(redis, pg_pool):
                 continue  # неизвестный формат — пропускаем
 
             debug_log(f"📥 Получено событие: {symbol} / {tf} / {open_time}")
-            # 🔜 Здесь будет логика обработки и расчёта
+            candles = await get_latest_ohlcv(symbol, tf, open_time, pg_pool)
+            if candles.empty:
+                logging.warning(f"⚠️ Расчёт прерван: нет свечей для {symbol} / {tf} / {open_time}")
+                continue
 
         except Exception as e:
             logging.error(f"❌ Ошибка при обработке события PubSub: {e}")
@@ -173,7 +176,7 @@ async def get_latest_ohlcv(symbol: str, tf: str, open_time: str, pg_pool) -> pd.
         "candles": df
     }
 
-    debug_log(f"📊 Загружены {len(df)} свечей для {symbol} / {tf} / {open_time}")
+    logging.info(f"📊 Загружены {len(df)} свечей для {symbol} / {tf} / {open_time}")
     return df
 # 🔄 Периодическое обновление тикеров и конфигураций
 async def refresh_all_periodically(pg_pool):
