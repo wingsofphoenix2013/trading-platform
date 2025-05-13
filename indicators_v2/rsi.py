@@ -2,6 +2,7 @@ import logging
 import pandas as pd
 import json
 from datetime import datetime
+from debug_utils import debug_log
 
 # 🔸 Расчёт RSI (Wilder's Smoothing) и сохранение в Redis + БД + Stream
 async def process_rsi(instance_id, symbol, tf, open_time, params, candles, redis, db, precision_price, stream_publish):
@@ -45,7 +46,7 @@ async def process_rsi(instance_id, symbol, tf, open_time, params, candles, redis
                 instance_id, symbol, open_dt, param_name, rsi_value
             )
 
-        logging.info(f"✅ RSI{length} для {symbol} / {tf} = {rsi_value}")
+        debug_log(f"✅ RSI{length} для {symbol} / {tf} = {rsi_value}")
 
         if stream_publish:
             try:
