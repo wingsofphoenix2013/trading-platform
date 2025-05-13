@@ -11,6 +11,7 @@ from decimal import Decimal, ROUND_DOWN
 from datetime import datetime
 from debug_utils import debug_log
 from strategy_1 import Strategy1
+from strategy_2 import Strategy2
 from strategies_v3_interface import StrategyInterface
         
 # 🔸 Конфигурация логирования
@@ -42,6 +43,7 @@ strategy_allowed_tickers = {}
 # 🔸 Хранилище стратегий (регистрируются вручную)
 strategies = {
     "strategy_1": Strategy1(),
+    "strategy_2": Strategy2(),
 }
 # 🔸 Загрузка тикеров из базы
 async def load_tickers(db_pool):
