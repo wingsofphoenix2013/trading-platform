@@ -1,5 +1,6 @@
 import logging
 import pandas as pd
+from datetime import datetime
 
 # 🔸 Расчёт EMA и сохранение в Redis + БД
 async def process_ema(instance_id, symbol, tf, open_time, params, candles, redis, db, precision_price):
@@ -17,6 +18,9 @@ async def process_ema(instance_id, symbol, tf, open_time, params, candles, redis
         redis_key = f"{symbol}:{tf}:EMA:{length}"
         await redis.set(redis_key, ema_value)
 
+        # Преобразуем строку open_time → datetime
+        open_dt = datetime.fromisoformat(open_time)
+
         async with db.acquire() as conn:
             await conn.execute(
                 """
@@ -25,7 +29,7 @@ async def process_ema(instance_id, symbol, tf, open_time, params, candles, redis
                 VALUES ($1, $2, $3, $4, $5)
                 ON CONFLICT DO NOTHING
                 """,
-                instance_id, symbol, open_time, f"ema{length}", ema_value
+                instance_id, symbol, open_dt, f"ema{length}", ema_value
             )
 
         logging.info(f"✅ EMA{length} для {symbol} / {tf} = {ema_value}")
