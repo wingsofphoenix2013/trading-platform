@@ -90,7 +90,7 @@ async def load_indicator_config(pg_pool) -> Dict[int, Dict[str, Any]]:
     debug_log(f"📦 Загружено конфигураций индикаторов: {len(config)}")
     return config
 # 🔸 Подписка на события Pub/Sub от агрегаторов
-async def subscribe_to_ohlcv(redis):
+async def subscribe_to_ohlcv(redis, pg_pool):
     pubsub = redis.pubsub()
     await pubsub.subscribe("ohlcv_m1_ready", "ohlcv_m5_ready", "ohlcv_m15_ready")
     logging.info("📡 Подписка на каналы ohlcv_m1_ready, ohlcv_m5_ready, ohlcv_m15_ready активна.")
@@ -123,42 +123,49 @@ async def subscribe_to_ohlcv(redis):
             logging.error(f"❌ Ошибка при обработке события PubSub: {e}")
 # 🔸 Получение и кэширование свечей
 async def get_latest_ohlcv(symbol: str, tf: str, open_time: str, pg_pool) -> pd.DataFrame:
-    from datetime import datetime
-
     cache_key = f"{symbol}:{tf}"
-    incoming_time = datetime.fromisoformat(open_time)
+
+    try:
+        incoming_time = datetime.fromisoformat(open_time)
+    except Exception:
+        logging.error(f"❌ Невалидный формат open_time: {open_time}")
+        return pd.DataFrame()
 
     # Проверка кэша
     cached = ohlcv_cache.get(cache_key)
     if cached:
         cached_time = cached["open_time"]
         if incoming_time < cached_time:
-            logging.warning(f"⚠️ Получено событие с устаревшим open_time: {symbol} / {tf} / {open_time}")
+            logging.warning(f"⚠️ Устаревшее событие: {symbol} / {tf} / {open_time}")
             return cached["candles"]
         if incoming_time == cached_time:
-            debug_log(f"🧠 Используем кэшированные свечи для {symbol} / {tf}")
+            debug_log(f"🧠 Используем кэш для {symbol} / {tf} / {open_time}")
             return cached["candles"]
 
     # Загрузка новых свечей из базы
     table_name = f"ohlcv2_{tf.lower()}"
-    async with pg_pool.acquire() as conn:
-        rows = await conn.fetch(
-            f"""
-            SELECT open_time, high, low, close
-            FROM {table_name}
-            WHERE symbol = $1
-            ORDER BY open_time DESC
-            LIMIT 250
-            """,
-            symbol
-        )
+    try:
+        async with pg_pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""
+                SELECT open_time, high, low, close
+                FROM {table_name}
+                WHERE symbol = $1
+                ORDER BY open_time DESC
+                LIMIT 250
+                """,
+                symbol
+            )
+    except Exception as e:
+        logging.error(f"❌ Ошибка при загрузке свечей для {symbol} / {tf}: {e}")
+        return pd.DataFrame()
 
     if not rows or len(rows) < 10:
         logging.warning(f"⚠️ Недостаточно данных OHLCV для {symbol} / {tf}")
-        return pd.DataFrame()  # Пустой результат
+        return pd.DataFrame()
 
     df = pd.DataFrame(rows, columns=["open_time", "high", "low", "close"])
-    df = df[::-1]  # Сортировка по возрастанию времени
+    df = df[::-1]  # Сортировка по времени (ASC)
 
     # Обновление кэша
     ohlcv_cache[cache_key] = {
@@ -166,8 +173,8 @@ async def get_latest_ohlcv(symbol: str, tf: str, open_time: str, pg_pool) -> pd.
         "candles": df
     }
 
-    debug_log(f"📊 Загружены свечи для {symbol} / {tf} / {open_time}")
-    return df            
+    debug_log(f"📊 Загружены {len(df)} свечей для {symbol} / {tf} / {open_time}")
+    return df
 # 🔄 Периодическое обновление тикеров и конфигураций
 async def refresh_all_periodically(pg_pool):
     while True:
@@ -195,7 +202,7 @@ async def main():
     indicator_configs = await load_indicator_config(pg_pool)
     logging.info(f"📥 Конфигураций расчёта: {len(indicator_configs)}")
     
-    asyncio.create_task(subscribe_to_ohlcv(redis))
+    asyncio.create_task(subscribe_to_ohlcv(redis, pg_pool))
     asyncio.create_task(refresh_all_periodically(pg_pool))
 
     # Заглушка: основной цикл
