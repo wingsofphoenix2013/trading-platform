@@ -96,7 +96,8 @@ async def handle_indicator_message(data: dict):
                 value=None,  # можно добавить значение, если оно доступно
                 ts=calculated_at,
                 state=signal_state_storage,
-                publish=publish_to_signals_stream
+                publish=publish_to_signals_stream,
+                db_pool=db_pool
             )
         else:
             debug_log(f"Пропущен неподдерживаемый индикатор: {indicator}")
