@@ -13,6 +13,7 @@ from debug_utils import debug_log
 from strategy_1 import Strategy1
 from strategy_2 import Strategy2
 from strategy_3 import Strategy3
+from strategy_4 import Strategy4
 from strategies_v3_interface import StrategyInterface
         
 # 🔸 Конфигурация логирования
@@ -46,6 +47,7 @@ strategies = {
     "strategy_1": Strategy1(),
     "strategy_2": Strategy2(),
     "strategy_3": Strategy3(),
+    "strategy_4": Strategy4(),
 }
 # 🔸 Загрузка тикеров из базы
 async def load_tickers(db_pool):
