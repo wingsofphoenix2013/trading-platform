@@ -62,7 +62,7 @@ async def process_ema_cross_signal(symbol: str, timeframe: str, params: dict, ts
         if not ema9_id or not ema21_id:
             return
 
-        # 🔹 Получение последних двух значений
+        # 🔹 Получение последних двух значений для ema9 и ema21
         ema9_prev, ema9_curr = await get_last_two_values(db_pool, ema9_id, symbol, 'ema9')
         ema21_prev, ema21_curr = await get_last_two_values(db_pool, ema21_id, symbol, 'ema21')
 
@@ -70,20 +70,20 @@ async def process_ema_cross_signal(symbol: str, timeframe: str, params: dict, ts
             return
 
         # 🔹 Проверка сигнала LONG
-        if ema9_prev < ema21_prev and ema9_curr > ema21_curr:
+        if ema9_prev <= ema21_prev and ema9_curr > ema21_curr:
             cache_key = (symbol, timeframe, "LONG")
             if last_signal_cache.get(cache_key) == ts:
-                return  # уже сгенерирован на этом баре
+                return
             message = f"EMA_{timeframe}_LONG"
             debug_log(f"✔ Пересечение вверх: {symbol} / {timeframe}")
             await publish(symbol=symbol, message=message, time=ts)
             last_signal_cache[cache_key] = ts
 
         # 🔹 Проверка сигнала SHORT
-        elif ema9_prev > ema21_prev and ema9_curr < ema21_curr:
+        elif ema9_prev >= ema21_prev and ema9_curr < ema21_curr:
             cache_key = (symbol, timeframe, "SHORT")
             if last_signal_cache.get(cache_key) == ts:
-                return  # уже сгенерирован на этом баре
+                return
             message = f"EMA_{timeframe}_SHORT"
             debug_log(f"✔ Пересечение вниз: {symbol} / {timeframe}")
             await publish(symbol=symbol, message=message, time=ts)
