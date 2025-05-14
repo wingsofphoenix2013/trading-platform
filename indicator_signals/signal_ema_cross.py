@@ -29,18 +29,18 @@ async def get_instance_id(db_pool, length: str, timeframe: str) -> int:
             debug_log(f"⚠️ Не найден instance_id для EMA {length} / {timeframe}")
             return None
 
-# 🔸 Получение двух последних значений индикатора
-async def get_last_two_values(db_pool, instance_id: int, symbol: str):
+# 🔸 Получение двух последних значений по указанному параметру
+async def get_last_two_values(db_pool, instance_id: int, symbol: str, param_name: str):
     async with db_pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT value
             FROM indicator_values_v2
             WHERE instance_id = $1
               AND symbol = $2
-              AND param_name = 'value'
+              AND param_name = $3
             ORDER BY open_time DESC
             LIMIT 2
-        """, instance_id, symbol)
+        """, instance_id, symbol, param_name)
 
         if len(rows) == 2:
             return rows[1]["value"], rows[0]["value"]  # prev, curr
@@ -56,9 +56,9 @@ async def process_ema_cross_signal(symbol: str, timeframe: str, params: dict, ts
         if not ema9_id or not ema21_id:
             return
 
-        # 🔹 Получение последних двух значений
-        ema9_prev, ema9_curr = await get_last_two_values(db_pool, ema9_id, symbol)
-        ema21_prev, ema21_curr = await get_last_two_values(db_pool, ema21_id, symbol)
+        # 🔹 Получение последних двух значений для ema9 и ema21
+        ema9_prev, ema9_curr = await get_last_two_values(db_pool, ema9_id, symbol, 'ema9')
+        ema21_prev, ema21_curr = await get_last_two_values(db_pool, ema21_id, symbol, 'ema21')
 
         if None in [ema9_prev, ema9_curr, ema21_prev, ema21_curr]:
             return
