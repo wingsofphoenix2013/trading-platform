@@ -2,6 +2,7 @@ import logging
 import pandas as pd
 import json
 from datetime import datetime
+from debug_utils import debug_log
 
 # 🔸 Расчёт ATR + Median(30) и публикация в Redis + БД + Stream
 async def process_atr(instance_id, symbol, tf, open_time, params, candles, redis, db, precision_price, stream_publish):
