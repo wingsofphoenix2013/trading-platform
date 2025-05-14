@@ -3,6 +3,7 @@ import json
 import asyncio
 import logging
 import redis.asyncio as redis
+import asyncpg
 from datetime import datetime
 
 from debug_utils import debug_log
@@ -49,7 +50,7 @@ async def publish_to_signals_stream(symbol: str, message: str, time: str):
         logging.error(f"Ошибка публикации сигнала: {e}")
 
 # 🔸 Основной цикл прослушивания Redis Stream
-async def listen_to_indicators():
+async def listen_to_indicators(db_pool):
     group = "indicator_signal_workers"
     consumer = f"worker-{os.getpid()}"
 
@@ -75,11 +76,11 @@ async def listen_to_indicators():
 
         for stream_name, messages in result:
             for entry_id, data in messages:
-                await handle_indicator_message(data)
+                await handle_indicator_message(data, db_pool)
                 await redis_client.xack("indicators_ready_stream", group, entry_id)
 
 # 🔸 Обработка одного сообщения индикатора
-async def handle_indicator_message(data: dict):
+async def handle_indicator_message(data: dict, db_pool):
     try:
         symbol = data["symbol"]
         timeframe = data["timeframe"]
@@ -93,7 +94,6 @@ async def handle_indicator_message(data: dict):
                 symbol=symbol,
                 timeframe=timeframe,
                 params=params,
-                value=None,  # можно добавить значение, если оно доступно
                 ts=calculated_at,
                 state=signal_state_storage,
                 publish=publish_to_signals_stream,
@@ -108,7 +108,9 @@ async def handle_indicator_message(data: dict):
 # 🔸 Точка входа
 async def main():
     logging.info("🚀 Indicator Signal Worker запущен")
-    await listen_to_indicators()
+
+    db_pool = await asyncpg.create_pool(dsn=os.getenv("DATABASE_URL"))
+    await listen_to_indicators(db_pool)
 
 if __name__ == "__main__":
     asyncio.run(main())
