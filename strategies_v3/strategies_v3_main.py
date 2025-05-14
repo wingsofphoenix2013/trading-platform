@@ -709,25 +709,28 @@ async def position_close_loop(db_pool):
 
                         quantity = Decimal(position["quantity_left"])
 
-                        async with db_pool.acquire() as conn:
-                            await conn.execute("""
-                                INSERT INTO position_targets_v2 (
-                                    position_id, type, price, quantity,
-                                    hit, canceled, tp_trigger_type
-                                ) VALUES (
-                                    $1, 'sl', $2, $3,
-                                    false, false, 'price'
-                                )
-                            """, position_id, sl_price, quantity)
+                        result = await conn.fetchrow("""
+                            INSERT INTO position_targets_v2 (
+                                position_id, type, price, quantity,
+                                hit, canceled, tp_trigger_type
+                            ) VALUES (
+                                $1, 'sl', $2, $3,
+                                false, false, 'price'
+                            )
+                            RETURNING id
+                        """, position_id, sl_price, quantity)
+
+                        new_sl_id = result["id"]
 
                         targets_by_position[position_id].append({
+                            "id": new_sl_id,
                             "type": "sl",
                             "price": sl_price,
                             "quantity": quantity,
                             "hit": False,
                             "canceled": False
                         })
-
+                        
                         debug_log(f"📌 SL переставлен после TP {target_id}: новый уровень = {sl_price}")
                 # 🔹 Пересчёт planned_risk
                 try:
