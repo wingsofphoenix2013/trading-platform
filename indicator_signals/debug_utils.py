@@ -1,7 +1,7 @@
 import logging
 
 # 🔸 Флаг режима отладки
-DEBUG_MODE = True  # Включи True при разработке
+DEBUG_MODE = False  # Включи True при разработке
 
 def debug_log(message: str):
     if DEBUG_MODE:
