@@ -591,10 +591,9 @@ async def position_close_loop(db_pool):
                             continue
 
                         except Exception as e:
-                            import traceback
                             logging.error(f"❌ Ошибка при закрытии позиции по SL: {e}")
-                            logging.error(traceback.format_exc())
                             await redis_client.xack(stream_name, group_name, msg_id)
+                            continue
 
                     except Exception as e:
                         logging.error(f"❌ Ошибка при обновлении SL цели {target_id}: {e}")
@@ -710,16 +709,17 @@ async def position_close_loop(db_pool):
 
                         quantity = Decimal(position["quantity_left"])
 
-                        result = await conn.fetchrow("""
-                            INSERT INTO position_targets_v2 (
-                                position_id, type, price, quantity,
-                                hit, canceled, tp_trigger_type
-                            ) VALUES (
-                                $1, 'sl', $2, $3,
-                                false, false, 'price'
-                            )
-                            RETURNING id
-                        """, position_id, sl_price, quantity)
+                        async with db_pool.acquire() as conn:
+                            result = await conn.fetchrow("""
+                                INSERT INTO position_targets_v2 (
+                                    position_id, type, price, quantity,
+                                    hit, canceled, tp_trigger_type
+                                ) VALUES (
+                                    $1, 'sl', $2, $3,
+                                    false, false, 'price'
+                                )
+                                RETURNING id
+                            """, position_id, sl_price, quantity)
 
                         new_sl_id = result["id"]
 
