@@ -1,4 +1,5 @@
 from debug_utils import debug_log
+from datetime import datetime
 
 # 🔸 Кэш instance_id по (length, timeframe)
 instance_cache = {}
@@ -49,6 +50,9 @@ async def get_last_two_values(db_pool, instance_id: int, symbol: str, param_name
 # 🔸 Обработка сигнала EMA для генерации сигнала пересечения
 async def process_ema_cross_signal(symbol: str, timeframe: str, params: dict, ts: str, state: dict, publish, db_pool):
     try:
+        # 🔹 Подстраховка — если нет ts (bar_time), берём UTC сейчас
+        ts = ts or datetime.utcnow().isoformat()
+
         # 🔹 Получение instance_id для EMA9 и EMA21
         ema9_id = await get_instance_id(db_pool, "9", timeframe)
         ema21_id = await get_instance_id(db_pool, "21", timeframe)
