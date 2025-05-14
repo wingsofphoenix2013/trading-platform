@@ -42,7 +42,7 @@ async def publish_to_signals_stream(symbol: str, message: str, time: str):
         await redis_client.xadd("signals_stream", {
             "message": message,
             "symbol": symbol,
-            "time": time,
+            "bar_time": time,
             "sent_at": sent_at
         })
         logging.info(f"📤 Сигнал опубликован: {message} / {symbol}")
