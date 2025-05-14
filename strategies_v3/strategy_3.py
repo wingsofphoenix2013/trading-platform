@@ -2,14 +2,14 @@ import logging
 from decimal import Decimal, ROUND_DOWN
 from debug_utils import debug_log
 
-# 🔸 Стратегия strategy_1 с проверкой EMA50 и ATR
-class Strategy4:
+# 🔸 Стратегия strategy_3 с проверкой EMA50 и ATR
+class Strategy3:
     def __init__(self):
         pass
 
     # 🔸 Обработка сигнала с учётом специфических условий
     async def on_signal(self, task: dict, interface):
-        debug_log("📈 Продолжение логики внутри strategy_2...")
+        debug_log("📈 Продолжение логики внутри strategy_3...")
 
         symbol = task["symbol"]
         direction = task["direction"]
@@ -39,25 +39,25 @@ class Strategy4:
         if direction == "long":
             threshold = ema_50 - (atr * Decimal("0.5"))
             if entry_price < threshold:
-                debug_log(f"⛔ Вход в long запрещён: цена {entry_price} < {threshold}")
+                logging.info(f"⛔ Вход в long запрещён: цена {entry_price} < {threshold}")
                 return
             if atr <= atr_median:
-                debug_log(f"⛔ Вход в long запрещён: ATR {atr} <= median(30) {atr_median}")
+                logging.info(f"⛔ Вход в long запрещён: ATR {atr} <= median(30) {atr_median}")
                 return
             if rsi_14 <= Decimal("50"):
-                debug_log(f"⛔ Вход в long запрещён: RSI {rsi_14} <= 50")
+                logging.info(f"⛔ Вход в long запрещён: RSI {rsi_14} <= 50")
                 return
 
         elif direction == "short":
             threshold = ema_50 + (atr * Decimal("0.5"))
             if entry_price > threshold:
-                debug_log(f"⛔ Вход в short запрещён: цена {entry_price} > {threshold}")
+                logging.info(f"⛔ Вход в short запрещён: цена {entry_price} > {threshold}")
                 return
             if atr <= atr_median:
-                debug_log(f"⛔ Вход в short запрещён: ATR {atr} <= median(30) {atr_median}")
+                logging.info(f"⛔ Вход в short запрещён: ATR {atr} <= median(30) {atr_median}")
                 return
             if rsi_14 >= Decimal("50"):
-                debug_log(f"⛔ Вход в short запрещён: RSI {rsi_14} >= 50")
+                logging.info(f"⛔ Вход в short запрещён: RSI {rsi_14} >= 50")
                 return
 
         # 🔹 Расчёт параметров позиции
@@ -67,7 +67,7 @@ class Strategy4:
             logging.warning("⚠️ Расчёт позиции завершён без результата — позиция не будет открыта")
             return
 
-        debug_log(f"📊 Расчёт позиции (strategy_2): "
+        debug_log(f"📊 Расчёт позиции (strategy_3): "
                      f"qty={result['quantity']}, notional={result['notional_value']}, "
                      f"risk={result['planned_risk']}, margin={result['margin_used']}, "
                      f"sl={result['stop_loss_price']}")
@@ -76,6 +76,6 @@ class Strategy4:
         position_id = await interface.open_position(task, result)
 
         if position_id:
-            debug_log(f"✅ Позиция открыта strategy_2, ID={position_id}")
+            logging.info(f"✅ Позиция открыта strategy_3, ID={position_id}")
         else:
             logging.warning("⚠️ Позиция не была открыта")
