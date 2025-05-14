@@ -41,9 +41,9 @@ class Strategy4:
             if entry_price < threshold:
                 logging.info(f"⛔ Вход в long запрещён: цена {entry_price} < {threshold}")
                 return
-#             if atr <= atr_median:
-#                 logging.info(f"⛔ Вход в long запрещён: ATR {atr} <= median(30) {atr_median}")
-#                 return
+            if atr <= atr_median:
+                logging.info(f"⛔ Вход в long запрещён: ATR {atr} <= median(30) {atr_median}")
+                return
             if rsi_14 <= Decimal("50"):
                 logging.info(f"⛔ Вход в long запрещён: RSI {rsi_14} <= 50")
                 return
@@ -53,9 +53,9 @@ class Strategy4:
             if entry_price > threshold:
                 logging.info(f"⛔ Вход в short запрещён: цена {entry_price} > {threshold}")
                 return
-#             if atr <= atr_median:
-#                 logging.info(f"⛔ Вход в short запрещён: ATR {atr} <= median(30) {atr_median}")
-#                 return
+            if atr <= atr_median:
+                logging.info(f"⛔ Вход в short запрещён: ATR {atr} <= median(30) {atr_median}")
+                return
             if rsi_14 >= Decimal("50"):
                 logging.info(f"⛔ Вход в short запрещён: RSI {rsi_14} >= 50")
                 return
