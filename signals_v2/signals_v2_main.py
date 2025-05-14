@@ -155,19 +155,49 @@ async def process_signal(entry_id, data):
 
     # 🔹 Преобразование временных полей
     from dateutil import parser
+
     try:
         bar_time = parser.isoparse(bar_time).replace(tzinfo=None) if bar_time else None
+    except Exception as e:
+        await log_system_event(
+            level="ERROR",
+            message="Ошибка парсинга bar_time",
+            source="signal_worker",
+            details=str(e)
+        )
+        bar_time = None
+
+    try:
         sent_at = parser.isoparse(sent_at).replace(tzinfo=None) if sent_at else None
+    except Exception as e:
+        await log_system_event(
+            level="ERROR",
+            message="Ошибка парсинга sent_at",
+            source="signal_worker",
+            details=str(e)
+        )
+        sent_at = None
+
+    try:
         received_at = parser.isoparse(received_at).replace(tzinfo=None) if received_at else datetime.utcnow()
     except Exception as e:
         await log_system_event(
             level="ERROR",
-            message="Ошибка преобразования дат",
+            message="Ошибка парсинга received_at",
             source="signal_worker",
             details=str(e)
         )
-        return
+        received_at = datetime.utcnow()
 
+    # 🔸 Прекратить обработку, если bar_time не удалось получить
+    if bar_time is None:
+        await log_system_event(
+            level="ERROR",
+            message="bar_time отсутствует после парсинга — сигнал отклонён",
+            source="signal_worker",
+            details=raw_message
+        )
+        return
     conn = await get_db()
     try:
         # 🔹 Поиск сигнала по фразе
