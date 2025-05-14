@@ -4,6 +4,9 @@ from datetime import datetime
 # 🔸 Кэш instance_id по (length, timeframe)
 instance_cache = {}
 
+# 🔸 Кэш последнего сгенерированного сигнала по (symbol, timeframe, direction)
+last_signal_cache = {}
+
 # 🔸 Получение instance_id для EMA по длине и таймфрейму
 async def get_instance_id(db_pool, length: str, timeframe: str) -> int:
     key = (length, timeframe)
@@ -50,7 +53,6 @@ async def get_last_two_values(db_pool, instance_id: int, symbol: str, param_name
 # 🔸 Обработка сигнала EMA для генерации сигнала пересечения
 async def process_ema_cross_signal(symbol: str, timeframe: str, params: dict, ts: str, state: dict, publish, db_pool):
     try:
-        # 🔹 Подстраховка — если нет ts (bar_time), берём UTC сейчас
         ts = ts or datetime.utcnow().isoformat()
 
         # 🔹 Получение instance_id для EMA9 и EMA21
@@ -60,24 +62,32 @@ async def process_ema_cross_signal(symbol: str, timeframe: str, params: dict, ts
         if not ema9_id or not ema21_id:
             return
 
-        # 🔹 Получение последних двух значений для ema9 и ema21
+        # 🔹 Получение последних двух значений
         ema9_prev, ema9_curr = await get_last_two_values(db_pool, ema9_id, symbol, 'ema9')
         ema21_prev, ema21_curr = await get_last_two_values(db_pool, ema21_id, symbol, 'ema21')
 
         if None in [ema9_prev, ema9_curr, ema21_prev, ema21_curr]:
             return
 
-        # 🔹 Проверка условия пересечения вверх (LONG)
+        # 🔹 Проверка сигнала LONG
         if ema9_prev < ema21_prev and ema9_curr > ema21_curr:
+            cache_key = (symbol, timeframe, "LONG")
+            if last_signal_cache.get(cache_key) == ts:
+                return  # уже сгенерирован на этом баре
             message = f"EMA_{timeframe}_LONG"
             debug_log(f"✔ Пересечение вверх: {symbol} / {timeframe}")
             await publish(symbol=symbol, message=message, time=ts)
+            last_signal_cache[cache_key] = ts
 
-        # 🔹 Проверка условия пересечения вниз (SHORT)
+        # 🔹 Проверка сигнала SHORT
         elif ema9_prev > ema21_prev and ema9_curr < ema21_curr:
+            cache_key = (symbol, timeframe, "SHORT")
+            if last_signal_cache.get(cache_key) == ts:
+                return  # уже сгенерирован на этом баре
             message = f"EMA_{timeframe}_SHORT"
             debug_log(f"✔ Пересечение вниз: {symbol} / {timeframe}")
             await publish(symbol=symbol, message=message, time=ts)
+            last_signal_cache[cache_key] = ts
 
     except Exception as e:
         debug_log(f"Ошибка в process_ema_cross_signal: {e}")
