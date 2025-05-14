@@ -76,7 +76,7 @@ async def process_ema(instance_id, symbol, tf, open_time, params, candles, redis
                         "calculated_at": open_time
                     }
                 )
-                logging.info(f"📤 Stream: EMA{length} опубликован для {symbol} / {tf}")
+                debug_log(f"📤 Stream: EMA{length} опубликован для {symbol} / {tf}")
             except Exception as e:
                 logging.error(f"❌ Ошибка публикации в Redis Stream: {e}")
 
