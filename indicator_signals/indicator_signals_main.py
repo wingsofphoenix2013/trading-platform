@@ -76,12 +76,17 @@ async def listen_to_indicators(db_pool):
 
         for stream_name, messages in result:
             for entry_id, data in messages:
-                await handle_indicator_message(data, db_pool)
-                await redis_client.xack("indicators_ready_stream", group, entry_id)
+                try:
+                    await handle_indicator_message(data, db_pool)
+                    await redis_client.xack("indicators_ready_stream", group, entry_id)
+                except Exception as e:
+                    logging.error(f"❌ Ошибка при обработке сообщения {entry_id}: {e}")
 
 # 🔸 Обработка одного сообщения индикатора
 async def handle_indicator_message(data: dict, db_pool):
     try:
+        debug_log(f"📥 Получено сообщение: {data}")
+
         symbol = data["symbol"]
         timeframe = data["timeframe"]
         indicator = data["indicator"]
@@ -90,6 +95,7 @@ async def handle_indicator_message(data: dict, db_pool):
 
         processor = INDICATOR_DISPATCH.get(indicator)
         if processor:
+            debug_log(f"🔍 Обработка индикатора {indicator} для {symbol} / {timeframe}")
             await processor(
                 symbol=symbol,
                 timeframe=timeframe,
@@ -100,7 +106,7 @@ async def handle_indicator_message(data: dict, db_pool):
                 db_pool=db_pool
             )
         else:
-            debug_log(f"Пропущен неподдерживаемый индикатор: {indicator}")
+            debug_log(f"⚠️ Пропущен неподдерживаемый индикатор: {indicator}")
 
     except Exception as e:
         logging.error(f"Ошибка обработки сообщения: {e}")
