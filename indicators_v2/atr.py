@@ -2,9 +2,8 @@ import logging
 import pandas as pd
 import json
 from datetime import datetime
-from debug_utils import debug_log
 
-# 🔸 Расчёт ATR по формуле Уайлдера (Wilder’s Smoothing)
+# 🔸 Расчёт ATR + Median(30) и публикация в Redis + БД + Stream
 async def process_atr(instance_id, symbol, tf, open_time, params, candles, redis, db, precision_price, stream_publish):
     try:
         length = int(params.get("length", 14))
@@ -13,9 +12,9 @@ async def process_atr(instance_id, symbol, tf, open_time, params, candles, redis
             logging.warning(f"⚠️ Нет high/low/close в свечах {symbol} / {tf}")
             return
 
-        high = candles["high"]
-        low = candles["low"]
-        close = candles["close"]
+        high = candles["high"].astype(float)
+        low = candles["low"].astype(float)
+        close = candles["close"].astype(float)
         prev_close = close.shift(1)
 
         tr = pd.concat([
@@ -24,10 +23,20 @@ async def process_atr(instance_id, symbol, tf, open_time, params, candles, redis
             (low - prev_close).abs()
         ], axis=1).max(axis=1)
 
-        # Wilder EMA: alpha = 1 / length, adjust=False → соответствует оригинальной формуле
+        # ATR (Wilder-style)
         atr_series = tr.ewm(alpha=1/length, adjust=False).mean()
         atr_value = round(float(atr_series.iloc[-1]), precision_price)
 
+        # 🔹 Median(30) по close
+        if len(close) >= 30:
+            median_30_val = round(float(close.tail(30).median()), precision_price)
+            redis_key_median = f"{symbol}:{tf}:ATR:median_30"
+            await redis.set(redis_key_median, median_30_val)
+            debug_log(f"📊 Median(30) для {symbol} / {tf} = {median_30_val}")
+        else:
+            logging.warning(f"⚠️ Недостаточно данных для median(30) {symbol} / {tf}")
+
+        # Основной ключ ATR
         redis_key = f"{symbol}:{tf}:ATR:{length}"
         await redis.set(redis_key, atr_value)
 
@@ -45,7 +54,7 @@ async def process_atr(instance_id, symbol, tf, open_time, params, candles, redis
                 instance_id, symbol, open_dt, param_name, atr_value
             )
 
-        debug_log(f"✅ ATR{length} для {symbol} / {tf} = {atr_value}")
+        logging.info(f"✅ ATR{length} для {symbol} / {tf} = {atr_value}")
 
         if stream_publish:
             try:
