@@ -591,9 +591,10 @@ async def position_close_loop(db_pool):
                             continue
 
                         except Exception as e:
+                            import traceback
                             logging.error(f"❌ Ошибка при закрытии позиции по SL: {e}")
+                            logging.error(traceback.format_exc())
                             await redis_client.xack(stream_name, group_name, msg_id)
-                            continue
 
                     except Exception as e:
                         logging.error(f"❌ Ошибка при обновлении SL цели {target_id}: {e}")
