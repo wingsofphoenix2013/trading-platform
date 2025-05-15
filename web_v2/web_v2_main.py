@@ -103,7 +103,7 @@ async def signals(request: Request):
 async def strategies(request: Request):
     pool = await get_db_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT id, human_name, enabled FROM strategies_v2 ORDER BY id")
+        rows = await conn.fetch("SELECT id, name, human_name, enabled FROM strategies_v2 ORDER BY id")
     return templates.TemplateResponse("strategies.html", {
         "request": request,
         "strategies": rows

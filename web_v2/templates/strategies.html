@@ -20,15 +20,15 @@
 </head>
 <body>
     <h1>Список всех стратегий</h1>
-    <ul>
-        {% for s in strategies %}
-        <li>
-            {{ s.human_name }} —
-            <span class="{{ 'enabled' if s.enabled else 'disabled' }}">
-                {{ 'Активна' if s.enabled else 'Отключена' }}
-            </span>
-        </li>
-        {% endfor %}
-    </ul>
+<ul>
+    {% for s in strategies %}
+    <li>
+        {{ s.name }} / {{ s.human_name }} —
+        <span class="{{ 'enabled' if s.enabled else 'disabled' }}">
+            {{ 'Активна' if s.enabled else 'Отключена' }}
+        </span>
+    </li>
+    {% endfor %}
+</ul>
 </body>
 </html>
