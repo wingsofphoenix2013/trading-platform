@@ -347,7 +347,7 @@ async def strategy_detail(request: Request, strategy_name: str, period: str = "a
         total_pnl = sum(r["total_pnl"] or 0 for r in rows)
 
         winrate = f"{(wins / total * 100):.1f}%" if total else "n/a"
-        roi = f"{(total_pnl / deposit * 100):.1f}%" if total else "n/a"
+        roi = f"{(float(total_pnl) / deposit * 100):.1f}%" if total else "n/a"
 
         return templates.TemplateResponse("strategy_detail.html", {
             "request": request,
