@@ -1,14 +1,36 @@
 import os
 import logging
 from pathlib import Path
-from datetime import datetime
 import asyncpg
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 import redis.asyncio as redis
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
+def get_period_bounds(period: str, now_utc: datetime) -> tuple[datetime | None, datetime | None]:
+    now_local = now_utc.astimezone(ZoneInfo("Europe/Kyiv"))
+
+    if period == "today":
+        start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_local = now_local
+    elif period == "yesterday":
+        y = now_local.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+        start_local = y
+        end_local = y.replace(hour=23, minute=59, second=59, microsecond=999999)
+    elif period == "week":
+        start_local = now_local - timedelta(days=now_local.weekday())
+        start_local = start_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_local = now_local
+    elif period == "all":
+        return None, None
+    else:
+        raise ValueError(f"Unknown period: {period}")
+
+    return start_local.astimezone(ZoneInfo("UTC")), end_local.astimezone(ZoneInfo("UTC"))
+        
 # 🔸 Инициализация FastAPI приложения
 app = FastAPI()
 
