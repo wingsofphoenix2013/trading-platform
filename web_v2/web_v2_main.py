@@ -312,3 +312,15 @@ async def list_strategies(request: Request):
         })
     finally:
         await conn.close()
+@app.get("/strategies/debug", response_class=HTMLResponse)
+async def debug_strategies(request: Request):
+    conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
+    try:
+        rows = await conn.fetch("SELECT id, name FROM strategies_v2")
+        return templates.TemplateResponse("strategies_debug.html", {
+            "request": request,
+            "strategies": rows,
+            "total": len(rows)
+        })
+    finally:
+        await conn.close()
