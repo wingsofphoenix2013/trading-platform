@@ -7,7 +7,7 @@
         body { font-family: sans-serif; margin: 40px; background: #f9f9f9; }
         h1 { margin-bottom: 10px; }
         select { margin-bottom: 20px; padding: 5px; }
-        table { border-collapse: collapse; width: 400px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        table { border-collapse: collapse; width: 600px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 40px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background-color: #f2f2f2; }
     </style>
@@ -43,6 +43,30 @@
             <th>ROI</th>
             <td>{{ stats.roi }}</td>
         </tr>
+    </table>
+
+    <h2>Открытые сделки</h2>
+    <table>
+        <tr>
+            <th>№№</th>
+            <th>ID</th>
+            <th>Тикер</th>
+            <th>Открыта</th>
+            <th>Курс</th>
+            <th>Статус</th>
+            <th>PnL</th>
+        </tr>
+        {% for i, p in enumerate(open_positions) %}
+        <tr>
+            <td>{{ i + 1 }}</td>
+            <td>{{ p.id }}</td>
+            <td>{{ p.symbol }}</td>
+            <td>{{ p.created_at.astimezone(timezone).strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{{ '%.4f'|format(p.entry_price) }}</td>
+            <td>{{ p.close_reason or '—' }}</td>
+            <td>{{ '%.4f'|format(p.pnl or 0.0) }}</td>
+        </tr>
+        {% endfor %}
     </table>
 </body>
 </html>

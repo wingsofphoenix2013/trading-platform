@@ -349,10 +349,20 @@ async def strategy_detail(request: Request, strategy_name: str, period: str = "a
         winrate = f"{(wins / total * 100):.1f}%" if total else "n/a"
         roi = f"{(float(total_pnl) / deposit * 100):.1f}%" if total else "n/a"
 
+        # 🔹 Получение открытых сделок
+        open_positions = await conn.fetch("""
+            SELECT id, symbol, created_at, entry_price, close_reason, pnl
+            FROM positions_v2
+            WHERE strategy_id = $1 AND status = 'open'
+            ORDER BY created_at ASC
+        """, strategy_id)
+
         return templates.TemplateResponse("strategy_detail.html", {
             "request": request,
             "strategy": strategy,
             "period": period,
+            "timezone": ZoneInfo("Europe/Kyiv"),
+            "open_positions": open_positions,
             "stats": {
                 "total": total or "n/a",
                 "long": long_trades or "n/a",
