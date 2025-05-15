@@ -291,15 +291,16 @@ async def list_strategies(request: Request):
             ORDER BY s.id DESC
         """)
 
-        active = [r for r in rows if r["enabled"] and not r["archived"]]
-        disabled = [r for r in rows if not r["enabled"] and not r["archived"]]
-        archived = [r for r in rows if not r["enabled"] and r["archived"]]
+        # 🔹 Явное сравнение: asyncpg может возвращать не bool, а 't'/'f'
+        active = [r for r in rows if r["enabled"] == True and r["archived"] == False]
+        disabled = [r for r in rows if r["enabled"] == False and r["archived"] == False]
+        archived = [r for r in rows if r["enabled"] == False and r["archived"] == True]
 
-        return templates.TemplateResponse("strategies_v3.html", {
+        return templates.TemplateResponse("strategies.html", {
             "request": request,
             "active_strategies": active,
             "disabled_strategies": disabled,
             "archived_strategies": archived
         })
     finally:
-        await conn.close()                
+        await conn.close()
