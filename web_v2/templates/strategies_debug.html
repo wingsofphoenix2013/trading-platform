@@ -8,7 +8,19 @@
     <h2>Всего стратегий: {{ total }}</h2>
     <ul>
       {% for s in strategies %}
-      <li>{{ s.id }} — {{ s.name }}</li>
+      <li>
+        <strong>ID:</strong> {{ s.id }}<br>
+        <strong>name:</strong> {{ s.name }}<br>
+        <strong>human_name:</strong> {{ s.human_name }}<br>
+        <strong>description:</strong> {{ s.description }}<br>
+        <strong>enabled:</strong> {{ s.enabled }}<br>
+        <strong>archived:</strong> {{ s.archived }}<br>
+        <strong>leverage:</strong> {{ s.leverage }}<br>
+        <strong>timeframe:</strong> {{ s.timeframe }}<br>
+        <strong>sl_type:</strong> {{ s.sl_type }}<br>
+        <strong>use_stoploss:</strong> {{ s.use_stoploss }}<br>
+        <hr>
+      </li>
       {% endfor %}
     </ul>
   </body>
