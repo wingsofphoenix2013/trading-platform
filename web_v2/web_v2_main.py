@@ -335,7 +335,7 @@ async def strategy_detail(request: Request, strategy_name: str, period: str = "a
         """
         if start_utc and end_utc:
             time_filter = "AND closed_at BETWEEN $2 AND $3"
-            rows = await conn.fetch(query.format(time_filter=time_filter), strategy_id, start_utc, end_utc)
+            rows = await conn.fetch(query.format(time_filter=time_filter), strategy_id, start_utc.replace(tzinfo=None), end_utc.replace(tzinfo=None))
         else:
             time_filter = ""
             rows = await conn.fetch(query.format(time_filter=time_filter), strategy_id)
