@@ -14,6 +14,16 @@ from strategy_1 import Strategy1
 from strategy_2 import Strategy2
 from strategy_3 import Strategy3
 from strategy_4 import Strategy4
+from strategy_5 import Strategy5
+from strategy_5_1 import Strategy5_1
+from strategy_5_2 import Strategy5_2
+from strategy_5_3 import Strategy5_3
+from strategy_5_4 import Strategy5_4
+from strategy_6 import Strategy6
+from strategy_6_1 import Strategy6_1
+from strategy_6_2 import Strategy6_2
+from strategy_6_3 import Strategy6_3
+from strategy_6_4 import Strategy6_4
 from strategies_v3_interface import StrategyInterface
         
 # 🔸 Конфигурация логирования
@@ -48,6 +58,16 @@ strategies = {
     "strategy_2": Strategy2(),
     "strategy_3": Strategy3(),
     "strategy_4": Strategy4(),
+    "strategy_5": Strategy5(),
+    "strategy_5_1": Strategy5_1(),
+    "strategy_5_2": Strategy5_2(),
+    "strategy_5_3": Strategy5_3(),
+    "strategy_5_4": Strategy5_4(),
+    "strategy_6": Strategy6(),
+    "strategy_6_1": Strategy6_1(),
+    "strategy_6_2": Strategy6_2(),
+    "strategy_6_3": Strategy6_3(),
+    "strategy_6_4": Strategy6_4(),
 }
 # 🔸 Загрузка тикеров из базы
 async def load_tickers(db_pool):
@@ -217,7 +237,7 @@ async def listen_strategy_tasks(db_pool):
                 for msg_id, msg_data in messages:
                     msg_data["received_at"] = datetime.utcnow().isoformat()
                 
-                    logging.info(f"📥 Получена задача: {msg_data}")
+                    debug_log(f"📥 Получена задача: {msg_data}")
                     try:
                         log_details = json.dumps({
                             "task": msg_data
@@ -448,7 +468,7 @@ async def position_close_loop(db_pool):
 
             for stream, messages in entries:
                 for msg_id, data in messages:
-                    logging.info(f"📥 Получена задача на закрытие позиции: {data}")
+                    debug_log(f"📥 Получена задача на закрытие позиции: {data}")
                 try:
                     position_id = int(data["position_id"])
                     target_id = int(data["target_id"])

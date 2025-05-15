@@ -384,11 +384,11 @@ class StrategyInterface:
                         "hit": False,
                         "canceled": False
                     })
-                    logging.info(f"📍 Установлен SL на уровне {sl_price}")
+                    debug_log(f"📍 Установлен SL на уровне {sl_price}")
                 else:
                     logging.warning("⚠️ SL не установлен — отсутствует stop_loss_price в position_data")
 
-                logging.info(f"📍 Сгенерировано TP-уровней: {len(tp_targets)}")
+                debug_log(f"📍 Сгенерировано TP-уровней: {len(tp_targets)}")
 
             try:
                 debug_log(f"🧠 Цели позиции {position_id} в памяти: {json.dumps(tp_targets + sl_targets, default=str)}")
