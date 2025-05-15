@@ -55,7 +55,7 @@ async def process_mfi(instance_id, symbol, tf, open_time, params, candles, redis
                 instance_id, symbol, open_dt, param_name, mfi_value
             )
 
-        logging.info(f"✅ MFI{length} для {symbol} / {tf} = {mfi_value}")
+        debug_log(f"✅ MFI{length} для {symbol} / {tf} = {mfi_value}")
 
         if stream_publish:
             try:
