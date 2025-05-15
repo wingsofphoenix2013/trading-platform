@@ -88,11 +88,17 @@ async def indicators(request: Request):
 async def signals(request: Request):
     return templates.TemplateResponse("signals.html", {"request": request})
 
-# 🔸 Страница стратегий
+# 🔸 Страница стратегий обновленная
+
 @app.get("/strategies", response_class=HTMLResponse)
 async def strategies(request: Request):
-    return templates.TemplateResponse("strategies.html", {"request": request})
-
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id, human_name, enabled FROM strategies_v2 ORDER BY id")
+    return templates.TemplateResponse("strategies.html", {
+        "request": request,
+        "strategies": rows
+    })
 # 🔸 Страница создания новой стратегии (форма + список сигналов/тикеров)
 @app.get("/strategies/new", response_class=HTMLResponse)
 async def strategy_new(request: Request):
@@ -264,71 +270,5 @@ async def check_strategy_name(name: str):
             )
         """, name)
         return {"exists": exists}
-    finally:
-        await conn.close()
-# 🔸 Список стратегий (v3) с фильтрацией по статусу
-@app.get("/strategies", response_class=HTMLResponse)
-async def list_strategies(request: Request):
-    conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
-    try:
-        # Активные
-        active = await conn.fetch("""
-            SELECT id, name, human_name, description, leverage, timeframe, sl_type, use_stoploss,
-            (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
-            FROM strategies_v2 s
-            WHERE enabled IS TRUE AND archived IS FALSE
-            ORDER BY id DESC
-        """)
-
-        # Отключённые
-        disabled = await conn.fetch("""
-            SELECT id, name, human_name, description, leverage, timeframe, sl_type, use_stoploss,
-            (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
-            FROM strategies_v2 s
-            WHERE enabled IS FALSE AND archived IS FALSE
-            ORDER BY id DESC
-        """)
-
-        # Архив
-        archived = await conn.fetch("""
-            SELECT id, name, human_name, description, leverage, timeframe, sl_type, use_stoploss,
-            (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
-            FROM strategies_v2 s
-            WHERE enabled IS FALSE AND archived IS TRUE
-            ORDER BY id DESC
-        """)
-
-        return templates.TemplateResponse("strategies.html", {
-            "request": request,
-            "active_strategies": active,
-            "disabled_strategies": disabled,
-            "archived_strategies": archived
-        })
-    finally:
-        await conn.close()
-@app.get("/strategies/debug", response_class=HTMLResponse)
-async def debug_strategies(request: Request):
-    conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
-    try:
-        rows = await conn.fetch("""
-            SELECT
-                id,
-                name,
-                human_name,
-                description,
-                enabled,
-                archived,
-                leverage,
-                timeframe,
-                sl_type,
-                use_stoploss
-            FROM strategies_v2
-            ORDER BY id
-        """)
-        return templates.TemplateResponse("strategies_debug.html", {
-            "request": request,
-            "strategies": rows,
-            "total": len(rows)
-        })
     finally:
         await conn.close()
