@@ -31,7 +31,16 @@ redis_client = redis.Redis(
     decode_responses=True,
     ssl=True
 )
+# 🔸 Подключение к базе данных
+db_pool = None
 
+async def get_db_pool():
+    global db_pool
+    if db_pool is None:
+        import asyncpg
+        from os import getenv
+        db_pool = await asyncpg.create_pool(getenv("DATABASE_URL"))
+    return db_pool
 # 🔸 Приём сигналов от TradingView (формат JSON)
 # Ожидается: message, symbol, time (бар), sent_at (время отправки)
 @app.post("/webhook_v2")
