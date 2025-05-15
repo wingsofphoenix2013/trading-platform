@@ -265,4 +265,41 @@ async def check_strategy_name(name: str):
         """, name)
         return {"exists": exists}
     finally:
-        await conn.close()        
+        await conn.close()
+# 🔸 Список стратегий (v3)
+@app.get("/strategies", response_class=HTMLResponse)
+async def list_strategies(request: Request):
+    conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
+    try:
+        rows = await conn.fetch("""
+            SELECT
+                s.id,
+                s.name,
+                s.human_name,
+                s.description,
+                s.enabled,
+                s.archived,
+                s.leverage,
+                s.timeframe,
+                s.sl_type,
+                s.use_stoploss,
+                (
+                    SELECT COUNT(*) FROM strategy_tp_levels_v2 t
+                    WHERE t.strategy_id = s.id
+                ) AS tp_count
+            FROM strategies_v2 s
+            ORDER BY s.id DESC
+        """)
+
+        active = [r for r in rows if r["enabled"] and not r["archived"]]
+        disabled = [r for r in rows if not r["enabled"] and not r["archived"]]
+        archived = [r for r in rows if not r["enabled"] and r["archived"]]
+
+        return templates.TemplateResponse("strategies_v3.html", {
+            "request": request,
+            "active_strategies": active,
+            "disabled_strategies": disabled,
+            "archived_strategies": archived
+        })
+    finally:
+        await conn.close()                

@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Стратегии</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://unpkg.com/lucide-static@latest/icons.css" rel="stylesheet">
     <style>
       body {
         background: linear-gradient(to bottom right, #e0f2ff, #fde2e4);
@@ -13,7 +12,7 @@
     </style>
   </head>
   <body class="min-h-screen font-sans text-slate-800">
-    <!-- 🔸 Topbar Navigation -->
+    <!-- 🔹 Topbar Navigation -->
     <header class="w-full bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
       <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
         <h1 class="text-2xl font-semibold text-blue-900 tracking-wide">Виртуальная Торговля</h1>
@@ -27,7 +26,7 @@
       </div>
     </header>
 
-    <!-- 🔸 Page Content -->
+    <!-- 🔹 Page Content -->
     <main class="max-w-7xl mx-auto px-4 py-10">
       <div class="flex justify-between items-center mb-6">
         <h2 class="text-3xl font-semibold text-blue-900">Стратегии</h2>
@@ -35,19 +34,77 @@
           Добавить +
         </a>
       </div>
-
-      <div class="grid gap-6 md:grid-cols-2">
-        <div class="p-6 bg-white/80 rounded-2xl shadow-lg">
-          <div class="text-slate-500 text-sm mb-1">strategy_1</div>
-          <div class="text-lg font-bold text-blue-800">Impulse RSI + EMA</div>
-          <div class="text-slate-600 text-sm mt-2">TP: 0.4–0.6%, SL: 0.3%. Выход — RSI 50 или обратный EMA-сигнал.</div>
-        </div>
-        <div class="p-6 bg-white/80 rounded-2xl shadow-lg">
-          <div class="text-slate-500 text-sm mb-1">strategy_2</div>
-          <div class="text-lg font-bold text-blue-800">Regression Channel</div>
-          <div class="text-slate-600 text-sm mt-2">Открытие по касанию LR-границы, выход — пробой средней линии или TP/SL.</div>
+<!-- 🔸 Активные стратегии -->
+<h3 class="text-xl font-semibold text-green-800 mb-4">Активные</h3>
+<div class="grid gap-6 md:grid-cols-3 mb-10">
+  {% for s in active_strategies %}
+  <div class="p-6 bg-white/80 rounded-2xl shadow-md">
+    <div class="text-sm text-slate-500 mb-1">{{ s.name }}</div>
+    <div class="flex justify-between items-start">
+      <div>
+        <div class="text-lg font-bold text-blue-800">{{ s.human_name }}</div>
+        <div class="text-sm text-slate-600 leading-tight mt-1">
+          {{ s.description or "—" }}
         </div>
       </div>
+      <div class="text-right pl-4">
+        <div class="text-[10px] uppercase tracking-wide text-slate-500">Winrate</div>
+        <div class="text-slate-400 font-semibold text-md">—</div>
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mt-1">ROI</div>
+        <div class="text-slate-400 font-semibold text-md">—</div>
+      </div>
+    </div>
+    <div class="text-slate-600 text-sm mt-3">
+      {{ s.timeframe }} • leverage: {{ s.leverage }} • TP: {{ s.tp_count }} • SL:
+      {% if s.use_stoploss %}{{ s.sl_type }}{% else %}none{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<!-- 🔸 Отключённые стратегии -->
+<h3 class="text-xl font-semibold text-yellow-800 mb-4">Отключённые</h3>
+<div class="grid gap-6 md:grid-cols-3 mb-10">
+  {% for s in disabled_strategies %}
+  <div class="p-6 bg-white/80 rounded-2xl shadow-md">
+    <div class="text-sm text-slate-500 mb-1">{{ s.name }}</div>
+    <div class="flex justify-between items-start">
+      <div>
+        <div class="text-lg font-bold text-blue-800">{{ s.human_name }}</div>
+        <div class="text-sm text-slate-600 leading-tight mt-1">
+          {{ s.description or "—" }}
+        </div>
+      </div>
+      <div class="text-right pl-4">
+        <div class="text-[10px] uppercase tracking-wide text-slate-500">Winrate</div>
+        <div class="text-slate-400 font-semibold text-md">—</div>
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mt-1">ROI</div>
+        <div class="text-slate-400 font-semibold text-md">—</div>
+      </div>
+    </div>
+    <div class="text-slate-600 text-sm mt-3">
+      {{ s.timeframe }} • leverage: {{ s.leverage }} • TP: {{ s.tp_count }} • SL:
+      {% if s.use_stoploss %}{{ s.sl_type }}{% else %}none{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<!-- 🔸 Архивированные стратегии -->
+<h3 class="text-xl font-semibold text-slate-500 mb-4">Архив</h3>
+<div class="grid gap-6 md:grid-cols-3">
+  {% for s in archived_strategies %}
+  <div class="p-6 bg-white/60 rounded-2xl shadow-inner">
+    <div class="text-sm text-slate-400 mb-1">{{ s.name }}</div>
+    <div class="text-lg font-bold text-slate-600">{{ s.human_name }}</div>
+    <div class="text-sm text-slate-500 mt-1 leading-tight">
+      {{ s.description or "—" }}
+    </div>
+    <div class="text-slate-500 text-sm mt-3">
+      {{ s.timeframe }} • leverage: {{ s.leverage }} • TP: {{ s.tp_count }} • SL:
+      {% if s.use_stoploss %}{{ s.sl_type }}{% else %}none{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
     </main>
   </body>
 </html>
