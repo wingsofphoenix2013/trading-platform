@@ -82,7 +82,7 @@ async def process_lr(instance_id, symbol, tf, open_time, params, candles, redis,
                         "calculated_at": open_time
                     }
                 )
-                logging.info(f"📤 Stream: LR{length} опубликован для {symbol} / {tf}")
+                debug_log(f"📤 Stream: LR{length} опубликован для {symbol} / {tf}")
             except Exception as e:
                 logging.error(f"❌ Ошибка публикации LR в Redis Stream: {e}")
 

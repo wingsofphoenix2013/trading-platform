@@ -69,7 +69,7 @@ async def process_atr(instance_id, symbol, tf, open_time, params, candles, redis
             median_val = round(median(values), precision_price)
             median_key = f"{symbol}:{tf}:ATR:median_30"
             await redis.set(median_key, median_val)
-            logging.info(f"📊 median(30) по ATR: {symbol} / {tf} = {median_val}")
+            debug_log(f"📊 median(30) по ATR: {symbol} / {tf} = {median_val}")
         else:
             logging.warning(f"⚠️ Недостаточно данных для median(30) ATR {symbol} / {tf}")
 
@@ -85,7 +85,7 @@ async def process_atr(instance_id, symbol, tf, open_time, params, candles, redis
                         "calculated_at": open_time
                     }
                 )
-                logging.info(f"📤 Stream: ATR{length} опубликован для {symbol} / {tf}")
+                debug_log(f"📤 Stream: ATR{length} опубликован для {symbol} / {tf}")
             except Exception as e:
                 logging.error(f"❌ Ошибка публикации ATR в Redis Stream: {e}")
 

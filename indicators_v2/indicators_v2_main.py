@@ -230,7 +230,7 @@ async def subscribe_to_ohlcv(redis, pg_pool):
                 )                             
         except Exception as e:
             logging.error(f"❌ Ошибка при обработке события PubSub: {e}")
-# 🔸 Получение и кэширование свечей
+# 🔸 Получение и кэширование свечей (включая volume)
 async def get_latest_ohlcv(symbol: str, tf: str, open_time: str, pg_pool) -> pd.DataFrame:
     cache_key = f"{symbol}:{tf}"
 
@@ -257,7 +257,7 @@ async def get_latest_ohlcv(symbol: str, tf: str, open_time: str, pg_pool) -> pd.
         async with pg_pool.acquire() as conn:
             rows = await conn.fetch(
                 f"""
-                SELECT open_time, high, low, close
+                SELECT open_time, high, low, close, volume
                 FROM {table_name}
                 WHERE symbol = $1
                 ORDER BY open_time DESC
@@ -273,7 +273,7 @@ async def get_latest_ohlcv(symbol: str, tf: str, open_time: str, pg_pool) -> pd.
         logging.warning(f"⚠️ Недостаточно данных OHLCV для {symbol} / {tf}")
         return pd.DataFrame()
 
-    df = pd.DataFrame(rows, columns=["open_time", "high", "low", "close"])
+    df = pd.DataFrame(rows, columns=["open_time", "high", "low", "close", "volume"])
     df = df[::-1]  # Сортировка по времени (ASC)
 
     # Обновление кэша
