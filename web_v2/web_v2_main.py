@@ -316,7 +316,21 @@ async def list_strategies(request: Request):
 async def debug_strategies(request: Request):
     conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
     try:
-        rows = await conn.fetch("SELECT id, name FROM strategies_v2")
+        rows = await conn.fetch("""
+            SELECT
+                id,
+                name,
+                human_name,
+                description,
+                enabled,
+                archived,
+                leverage,
+                timeframe,
+                sl_type,
+                use_stoploss
+            FROM strategies_v2
+            ORDER BY id
+        """)
         return templates.TemplateResponse("strategies_debug.html", {
             "request": request,
             "strategies": rows,
