@@ -56,17 +56,17 @@
             <th>Статус</th>
             <th>PnL</th>
         </tr>
-        {% for i, p in enumerate(open_positions) %}
-        <tr>
-            <td>{{ i + 1 }}</td>
-            <td>{{ p.id }}</td>
-            <td>{{ p.symbol }}</td>
-            <td>{{ p.created_at.astimezone(timezone).strftime('%Y-%m-%d %H:%M:%S') }}</td>
-            <td>{{ '%.4f'|format(p.entry_price) }}</td>
-            <td>{{ p.close_reason or '—' }}</td>
-            <td>{{ '%.4f'|format(p.pnl or 0.0) }}</td>
-        </tr>
-        {% endfor %}
+{% for p in open_positions %}
+<tr>
+    <td>{{ loop.index }}</td>
+    <td>{{ p.id }}</td>
+    <td>{{ p.symbol }}</td>
+    <td>{{ p.created_at.astimezone(timezone).strftime('%Y-%m-%d %H:%M:%S') }}</td>
+    <td>{{ '%.4f'|format(p.entry_price) }}</td>
+    <td>{{ p.close_reason or '—' }}</td>
+    <td>{{ '%.4f'|format(p.pnl or 0.0) }}</td>
+</tr>
+{% endfor %}
     </table>
 </body>
 </html>
