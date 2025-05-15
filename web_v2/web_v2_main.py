@@ -266,42 +266,36 @@ async def check_strategy_name(name: str):
         return {"exists": exists}
     finally:
         await conn.close()
-# 🔸 Список стратегий (v3) с фильтрацией по группам
+# 🔸 Список стратегий (v3) с фильтрацией по статусу
 @app.get("/strategies", response_class=HTMLResponse)
 async def list_strategies(request: Request):
     conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
     try:
-        # 🔹 Активные
+        # Активные
         active = await conn.fetch("""
-            SELECT
-                s.id, s.name, s.human_name, s.description,
-                s.leverage, s.timeframe, s.sl_type, s.use_stoploss,
-                (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
+            SELECT id, name, human_name, description, leverage, timeframe, sl_type, use_stoploss,
+            (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
             FROM strategies_v2 s
-            WHERE s.enabled IS TRUE AND s.archived IS FALSE
-            ORDER BY s.id DESC
+            WHERE enabled IS TRUE AND archived IS FALSE
+            ORDER BY id DESC
         """)
 
-        # 🔹 Отключённые
+        # Отключённые
         disabled = await conn.fetch("""
-            SELECT
-                s.id, s.name, s.human_name, s.description,
-                s.leverage, s.timeframe, s.sl_type, s.use_stoploss,
-                (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
+            SELECT id, name, human_name, description, leverage, timeframe, sl_type, use_stoploss,
+            (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
             FROM strategies_v2 s
-            WHERE s.enabled IS FALSE AND s.archived IS FALSE
-            ORDER BY s.id DESC
+            WHERE enabled IS FALSE AND archived IS FALSE
+            ORDER BY id DESC
         """)
 
-        # 🔹 Архив
+        # Архив
         archived = await conn.fetch("""
-            SELECT
-                s.id, s.name, s.human_name, s.description,
-                s.leverage, s.timeframe, s.sl_type, s.use_stoploss,
-                (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
+            SELECT id, name, human_name, description, leverage, timeframe, sl_type, use_stoploss,
+            (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
             FROM strategies_v2 s
-            WHERE s.enabled IS FALSE AND s.archived IS TRUE
-            ORDER BY s.id DESC
+            WHERE enabled IS FALSE AND archived IS TRUE
+            ORDER BY id DESC
         """)
 
         return templates.TemplateResponse("strategies.html", {
