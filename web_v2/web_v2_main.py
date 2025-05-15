@@ -266,35 +266,43 @@ async def check_strategy_name(name: str):
         return {"exists": exists}
     finally:
         await conn.close()
-# 🔸 Список стратегий (v3)
+# 🔸 Список стратегий (v3) с фильтрацией по группам
 @app.get("/strategies", response_class=HTMLResponse)
 async def list_strategies(request: Request):
     conn = await asyncpg.connect(os.getenv("DATABASE_URL"))
     try:
-        rows = await conn.fetch("""
+        # 🔹 Активные
+        active = await conn.fetch("""
             SELECT
-                s.id,
-                s.name,
-                s.human_name,
-                s.description,
-                s.enabled,
-                s.archived,
-                s.leverage,
-                s.timeframe,
-                s.sl_type,
-                s.use_stoploss,
-                (
-                    SELECT COUNT(*) FROM strategy_tp_levels_v2 t
-                    WHERE t.strategy_id = s.id
-                ) AS tp_count
+                s.id, s.name, s.human_name, s.description,
+                s.leverage, s.timeframe, s.sl_type, s.use_stoploss,
+                (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
             FROM strategies_v2 s
+            WHERE s.enabled IS TRUE AND s.archived IS FALSE
             ORDER BY s.id DESC
         """)
 
-        # 🔹 Явное сравнение: asyncpg может возвращать не bool, а 't'/'f'
-        active = [r for r in rows if r["enabled"] == True and r["archived"] == False]
-        disabled = [r for r in rows if r["enabled"] == False and r["archived"] == False]
-        archived = [r for r in rows if r["enabled"] == False and r["archived"] == True]
+        # 🔹 Отключённые
+        disabled = await conn.fetch("""
+            SELECT
+                s.id, s.name, s.human_name, s.description,
+                s.leverage, s.timeframe, s.sl_type, s.use_stoploss,
+                (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
+            FROM strategies_v2 s
+            WHERE s.enabled IS FALSE AND s.archived IS FALSE
+            ORDER BY s.id DESC
+        """)
+
+        # 🔹 Архив
+        archived = await conn.fetch("""
+            SELECT
+                s.id, s.name, s.human_name, s.description,
+                s.leverage, s.timeframe, s.sl_type, s.use_stoploss,
+                (SELECT COUNT(*) FROM strategy_tp_levels_v2 t WHERE t.strategy_id = s.id) AS tp_count
+            FROM strategies_v2 s
+            WHERE s.enabled IS FALSE AND s.archived IS TRUE
+            ORDER BY s.id DESC
+        """)
 
         return templates.TemplateResponse("strategies.html", {
             "request": request,
