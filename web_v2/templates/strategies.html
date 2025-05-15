@@ -23,7 +23,7 @@
 <ul>
     {% for s in strategies %}
     <li>
-        {{ s.name }} / {{ s.human_name }} —
+        <a href="/strategies/detail/{{ s.name }}">{{ s.name }}</a> / {{ s.human_name }} —
         <span class="{{ 'enabled' if s.enabled else 'disabled' }}">
             {{ 'Активна' if s.enabled else 'Отключена' }}
         </span>
