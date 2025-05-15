@@ -36,30 +36,22 @@
       </div>
 <!-- 🔸 Активные стратегии -->
 <h3 class="text-xl font-semibold text-green-800 mb-4">Активные</h3>
-<div class="grid gap-6 md:grid-cols-3 mb-10">
-  {% for s in active_strategies %}
-  <div class="p-6 bg-white/80 rounded-2xl shadow-md">
-    <div class="text-sm text-slate-500 mb-1">{{ s.name }}</div>
-    <div class="flex justify-between items-start">
-      <div>
-        <div class="text-lg font-bold text-blue-800">{{ s.human_name }}</div>
-        <div class="text-sm text-slate-600 leading-tight mt-1">
-          {{ s.description or "—" }}
-        </div>
+<div class="grid gap-4">
+  {% if active_strategies %}
+    {% for s in active_strategies %}
+      <div class="p-4 border rounded bg-white text-sm text-slate-800">
+        <p><strong>ID:</strong> {{ s.id }}</p>
+        <p><strong>Name:</strong> {{ s.name }}</p>
+        <p><strong>Human name:</strong> {{ s.human_name }}</p>
+        <p><strong>Description:</strong> {{ s.description }}</p>
+        <p><strong>Timeframe:</strong> {{ s.timeframe }}</p>
+        <p><strong>Leverage:</strong> {{ s.leverage }}</p>
+        <p><strong>SL:</strong> {% if s.use_stoploss %}{{ s.sl_type }}{% else %}none{% endif %}</p>
       </div>
-      <div class="text-right pl-4">
-        <div class="text-[10px] uppercase tracking-wide text-slate-500">Winrate</div>
-        <div class="text-slate-400 font-semibold text-md">—</div>
-        <div class="text-[10px] uppercase tracking-wide text-slate-500 mt-1">ROI</div>
-        <div class="text-slate-400 font-semibold text-md">—</div>
-      </div>
-    </div>
-    <div class="text-slate-600 text-sm mt-3">
-      {{ s.timeframe }} • leverage: {{ s.leverage }} • TP: {{ s.tp_count }} • SL:
-      {% if s.use_stoploss %}{{ s.sl_type }}{% else %}none{% endif %}
-    </div>
-  </div>
-  {% endfor %}
+    {% endfor %}
+  {% else %}
+    <p class="text-slate-400 italic">Нет активных стратегий</p>
+  {% endif %}
 </div>
 <!-- 🔸 Отключённые стратегии -->
 <h3 class="text-xl font-semibold text-yellow-800 mb-4">Отключённые</h3>
