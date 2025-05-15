@@ -37,8 +37,8 @@ class Strategy5_2:
             if rsi >= Decimal("35"):
                 debug_log(f"⛔ Вход в long запрещён: RSI {rsi} >= 35")
                 return
-            if mfi >= Decimal("20"):
-                debug_log(f"⛔ Вход в long запрещён: MFI {mfi} >= 20")
+            if mfi >= Decimal("25"):
+                debug_log(f"⛔ Вход в long запрещён: MFI {mfi} >= 25")
                 return
 
         elif direction == "short":
@@ -48,8 +48,8 @@ class Strategy5_2:
             if rsi <= Decimal("65"):
                 debug_log(f"⛔ Вход в short запрещён: RSI {rsi} <= 65")
                 return
-            if mfi <= Decimal("80"):
-                debug_log(f"⛔ Вход в short запрещён: MFI {mfi} <= 80")
+            if mfi <= Decimal("75"):
+                debug_log(f"⛔ Вход в short запрещён: MFI {mfi} <= 75")
                 return
 
         # 🔹 Расчёт параметров позиции
