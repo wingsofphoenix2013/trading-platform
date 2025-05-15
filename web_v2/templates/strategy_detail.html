@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ strategy.name }} / {{ strategy.human_name }}</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; background: #f9f9f9; }
+        h1 { margin-bottom: 10px; }
+        select { margin-bottom: 20px; padding: 5px; }
+        table { border-collapse: collapse; width: 400px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>{{ strategy.name }} / {{ strategy.human_name }}</h1>
+
+    <form method="get">
+        <label for="period">Режим просмотра:</label>
+        <select name="period" id="period" onchange="this.form.submit()">
+            <option value="today" {% if period == 'today' %}selected{% endif %}>Сегодня</option>
+            <option value="yesterday" {% if period == 'yesterday' %}selected{% endif %}>Вчера</option>
+            <option value="week" {% if period == 'week' %}selected{% endif %}>Неделя</option>
+            <option value="all" {% if period == 'all' %}selected{% endif %}>Всего</option>
+        </select>
+    </form>
+
+    <h2>Статистика</h2>
+    <table>
+        <tr>
+            <th>Всего сделок</th>
+            <td>{{ stats.total }}</td>
+        </tr>
+        <tr>
+            <th>Шорт / Лонг</th>
+            <td>{{ stats.short }} / {{ stats.long }}</td>
+        </tr>
+        <tr>
+            <th>Winrate</th>
+            <td>{{ stats.winrate }}</td>
+        </tr>
+        <tr>
+            <th>ROI</th>
+            <td>{{ stats.roi }}</td>
+        </tr>
+    </table>
+</body>
+</html>

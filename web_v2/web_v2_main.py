@@ -98,7 +98,6 @@ async def signals(request: Request):
     return templates.TemplateResponse("signals.html", {"request": request})
 
 # 🔸 Страница стратегий обновленная
-
 @app.get("/strategies", response_class=HTMLResponse)
 async def strategies(request: Request):
     pool = await get_db_pool()
@@ -281,3 +280,62 @@ async def check_strategy_name(name: str):
         return {"exists": exists}
     finally:
         await conn.close()
+# 🔸 Детальная страница стратегии по имени
+@app.get("/strategies/detail/{strategy_name}", response_class=HTMLResponse)
+async def strategy_detail(request: Request, strategy_name: str, period: str = "all"):
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        # 🔹 Получение стратегии
+        strategy = await conn.fetchrow("""
+            SELECT id, name, human_name, deposit
+            FROM strategies_v2
+            WHERE name = $1
+        """, strategy_name)
+        
+        if not strategy:
+            raise HTTPException(status_code=404, detail="Strategy not found")
+
+        strategy_id = strategy["id"]
+        deposit = float(strategy["deposit"] or 1)
+
+        # 🔹 Определение периода фильтрации
+        now_utc = datetime.utcnow()
+        start_utc, end_utc = get_period_bounds(period, now_utc)
+
+        # 🔹 Сбор статистики по закрытым сделкам
+        query = """
+            SELECT direction, COUNT(*) AS count, SUM(pnl) AS total_pnl,
+                   COUNT(*) FILTER (WHERE pnl > 0) AS wins
+            FROM positions_v2
+            WHERE strategy_id = $1 AND status = 'closed'
+            {time_filter}
+            GROUP BY direction
+        """
+        if start_utc and end_utc:
+            time_filter = "AND closed_at BETWEEN $2 AND $3"
+            rows = await conn.fetch(query.format(time_filter=time_filter), strategy_id, start_utc, end_utc)
+        else:
+            time_filter = ""
+            rows = await conn.fetch(query.format(time_filter=time_filter), strategy_id)
+
+        total = sum(r["count"] for r in rows)
+        long_trades = next((r["count"] for r in rows if r["direction"] == "long"), 0)
+        short_trades = next((r["count"] for r in rows if r["direction"] == "short"), 0)
+        wins = sum(r["wins"] for r in rows)
+        total_pnl = sum(r["total_pnl"] or 0 for r in rows)
+
+        winrate = f"{(wins / total * 100):.1f}%" if total else "n/a"
+        roi = f"{(total_pnl / deposit * 100):.1f}%" if total else "n/a"
+
+        return templates.TemplateResponse("strategy_detail.html", {
+            "request": request,
+            "strategy": strategy,
+            "period": period,
+            "stats": {
+                "total": total or "n/a",
+                "long": long_trades or "n/a",
+                "short": short_trades or "n/a",
+                "winrate": winrate,
+                "roi": roi,
+            }
+        })
