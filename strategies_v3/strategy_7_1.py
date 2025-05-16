@@ -59,7 +59,7 @@ class Strategy7_1:
 #                 debug_log(f"⛔ Вход в short запрещён: MFI {mfi} <= 50")
 #                 return
             if lr_angle <= Decimal("-0.015"):
-                debug_log(f"⛔ Вход в short запрещён: угол LR50 {lr_angle} >= 0.015")
+                debug_log(f"⛔ Вход в short запрещён: угол LR50 {lr_angle} >= -0.015")
                 return
 
         # 🔹 Расчёт параметров позиции

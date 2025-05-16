@@ -44,7 +44,7 @@ class Strategy7_4:
 #                 debug_log(f"⛔ Вход в long запрещён: MFI {mfi} >= 50")
 #                 return
             if lr_angle <= Decimal("0.03"):
-                debug_log(f"⛔ Вход в long запрещён: угол LR50 {lr_angle} <= 0.03")
+                debug_log(f"⛔ Вход в long запрещён: угол LR50 {lr_angle} <= -0.03")
                 return
 
         elif direction == "short":
