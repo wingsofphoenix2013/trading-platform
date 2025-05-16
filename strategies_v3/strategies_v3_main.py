@@ -18,7 +18,17 @@ from strategy_5 import Strategy5
 from strategy_5_1 import Strategy5_1
 from strategy_5_2 import Strategy5_2
 from strategy_5_3 import Strategy5_3
+from strategy_5_3_1 import Strategy5_3_1
+from strategy_5_3_2 import Strategy5_3_2
+from strategy_5_3_3 import Strategy5_3_3
+from strategy_5_3_4 import Strategy5_3_4
+from strategy_5_3_5 import Strategy5_3_5
 from strategy_5_4 import Strategy5_4
+from strategy_5_4_1 import Strategy5_4_1
+from strategy_5_4_2 import Strategy5_4_2
+from strategy_5_4_3 import Strategy5_4_3
+from strategy_5_4_4 import Strategy5_4_4
+from strategy_5_4_5 import Strategy5_4_5
 from strategy_6 import Strategy6
 from strategy_6_1 import Strategy6_1
 from strategy_6_2 import Strategy6_2
@@ -72,7 +82,17 @@ strategies = {
     "strategy_5_1": Strategy5_1(),
     "strategy_5_2": Strategy5_2(),
     "strategy_5_3": Strategy5_3(),
+    "strategy_5_3_1": Strategy5_3_1(),
+    "strategy_5_3_2": Strategy5_3_2(),
+    "strategy_5_3_3": Strategy5_3_3(),
+    "strategy_5_3_4": Strategy5_3_4(),
+    "strategy_5_3_5": Strategy5_3_5(),
     "strategy_5_4": Strategy5_4(),
+    "strategy_5_4_1": Strategy5_4_1(),
+    "strategy_5_4_2": Strategy5_4_2(),
+    "strategy_5_4_3": Strategy5_4_3(),
+    "strategy_5_4_4": Strategy5_4_4(),
+    "strategy_5_4_5": Strategy5_4_5(),
     "strategy_6": Strategy6(),
     "strategy_6_1": Strategy6_1(),
     "strategy_6_2": Strategy6_2(),
