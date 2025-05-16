@@ -119,11 +119,15 @@ async def indicators(request: Request):
 async def signals(request: Request):
     return templates.TemplateResponse("signals.html", {"request": request})
 
-# 🔸 Страница стратегий с расширенной статистикой
+# 🔸 Страница стратегий с расширенной статистикой (только за сегодня)
 @app.get("/strategies", response_class=HTMLResponse)
 async def strategies(request: Request):
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        start_utc, end_utc = get_period_bounds("today", datetime.utcnow())
+
         rows = await conn.fetch("""
             SELECT s.id, s.name, s.human_name, s.enabled, s.deposit,
                    COUNT(p.id) AS total,
@@ -132,9 +136,11 @@ async def strategies(request: Request):
                    COUNT(*) FILTER (WHERE p.pnl > 0) AS wins,
                    SUM(p.pnl) AS total_pnl
             FROM strategies_v2 s
-            LEFT JOIN positions_v2 p ON p.strategy_id = s.id AND p.status = 'closed'
+            LEFT JOIN positions_v2 p ON p.strategy_id = s.id
+                AND p.status = 'closed'
+                AND p.closed_at BETWEEN $1 AND $2
             GROUP BY s.id, s.name, s.human_name, s.enabled, s.deposit
-        """)
+        """, start_utc.replace(tzinfo=None), end_utc.replace(tzinfo=None))
 
         strategies = []
         for row in rows:
