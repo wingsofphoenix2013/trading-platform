@@ -119,16 +119,52 @@ async def indicators(request: Request):
 async def signals(request: Request):
     return templates.TemplateResponse("signals.html", {"request": request})
 
-# 🔸 Страница стратегий обновленная
+# 🔸 Страница стратегий с расширенной статистикой
 @app.get("/strategies", response_class=HTMLResponse)
 async def strategies(request: Request):
     pool = await get_db_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT id, name, human_name, enabled FROM strategies_v2 ORDER BY id")
-    return templates.TemplateResponse("strategies.html", {
-        "request": request,
-        "strategies": rows
-    })
+        rows = await conn.fetch("""
+            SELECT s.id, s.name, s.human_name, s.enabled, s.deposit,
+                   COUNT(p.id) AS total,
+                   COUNT(*) FILTER (WHERE p.direction = 'long') AS long_count,
+                   COUNT(*) FILTER (WHERE p.direction = 'short') AS short_count,
+                   COUNT(*) FILTER (WHERE p.pnl > 0) AS wins,
+                   SUM(p.pnl) AS total_pnl
+            FROM strategies_v2 s
+            LEFT JOIN positions_v2 p ON p.strategy_id = s.id AND p.status = 'closed'
+            GROUP BY s.id, s.name, s.human_name, s.enabled, s.deposit
+        """)
+
+        strategies = []
+        for row in rows:
+            total = row["total"] or 0
+            wins = row["wins"] or 0
+            pnl = float(row["total_pnl"] or 0)
+            deposit = float(row["deposit"] or 1)
+            roi = pnl / deposit if deposit > 0 else 0
+            winrate = (wins / total) * 100 if total else 0
+
+            strategies.append({
+                "id": row["id"],
+                "name": row["name"],
+                "human_name": row["human_name"],
+                "enabled": row["enabled"],
+                "total": total,
+                "long": row["long_count"] or 0,
+                "short": row["short_count"] or 0,
+                "winrate": f"{winrate:.1f}%" if total else "n/a",
+                "roi": roi,
+                "roi_display": f"{roi*100:.1f}%" if total else "n/a",
+            })
+
+        # 🔽 Сортировка по ROI (по убыванию)
+        strategies.sort(key=lambda x: x["roi"], reverse=True)
+
+        return templates.TemplateResponse("strategies.html", {
+            "request": request,
+            "strategies": strategies
+        })
 # 🔸 Страница создания новой стратегии (форма + список сигналов/тикеров)
 @app.get("/strategies/new", response_class=HTMLResponse)
 async def strategy_new(request: Request):
