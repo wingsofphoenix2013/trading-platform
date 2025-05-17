@@ -33,7 +33,7 @@ class Strategy5_3_2:
         # 🔹 Проверка условий входа
         if direction == "long":
             if entry_price >= ema_50:
-                debug_log(f"⛔ Вход в long запрещён: цена {entry_price} >= EMA50 {ema_50}")
+                logging.info(f"⛔ Вход в long запрещён: цена {entry_price} >= EMA50 {ema_50}")
                 return
             if rsi >= Decimal("40"):
                 debug_log(f"⛔ Вход в long запрещён: RSI {rsi} >= 40")
@@ -44,7 +44,7 @@ class Strategy5_3_2:
 
         elif direction == "short":
             if entry_price <= ema_50:
-                debug_log(f"⛔ Вход в short запрещён: цена {entry_price} <= EMA50 {ema_50}")
+                logging.info(f"⛔ Вход в short запрещён: цена {entry_price} <= EMA50 {ema_50}")
                 return
             if rsi <= Decimal("60"):
                 debug_log(f"⛔ Вход в short запрещён: RSI {rsi} <= 60")
