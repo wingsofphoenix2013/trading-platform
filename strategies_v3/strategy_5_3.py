@@ -14,11 +14,12 @@ class Strategy5_3:
         symbol = task["symbol"]
         direction = task["direction"]
         timeframe = "M5"
+        # 🔹 Получение и преобразование цены входа
         entry_price = interface.latest_prices.get(symbol)
-
         if entry_price is None:
             logging.warning(f"⚠️ Нет актуальной цены для {symbol}")
             return
+        entry_price = Decimal(str(entry_price))
 
         # 🔹 Получение EMA50, RSI, MFI
         ema_50 = await interface.get_indicator_value(symbol, timeframe, "EMA", "50")
