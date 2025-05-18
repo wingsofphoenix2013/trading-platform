@@ -49,12 +49,14 @@ class Strategy5_3:
             if last_close_time is not None:
                 signal_time = datetime.fromisoformat(task.get("sent_at") or task["bar_time"])
                 mfi_values = await interface.get_mfi_values_between(symbol, last_close_time, signal_time)
-                logging.info(f"📊 LONG SL-защита: найдено {len(mfi_values)} значений MFI между {last_close_time} и {signal_time}")
-                if mfi_values:
+                debug_log(f"📊 LONG SL-защита [{symbol}]: найдено {len(mfi_values)} значений MFI между {last_close_time} и {signal_time}")
+                if not mfi_values:
+                    debug_log(f"⚠️ MFI отсутствует в диапазоне SL-фильтрации по {symbol} — фильтр пропущен")
+                else:
                     mfi_max = max(mfi_values)
-                    logging.info(f"📊 MFI максимум в этом диапазоне: {mfi_max}")
+                    debug_log(f"📊 MFI максимум по {symbol}: {mfi_max}")
                     if mfi_max <= Decimal("35"):
-                        logging.info(f"⛔ Long отклонён: после SL MFI ни разу не поднимался выше 35")
+                        debug_log(f"⛔ Вход в long по {symbol} отклонён: после SL MFI ни разу не поднимался выше 35")
                         return
 
         elif direction == "short":
@@ -73,12 +75,14 @@ class Strategy5_3:
             if last_close_time is not None:
                 signal_time = datetime.fromisoformat(task.get("sent_at") or task["bar_time"])
                 mfi_values = await interface.get_mfi_values_between(symbol, last_close_time, signal_time)
-                logging.info(f"📊 SHORT SL-защита: найдено {len(mfi_values)} значений MFI между {last_close_time} и {signal_time}")
-                if mfi_values:
+                debug_log(f"📊 SHORT SL-защита [{symbol}]: найдено {len(mfi_values)} значений MFI между {last_close_time} и {signal_time}")
+                if not mfi_values:
+                    debug_log(f"⚠️ MFI отсутствует в диапазоне SL-фильтрации по {symbol} — фильтр пропущен")
+                else:
                     mfi_min = min(mfi_values)
-                    logging.info(f"📊 MFI минимум в этом диапазоне: {mfi_min}")
+                    debug_log(f"📊 MFI минимум по {symbol}: {mfi_min}")
                     if mfi_min >= Decimal("65"):
-                        logging.info(f"⛔ Short отклонён: после SL MFI ни разу не опускался ниже 65")
+                        debug_log(f"⛔ Вход в short по {symbol} отклонён: после SL MFI ни разу не опускался ниже 65")
                         return
 
         # 🔹 Расчёт параметров позиции
