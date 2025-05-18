@@ -391,13 +391,42 @@ async def strategy_detail(request: Request, strategy_name: str, period: str = "a
         winrate = f"{(wins / total * 100):.1f}%" if total else "n/a"
         roi = f"{(float(total_pnl) / deposit * 100):.1f}%" if total else "n/a"
 
-        # 🔹 Получение открытых сделок
+        # 🔹 Получение открытых сделок (с direction)
         open_positions = await conn.fetch("""
-            SELECT id, symbol, created_at, entry_price, close_reason, pnl
+            SELECT id, symbol, direction, created_at, entry_price, close_reason, pnl
             FROM positions_v2
             WHERE strategy_id = $1 AND status = 'open'
             ORDER BY created_at ASC
         """, strategy_id)
+
+        # 🔹 Получение TP/SL целей по открытым позициям
+        position_ids = tuple(p["id"] for p in open_positions)
+        tp_by_position = {}
+        sl_by_position = {}
+
+        if position_ids:
+            targets = await conn.fetch(f"""
+                SELECT position_id, type, level, price
+                FROM position_targets_v2
+                WHERE position_id = ANY($1::int[])
+                  AND hit = false AND canceled = false
+            """, position_ids)
+
+            from collections import defaultdict
+            tp_map = defaultdict(list)
+            sl_map = {}
+            for row in targets:
+                pid = row["position_id"]
+                if row["type"] == "tp":
+                    tp_map[pid].append((row["level"], row["price"]))
+                elif row["type"] == "sl":
+                    sl_map[pid] = row["price"]
+
+            for pid, levels in tp_map.items():
+                if levels:
+                    min_level = min(levels, key=lambda x: x[0])
+                    tp_by_position[pid] = min_level[1]
+            sl_by_position = sl_map
 
         # 🔹 Пагинация закрытых сделок
         limit = 20
@@ -427,6 +456,8 @@ async def strategy_detail(request: Request, strategy_name: str, period: str = "a
             "timezone": ZoneInfo("Europe/Kyiv"),
             "open_positions": open_positions,
             "closed_positions": closed_positions,
+            "tp_by_position": tp_by_position,
+            "sl_by_position": sl_by_position,
             "stats": {
                 "total": total or "n/a",
                 "long": long_trades or "n/a",

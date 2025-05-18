@@ -37,14 +37,17 @@
 
     <h2>Открытые сделки</h2>
     <table>
-        <tr><th>№№</th><th>ID</th><th>Тикер</th><th>Открыта</th><th>Курс</th><th>Статус</th><th>PnL</th></tr>
+        <tr><th>№№</th><th>ID</th><th>Тикер</th><th>Открыта</th><th>Направление</th><th>Курс</th><th>TP</th><th>SL</th><th>Статус</th><th>PnL</th></tr>
         {% for p in open_positions %}
         <tr>
             <td>{{ loop.index }}</td>
             <td>{{ p.id }}</td>
             <td>{{ p.symbol }}</td>
             <td>{{ p.created_at.astimezone(timezone).strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{{ p.direction }}</td>
             <td>{{ '%.4f'|format(p.entry_price) }}</td>
+            <td>{{ '%.4f'|format(tp_by_position[p.id]) if p.id in tp_by_position else '—' }}</td>
+            <td>{{ '%.4f'|format(sl_by_position[p.id]) if p.id in sl_by_position else '—' }}</td>
             <td>{{ p.close_reason or '—' }}</td>
             <td>{{ '%.4f'|format(p.pnl or 0.0) }}</td>
         </tr>
