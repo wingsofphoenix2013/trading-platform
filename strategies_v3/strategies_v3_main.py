@@ -398,13 +398,16 @@ async def load_position_targets(db_pool):
 
         for pid, new_targets in grouped.items():
             existing = targets_by_position.get(pid, [])
-            targets_by_position[pid] = merge_targets(existing, new_targets)
+            merged = merge_targets(existing, new_targets)
+            if len(merged) > len(existing):
+                targets_by_position[pid] = merged
 
         total = sum(len(t) for t in targets_by_position.values())
-        logging.info(f"✅ Обновлено целей: {total} для {len(targets_by_position)} позиций")
+        debug_log(f"✅ Обновлено целей: {total} для {len(targets_by_position)} позиций")
 
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке целей позиции: {e}")
+
 # 🔸 Мониторинг открытых позиций на достижение TP/SL
 async def follow_positions():
     for position_id, pos in open_positions.items():
@@ -536,6 +539,10 @@ async def position_close_loop(db_pool):
                 debug_log(f"🧪 Ищем target_id = {target_id}")
                 
                 target = next((t for t in targets if t.get("id") == target_id), None)
+                if not target:
+                    logging.error(f"❌ Цель ID={target_id} не найдена в памяти для позиции {position_id}")
+                    await redis_client.xack(stream_name, group_name, msg_id)
+                    continue
                 
                 if data.get("type") == "sl":
                     try:
