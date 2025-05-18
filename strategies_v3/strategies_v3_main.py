@@ -44,6 +44,7 @@ from strategy_8_1 import Strategy8_1
 from strategy_8_2 import Strategy8_2
 from strategy_8_3 import Strategy8_3
 from strategy_8_4 import Strategy8_4
+from strategy_9_3 import Strategy9_3
 from strategies_v3_interface import StrategyInterface
         
 # 🔸 Конфигурация логирования
@@ -108,6 +109,7 @@ strategies = {
     "strategy_8_2": Strategy8_2(),
     "strategy_8_3": Strategy8_3(),
     "strategy_8_4": Strategy8_4(),
+    "strategy_9_3": Strategy9_3(),
 }
 # 🔸 Загрузка тикеров из базы
 async def load_tickers(db_pool):
