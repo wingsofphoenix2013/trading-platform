@@ -372,9 +372,13 @@ async def load_open_positions(db_pool):
         debug_log(f"✅ Загружено открытых позиций: {len(open_positions)}")
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке открытых позиций: {e}")
-# 🔸 Загрузка целей по позициям из базы
+# 🔸 Загрузка целей по позициям из базы с merge-обновлением
 async def load_position_targets(db_pool):
     global targets_by_position
+
+    def merge_targets(existing, incoming):
+        existing_ids = {t["id"] for t in existing if "id" in t}
+        return existing + [t for t in incoming if t["id"] not in existing_ids]
 
     try:
         async with db_pool.acquire() as conn:
@@ -390,10 +394,12 @@ async def load_position_targets(db_pool):
             pid = row["position_id"]
             grouped.setdefault(pid, []).append(dict(row))
 
-        targets_by_position = grouped
+        for pid, new_targets in grouped.items():
+            existing = targets_by_position.get(pid, [])
+            targets_by_position[pid] = merge_targets(existing, new_targets)
 
-        total = sum(len(t) for t in grouped.values())
-        debug_log(f"✅ Загружено целей: {total} для {len(targets_by_position)} позиций")
+        total = sum(len(t) for t in targets_by_position.values())
+        logging.info(f"✅ Обновлено целей: {total} для {len(targets_by_position)} позиций")
 
     except Exception as e:
         logging.error(f"❌ Ошибка при загрузке целей позиции: {e}")
