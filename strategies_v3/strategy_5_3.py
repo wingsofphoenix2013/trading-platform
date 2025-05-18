@@ -47,12 +47,15 @@ class Strategy5_3:
             # 🔸 Доп. фильтр: проверка предыдущей long-сделки по SL и поведения MFI
             last_close_time = await interface.get_last_sl_close_time(symbol, "long")
             if last_close_time is not None:
-                signal_time = datetime.fromisoformat(task["sent_at"])
+                signal_time = datetime.fromisoformat(task.get("sent_at") or task["bar_time"])
                 mfi_values = await interface.get_mfi_values_between(symbol, last_close_time, signal_time)
-                if mfi_values and all(mfi <= Decimal("35") for mfi in mfi_values):
-                    debug_log(f"⛔ Long отклонён: предыдущая long-сделка закрыта по SL, "
-                              f"и MFI не поднимался выше 35 с {last_close_time} до {signal_time}")
-                    return
+                logging.info(f"📊 LONG SL-защита: найдено {len(mfi_values)} значений MFI между {last_close_time} и {signal_time}")
+                if mfi_values:
+                    mfi_max = max(mfi_values)
+                    logging.info(f"📊 MFI максимум в этом диапазоне: {mfi_max}")
+                    if mfi_max <= Decimal("35"):
+                        logging.info(f"⛔ Long отклонён: после SL MFI ни разу не поднимался выше 35")
+                        return
 
         elif direction == "short":
             if entry_price <= ema_50:
@@ -68,12 +71,15 @@ class Strategy5_3:
             # 🔸 Доп. фильтр: проверка предыдущей short-сделки по SL и поведения MFI
             last_close_time = await interface.get_last_sl_close_time(symbol, "short")
             if last_close_time is not None:
-                signal_time = datetime.fromisoformat(task["sent_at"])
+                signal_time = datetime.fromisoformat(task.get("sent_at") or task["bar_time"])
                 mfi_values = await interface.get_mfi_values_between(symbol, last_close_time, signal_time)
-                if mfi_values and all(mfi >= Decimal("65") for mfi in mfi_values):
-                    debug_log(f"⛔ Short отклонён: предыдущая short-сделка закрыта по SL, "
-                              f"и MFI не опускался ниже 65 с {last_close_time} до {signal_time}")
-                    return
+                logging.info(f"📊 SHORT SL-защита: найдено {len(mfi_values)} значений MFI между {last_close_time} и {signal_time}")
+                if mfi_values:
+                    mfi_min = min(mfi_values)
+                    logging.info(f"📊 MFI минимум в этом диапазоне: {mfi_min}")
+                    if mfi_min >= Decimal("65"):
+                        logging.info(f"⛔ Short отклонён: после SL MFI ни разу не опускался ниже 65")
+                        return
 
         # 🔹 Расчёт параметров позиции
         result = await interface.calculate_position_size(task)
