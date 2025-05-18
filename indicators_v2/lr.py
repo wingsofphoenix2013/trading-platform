@@ -4,7 +4,30 @@ import numpy as np
 import json
 from datetime import datetime
 from debug_utils import debug_log
-
+# 🔸 Очистка старых значений (оставляем только 100 последних)
+async def cleanup_old_values(db, instance_id, symbol, param_name):
+    try:
+        async with db.acquire() as conn:
+            await conn.execute(
+                """
+                DELETE FROM indicator_values_v2
+                WHERE ctid IN (
+                    SELECT ctid FROM (
+                        SELECT ctid,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY instance_id, symbol, param_name
+                                   ORDER BY open_time DESC
+                               ) AS rownum
+                        FROM indicator_values_v2
+                        WHERE instance_id = $1 AND symbol = $2 AND param_name = $3
+                    ) sub
+                    WHERE sub.rownum > 300
+                )
+                """,
+                instance_id, symbol, param_name
+            )
+    except Exception as e:
+        logging.error(f"❌ Ошибка при очистке LR {param_name} для {symbol}: {e}")
 # 🔸 Расчёт линейной регрессии и запись в Redis + БД + Stream
 async def process_lr(instance_id, symbol, tf, open_time, params, candles, redis, db, precision_price, stream_publish):
     try:
@@ -68,6 +91,8 @@ async def process_lr(instance_id, symbol, tf, open_time, params, candles, redis,
                 [(instance_id, symbol, open_dt, param, val) for param, val in results]
             )
 
+        await cleanup_old_values(db, instance_id, symbol, param_name)
+        
         debug_log(f"✅ LR{length} для {symbol} / {tf} рассчитан (angle={angle_val})")
 
         if stream_publish:

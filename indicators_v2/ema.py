@@ -21,7 +21,7 @@ async def cleanup_old_values(db, instance_id, symbol, param_name):
                         FROM indicator_values_v2
                         WHERE instance_id = $1 AND symbol = $2 AND param_name = $3
                     ) sub
-                    WHERE sub.rownum > 100
+                    WHERE sub.rownum > 300
                 )
                 """,
                 instance_id, symbol, param_name
