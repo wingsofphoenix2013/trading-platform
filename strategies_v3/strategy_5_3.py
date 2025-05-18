@@ -1,19 +1,21 @@
 import logging
 from decimal import Decimal, ROUND_DOWN
+from datetime import datetime
 from debug_utils import debug_log
 
-# 🔸 Стратегия strategy_5_3 с проверкой EMA50 и ATR
+# 🔸 Стратегия strategy_5_3 с проверкой EMA50, RSI, MFI + фильтрация по истории SL/MFI
 class Strategy5_3:
     def __init__(self):
         pass
 
-    # 🔸 Обработка сигнала в strategy_5_3 (таймфрейм M5, фильтры EMA50, RSI, MFI)
+    # 🔸 Обработка сигнала в strategy_5_3 (таймфрейм M5, фильтры EMA + RSI + MFI + SL-защита)
     async def on_signal(self, task: dict, interface):
-        debug_log("📈 Обработка сигнала в strategy_5_3 (M5 / EMA + RSI + MFI)")
+        debug_log("📈 Обработка сигнала в strategy_5_3 (M5 / EMA + RSI + MFI + SL-фильтр)")
 
         symbol = task["symbol"]
         direction = task["direction"]
         timeframe = "M5"
+
         # 🔹 Получение и преобразование цены входа
         entry_price = interface.latest_prices.get(symbol)
         if entry_price is None:
@@ -42,6 +44,16 @@ class Strategy5_3:
                 debug_log(f"⛔ Вход в long запрещён: MFI {mfi} >= 25")
                 return
 
+            # 🔸 Доп. фильтр: проверка предыдущей long-сделки по SL и поведения MFI
+            last_close_time = await interface.get_last_sl_close_time(symbol, "long")
+            if last_close_time is not None:
+                signal_time = datetime.fromisoformat(task["sent_at"])
+                mfi_values = await interface.get_mfi_values_between(symbol, last_close_time, signal_time)
+                if mfi_values and all(mfi <= Decimal("35") for mfi in mfi_values):
+                    debug_log(f"⛔ Long отклонён: предыдущая long-сделка закрыта по SL, "
+                              f"и MFI не поднимался выше 35 с {last_close_time} до {signal_time}")
+                    return
+
         elif direction == "short":
             if entry_price <= ema_50:
                 debug_log(f"⛔ Вход в short запрещён: цена {entry_price} <= EMA50 {ema_50}")
@@ -53,6 +65,16 @@ class Strategy5_3:
                 debug_log(f"⛔ Вход в short запрещён: MFI {mfi} <= 75")
                 return
 
+            # 🔸 Доп. фильтр: проверка предыдущей short-сделки по SL и поведения MFI
+            last_close_time = await interface.get_last_sl_close_time(symbol, "short")
+            if last_close_time is not None:
+                signal_time = datetime.fromisoformat(task["sent_at"])
+                mfi_values = await interface.get_mfi_values_between(symbol, last_close_time, signal_time)
+                if mfi_values and all(mfi >= Decimal("65") for mfi in mfi_values):
+                    debug_log(f"⛔ Short отклонён: предыдущая short-сделка закрыта по SL, "
+                              f"и MFI не опускался ниже 65 с {last_close_time} до {signal_time}")
+                    return
+
         # 🔹 Расчёт параметров позиции
         result = await interface.calculate_position_size(task)
 
@@ -61,9 +83,9 @@ class Strategy5_3:
             return
 
         debug_log(f"📊 Расчёт позиции (strategy_5_3): "
-                     f"qty={result['quantity']}, notional={result['notional_value']}, "
-                     f"risk={result['planned_risk']}, margin={result['margin_used']}, "
-                     f"sl={result['stop_loss_price']}")
+                  f"qty={result['quantity']}, notional={result['notional_value']}, "
+                  f"risk={result['planned_risk']}, margin={result['margin_used']}, "
+                  f"sl={result['stop_loss_price']}")
 
         # 🔹 Создание позиции в базе
         position_id = await interface.open_position(task, result)

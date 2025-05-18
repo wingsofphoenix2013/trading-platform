@@ -420,4 +420,38 @@ class StrategyInterface:
         except Exception as e:
             logging.error(f"❌ Ошибка при создании позиции: {e}")
             return None
-    
+    # 🔸 Получение значений MFI (instance_id=14, param_name='mfi14') в диапазоне времени
+    async def get_mfi_values_between(self, symbol: str, start: datetime, end: datetime) -> list[Decimal]:
+        try:
+            async with self.db_pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT value
+                    FROM indicator_values_v2
+                    WHERE symbol = $1
+                      AND instance_id = 14
+                      AND param_name = 'mfi14'
+                      AND open_time BETWEEN $2 AND $3
+                    ORDER BY open_time
+                """, symbol, start, end)
+                return [Decimal(str(row["value"])) for row in rows]
+        except Exception as e:
+            logging.error(f"❌ Ошибка при получении значений MFI: {e}")
+            return []
+    # 🔸 Получение времени закрытия последней SL-сделки по тикеру и направлению
+    async def get_last_sl_close_time(self, symbol: str, direction: str) -> datetime | None:
+        try:
+            async with self.db_pool.acquire() as conn:
+                row = await conn.fetchrow("""
+                    SELECT closed_at
+                    FROM positions_v2
+                    WHERE symbol = $1
+                      AND direction = $2
+                      AND close_reason = 'sl'
+                      AND status = 'closed'
+                    ORDER BY closed_at DESC
+                    LIMIT 1
+                """, symbol, direction)
+                return row["closed_at"] if row else None
+        except Exception as e:
+            logging.error(f"❌ Ошибка при получении времени последней SL-сделки: {e}")
+            return None
