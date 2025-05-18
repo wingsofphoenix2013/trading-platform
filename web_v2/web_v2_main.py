@@ -345,6 +345,7 @@ async def check_strategy_name(name: str):
     finally:
         await conn.close()
 # 🔸 Детальная страница стратегии по имени
+# 🔸 Детальная страница стратегии по имени
 @app.get("/strategies/detail/{strategy_name}", response_class=HTMLResponse)
 async def strategy_detail(request: Request, strategy_name: str, period: str = "all", page: int = 1):
     pool = await get_db_pool()
@@ -366,32 +367,71 @@ async def strategy_detail(request: Request, strategy_name: str, period: str = "a
         now_utc = datetime.utcnow()
         start_utc, end_utc = get_period_bounds(period, now_utc)
 
-        # 🔹 Сбор статистики по закрытым сделкам
-        query = """
-            SELECT direction, COUNT(*) AS count, SUM(pnl) AS total_pnl,
-                   COUNT(*) FILTER (WHERE pnl > 0) AS wins
-            FROM positions_v2
-            WHERE strategy_id = $1 AND status = 'closed'
-            {time_filter}
-            GROUP BY direction
-        """
-        if start_utc and end_utc:
-            time_filter = "AND closed_at BETWEEN $2 AND $3"
-            rows = await conn.fetch(query.format(time_filter=time_filter), strategy_id, start_utc.replace(tzinfo=None), end_utc.replace(tzinfo=None))
-        else:
-            time_filter = ""
-            rows = await conn.fetch(query.format(time_filter=time_filter), strategy_id)
+        # 🔹 Подготовка дат последних 10 дней
+        from zoneinfo import ZoneInfo
+        from datetime import timedelta
+        kyiv_tz = ZoneInfo("Europe/Kyiv")
+        today_local = now_utc.astimezone(kyiv_tz).replace(hour=0, minute=0, second=0, microsecond=0)
+        date_ranges = []
+        date_labels = []
+        for i in range(9, -1, -1):
+            day_start = today_local - timedelta(days=i)
+            day_end = day_start + timedelta(days=1) - timedelta(microseconds=1)
+            date_ranges.append((day_start.astimezone(ZoneInfo("UTC")), day_end.astimezone(ZoneInfo("UTC"))))
+            date_labels.append(day_start.strftime("%Y-%m-%d"))
 
-        total = sum(r["count"] for r in rows)
-        long_trades = next((r["count"] for r in rows if r["direction"] == "long"), 0)
-        short_trades = next((r["count"] for r in rows if r["direction"] == "short"), 0)
-        wins = sum(r["wins"] for r in rows)
-        total_pnl = sum(r["total_pnl"] or 0 for r in rows)
+        # 🔹 Универсальный сбор статистики по диапазону
+        async def collect_stats(start: datetime, end: datetime):
+            stats = await conn.fetch("""
+                SELECT direction,
+                       COUNT(*) AS count,
+                       COUNT(*) FILTER (WHERE pnl > 0) AS wins,
+                       SUM(pnl) AS pnl
+                FROM positions_v2
+                WHERE strategy_id = $1 AND status = 'closed'
+                  AND closed_at BETWEEN $2 AND $3
+                GROUP BY direction
+            """, strategy_id, start.replace(tzinfo=None), end.replace(tzinfo=None))
 
-        winrate = f"{(wins / total * 100):.1f}%" if total else "n/a"
-        roi = f"{(float(total_pnl) / deposit * 100):.1f}%" if total else "n/a"
+            total = sum(r["count"] for r in stats)
+            wins = sum(r["wins"] for r in stats)
+            pnl = sum(r["pnl"] or 0 for r in stats)
+            
+            long_total = next((r["count"] for r in stats if r["direction"] == "long"), 0)
+            long_wins = next((r["wins"] for r in stats if r["direction"] == "long"), 0)
+            short_total = next((r["count"] for r in stats if r["direction"] == "short"), 0)
+            short_wins = next((r["wins"] for r in stats if r["direction"] == "short"), 0)
 
-        # 🔹 Получение открытых сделок (с direction)
+            return {
+                "total": total,
+                "short": short_total,
+                "long": long_total,
+                "short_winrate": f"{(short_wins / short_total * 100):.1f}%" if short_total else "n/a",
+                "long_winrate": f"{(long_wins / long_total * 100):.1f}%" if long_total else "n/a",
+                "winrate": f"{(wins / total * 100):.1f}%" if total else "n/a",
+                "roi": f"{(float(pnl) / deposit * 100):.1f}%" if total else "n/a",
+                "short_long": f"{short_total} / {long_total}"
+            }
+
+        # 🔹 Статистика за весь период (всего)
+        full_stats = await collect_stats(datetime.min, datetime.max)
+
+        # 🔹 Статистика по дням (последние 10)
+        day_stats = []
+        for start, end in date_ranges:
+            day_stats.append(await collect_stats(start, end))
+
+        # 🔹 Подготовка таблицы статистики по строкам
+        stat_rows = [
+            ("Всего сделок", [full_stats["total"]] + [d["total"] for d in day_stats]),
+            ("Шорт / Лонг", [full_stats["short_long"]] + [d["short_long"] for d in day_stats]),
+            ("Шорт winrate", [full_stats["short_winrate"]] + [d["short_winrate"] for d in day_stats]),
+            ("Лонг winrate", [full_stats["long_winrate"]] + [d["long_winrate"] for d in day_stats]),
+            ("Winrate", [full_stats["winrate"]] + [d["winrate"] for d in day_stats]),
+            ("ROI", [full_stats["roi"]] + [d["roi"] for d in day_stats]),
+        ]
+
+        # 🔹 Остальное без изменений
         open_positions = await conn.fetch("""
             SELECT id, symbol, direction, created_at, entry_price, close_reason, pnl
             FROM positions_v2
@@ -399,7 +439,6 @@ async def strategy_detail(request: Request, strategy_name: str, period: str = "a
             ORDER BY created_at ASC
         """, strategy_id)
 
-        # 🔹 Получение TP/SL целей по открытым позициям
         position_ids = tuple(p["id"] for p in open_positions)
         tp_by_position = {}
         sl_by_position = {}
@@ -428,7 +467,6 @@ async def strategy_detail(request: Request, strategy_name: str, period: str = "a
                     tp_by_position[pid] = min_level[1]
             sl_by_position = sl_map
 
-        # 🔹 Пагинация закрытых сделок
         limit = 20
         offset = (page - 1) * limit
 
@@ -458,11 +496,7 @@ async def strategy_detail(request: Request, strategy_name: str, period: str = "a
             "closed_positions": closed_positions,
             "tp_by_position": tp_by_position,
             "sl_by_position": sl_by_position,
-            "stats": {
-                "total": total or "n/a",
-                "long": long_trades or "n/a",
-                "short": short_trades or "n/a",
-                "winrate": winrate,
-                "roi": roi,
-            }
+            "stat_rows": stat_rows,
+            "stat_dates": date_labels,
+            "stats": full_stats
         })

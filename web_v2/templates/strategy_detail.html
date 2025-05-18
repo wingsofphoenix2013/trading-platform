@@ -8,8 +8,9 @@
         h1 { margin-bottom: 10px; }
         select { margin-bottom: 20px; padding: 5px; }
         table { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 40px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
         th { background-color: #f2f2f2; }
+        .highlight { background-color: #ffe8cc; font-weight: bold; }
         .pagination a { margin: 0 4px; text-decoration: none; padding: 4px 8px; border: 1px solid #ccc; background: #fff; color: #000; }
         .pagination strong { margin: 0 4px; padding: 4px 8px; border: 1px solid #ccc; background: #ddd; }
     </style>
@@ -29,11 +30,27 @@
 
     <h2>Статистика</h2>
     <table>
-        <tr><th>Всего сделок</th><td>{{ stats.total }}</td></tr>
-        <tr><th>Шорт / Лонг</th><td>{{ stats.short }} / {{ stats.long }}</td></tr>
-        <tr><th>Winrate</th><td>{{ stats.winrate }}</td></tr>
-        <tr><th>ROI</th><td>{{ stats.roi }}</td></tr>
+        <tr>
+            <th>Метрика</th>
+            <th>Всего</th>
+            {% for date in stat_dates %}
+                <th class="{% if (period == 'today' and date == stat_dates[-1])
+                              or (period == 'yesterday' and date == stat_dates[-2])
+                              or (period == 'week' and date >= stat_dates[-7]) %}highlight{% endif %}">
+                    {{ date }}
+                </th>
+            {% endfor %}
+        </tr>
+        {% for label, values in stat_rows %}
+        <tr>
+            <td>{{ label }}</td>
+            {% for val in values %}
+                <td>{{ val }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
     </table>
+
 
     <h2>Открытые сделки</h2>
     <table>
