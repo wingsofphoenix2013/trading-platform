@@ -44,20 +44,20 @@ class Strategy5_3:
                 debug_log(f"⛔ Вход в long запрещён: MFI {mfi} >= 25")
                 return
 
-            # 🔸 Доп. фильтр: проверка предыдущей long-сделки по SL и поведения MFI
-            last_close_time = await interface.get_last_sl_close_time(symbol, "long")
-            if last_close_time is not None:
-                signal_time = datetime.fromisoformat(task.get("sent_at") or task["bar_time"])
-                mfi_values = await interface.get_mfi_values_between(symbol, last_close_time, signal_time)
-                logging.info(f"📊 LONG SL-защита [{symbol}]: найдено {len(mfi_values)} значений MFI между {last_close_time} и {signal_time}")
-                if not mfi_values:
-                    logging.info(f"⚠️ MFI отсутствует в диапазоне SL-фильтрации по {symbol} — фильтр пропущен")
-                else:
-                    mfi_max = max(mfi_values)
-                    logging.info(f"📊 MFI максимум по {symbol}: {mfi_max}")
-                    if mfi_max <= Decimal("35"):
-                        logging.info(f"⛔ Вход в long по {symbol} отклонён: после SL MFI ни разу не поднимался выше 35")
-                        return
+#             # 🔸 Доп. фильтр: проверка предыдущей long-сделки по SL и поведения MFI
+#             last_close_time = await interface.get_last_sl_close_time(symbol, "long")
+#             if last_close_time is not None:
+#                 signal_time = datetime.fromisoformat(task.get("sent_at") or task["bar_time"])
+#                 mfi_values = await interface.get_mfi_values_between(symbol, last_close_time, signal_time)
+#                 logging.info(f"📊 LONG SL-защита [{symbol}]: найдено {len(mfi_values)} значений MFI между {last_close_time} и {signal_time}")
+#                 if not mfi_values:
+#                     logging.info(f"⚠️ MFI отсутствует в диапазоне SL-фильтрации по {symbol} — фильтр пропущен")
+#                 else:
+#                     mfi_max = max(mfi_values)
+#                     logging.info(f"📊 MFI максимум по {symbol}: {mfi_max}")
+#                     if mfi_max <= Decimal("35"):
+#                         logging.info(f"⛔ Вход в long по {symbol} отклонён: после SL MFI ни разу не поднимался выше 35")
+#                         return
 
         elif direction == "short":
             if entry_price <= ema_50:
@@ -70,20 +70,20 @@ class Strategy5_3:
                 debug_log(f"⛔ Вход в short запрещён: MFI {mfi} <= 75")
                 return
 
-            # 🔸 Доп. фильтр: проверка предыдущей short-сделки по SL и поведения MFI
-            last_close_time = await interface.get_last_sl_close_time(symbol, "short")
-            if last_close_time is not None:
-                signal_time = datetime.fromisoformat(task.get("sent_at") or task["bar_time"])
-                mfi_values = await interface.get_mfi_values_between(symbol, last_close_time, signal_time)
-                logging.info(f"📊 SHORT SL-защита [{symbol}]: найдено {len(mfi_values)} значений MFI между {last_close_time} и {signal_time}")
-                if not mfi_values:
-                    logging.info(f"⚠️ MFI отсутствует в диапазоне SL-фильтрации по {symbol} — фильтр пропущен")
-                else:
-                    mfi_min = min(mfi_values)
-                    logging.info(f"📊 MFI минимум по {symbol}: {mfi_min}")
-                    if mfi_min >= Decimal("65"):
-                        logging.info(f"⛔ Вход в short по {symbol} отклонён: после SL MFI ни разу не опускался ниже 65")
-                        return
+#             # 🔸 Доп. фильтр: проверка предыдущей short-сделки по SL и поведения MFI
+#             last_close_time = await interface.get_last_sl_close_time(symbol, "short")
+#             if last_close_time is not None:
+#                 signal_time = datetime.fromisoformat(task.get("sent_at") or task["bar_time"])
+#                 mfi_values = await interface.get_mfi_values_between(symbol, last_close_time, signal_time)
+#                 logging.info(f"📊 SHORT SL-защита [{symbol}]: найдено {len(mfi_values)} значений MFI между {last_close_time} и {signal_time}")
+#                 if not mfi_values:
+#                     logging.info(f"⚠️ MFI отсутствует в диапазоне SL-фильтрации по {symbol} — фильтр пропущен")
+#                 else:
+#                     mfi_min = min(mfi_values)
+#                     logging.info(f"📊 MFI минимум по {symbol}: {mfi_min}")
+#                     if mfi_min >= Decimal("65"):
+#                         logging.info(f"⛔ Вход в short по {symbol} отклонён: после SL MFI ни разу не опускался ниже 65")
+#                         return
 
         # 🔹 Расчёт параметров позиции
         result = await interface.calculate_position_size(task)

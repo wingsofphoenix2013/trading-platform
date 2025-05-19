@@ -14,11 +14,12 @@ class Strategy5_1:
         symbol = task["symbol"]
         direction = task["direction"]
         timeframe = "M5"
+        # 🔹 Получение и преобразование цены входа
         entry_price = interface.latest_prices.get(symbol)
-
         if entry_price is None:
             logging.warning(f"⚠️ Нет актуальной цены для {symbol}")
             return
+        entry_price = Decimal(str(entry_price))
 
         # 🔹 Получение EMA50, RSI, MFI
         ema_50 = await interface.get_indicator_value(symbol, timeframe, "EMA", "50")
@@ -34,22 +35,22 @@ class Strategy5_1:
             if entry_price >= ema_50:
                 debug_log(f"⛔ Вход в long запрещён: цена {entry_price} >= EMA50 {ema_50}")
                 return
-            if rsi >= Decimal("30"):
-                debug_log(f"⛔ Вход в long запрещён: RSI {rsi} >= 30")
+            if rsi >= Decimal("40"):
+                debug_log(f"⛔ Вход в long запрещён: RSI {rsi} >= 40")
                 return
-            if mfi >= Decimal("25"):
-                debug_log(f"⛔ Вход в long запрещён: MFI {mfi} >= 25")
+            if mfi >= Decimal("20"):
+                debug_log(f"⛔ Вход в long запрещён: MFI {mfi} >= 20")
                 return
 
         elif direction == "short":
             if entry_price <= ema_50:
                 debug_log(f"⛔ Вход в short запрещён: цена {entry_price} <= EMA50 {ema_50}")
                 return
-            if rsi <= Decimal("70"):
-                debug_log(f"⛔ Вход в short запрещён: RSI {rsi} <= 70")
+            if rsi <= Decimal("60"):
+                debug_log(f"⛔ Вход в short запрещён: RSI {rsi} <= 60")
                 return
-            if mfi <= Decimal("75"):
-                debug_log(f"⛔ Вход в short запрещён: MFI {mfi} <= 75")
+            if mfi <= Decimal("80"):
+                debug_log(f"⛔ Вход в short запрещён: MFI {mfi} <= 80")
                 return
 
         # 🔹 Расчёт параметров позиции

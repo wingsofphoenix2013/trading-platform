@@ -35,22 +35,22 @@ class Strategy5_4:
             if entry_price >= ema_50:
                 debug_log(f"⛔ Вход в long запрещён: цена {entry_price} >= EMA50 {ema_50}")
                 return
-            if rsi >= Decimal("45"):
-                debug_log(f"⛔ Вход в long запрещён: RSI {rsi} >= 45")
+            if rsi >= Decimal("35"):
+                debug_log(f"⛔ Вход в long запрещён: RSI {rsi} >= 35")
                 return
-            if mfi >= Decimal("25"):
-                debug_log(f"⛔ Вход в long запрещён: MFI {mfi} >= 25")
+            if mfi >= Decimal("20"):
+                debug_log(f"⛔ Вход в long запрещён: MFI {mfi} >= 20")
                 return
 
         elif direction == "short":
             if entry_price <= ema_50:
                 debug_log(f"⛔ Вход в short запрещён: цена {entry_price} <= EMA50 {ema_50}")
                 return
-            if rsi <= Decimal("55"):
-                debug_log(f"⛔ Вход в short запрещён: RSI {rsi} <= 55")
+            if rsi <= Decimal("65"):
+                debug_log(f"⛔ Вход в short запрещён: RSI {rsi} <= 65")
                 return
-            if mfi <= Decimal("75"):
-                debug_log(f"⛔ Вход в short запрещён: MFI {mfi} <= 75")
+            if mfi <= Decimal("80"):
+                debug_log(f"⛔ Вход в short запрещён: MFI {mfi} <= 80")
                 return
 
         # 🔹 Расчёт параметров позиции
